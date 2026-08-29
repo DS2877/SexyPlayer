@@ -1,16 +1,13 @@
 import SwiftUI
 
-/// Top-level navigation. Runs the onboarding sequence (add provider → prepare →
-/// personalize) the first time, then the tabbed app.
+/// Top-level flow. Runs the onboarding sequence (add provider → prepare →
+/// personalize) the first time, then hands off to the sidebar shell. The shell
+/// never blocks on the library import — a status pill shows instead.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
-    enum Tab: Hashable {
-        case home, liveTV, guide, movies, series, search, settings
-    }
     enum OnboardingStage: Equatable { case addProvider, preparing, personalize }
 
-    @State private var selection: Tab = .home
     @State private var stage: OnboardingStage?
     @State private var decidedInitialStage = false
 
@@ -20,6 +17,7 @@ struct RootView: View {
             case .addProvider:
                 ProviderSetupView(onProviderReady: { stage = .preparing })
                     .transition(.opacity)
+
             case .preparing:
                 fullScreen {
                     LibraryLoadingView(
@@ -36,15 +34,14 @@ struct RootView: View {
                         }
                     )
                 }
+
             case .personalize:
                 PersonalizeView(mode: .onboarding, onDone: { stage = nil })
                     .transition(.opacity)
+
             case nil:
-                if coldLoadingWithoutOnboarding {
-                    fullScreen { LibraryLoadingView() }
-                } else {
-                    tabs
-                }
+                SidebarShell()
+                    .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: stage)
@@ -62,14 +59,6 @@ struct RootView: View {
         }
     }
 
-    /// Returning user, no cache — cover the tab bar with the checklist until the
-    /// library is ready, then drop straight into the app.
-    private var coldLoadingWithoutOnboarding: Bool {
-        guard environment.preferences.hasOnboarded, !environment.hasLoadedOnce else { return false }
-        if case .loading = environment.loadState { return true }
-        return false
-    }
-
     private func advanceFromPreparing() {
         stage = environment.preferences.hasOnboarded ? nil : .personalize
     }
@@ -81,52 +70,5 @@ struct RootView: View {
                 .frame(maxWidth: 1000)
                 .padding(Metrics.screenMargin)
         }
-    }
-
-    private var tabs: some View {
-        TabView(selection: $selection) {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house") }
-                .tag(Tab.home)
-
-            LiveTVBrowseView()
-                .tabItem { Label("Live TV", systemImage: "tv") }
-                .tag(Tab.liveTV)
-
-            ComingSoonView(feature: "TV Guide", milestone: "the next milestone")
-                .tabItem { Label("Guide", systemImage: "calendar") }
-                .tag(Tab.guide)
-
-            VODBrowseView(kind: .movies)
-                .tabItem { Label("Movies", systemImage: "film") }
-                .tag(Tab.movies)
-
-            VODBrowseView(kind: .series)
-                .tabItem { Label("Series", systemImage: "rectangle.stack") }
-                .tag(Tab.series)
-
-            ComingSoonView(feature: "Search", milestone: "the next milestone")
-                .tabItem { Label("Search", systemImage: "magnifyingglass") }
-                .tag(Tab.search)
-
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(Tab.settings)
-        }
-        .appThemeBackground()
-    }
-}
-
-struct ComingSoonView: View {
-    let feature: String
-    let milestone: String
-
-    var body: some View {
-        EmptyStateView(
-            icon: "hammer",
-            title: "\(feature) is on the way",
-            message: "This screen arrives in \(milestone). The foundation it needs is already in place."
-        )
-        .appThemeBackground()
     }
 }

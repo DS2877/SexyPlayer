@@ -221,7 +221,13 @@ struct LibraryLoadingView: View {
 
     @Environment(AppEnvironment.self) private var env
     @FocusState private var startFocused: Bool
+    @State private var secondsElapsed = 0
 
+    /// After this long the user can enter the app even if the import is still
+    /// running or stuck — the app works fine with a partial / empty catalog.
+    private let escapeAfter = 12
+
+    private var canEscape: Bool { showStartButton && secondsElapsed >= escapeAfter }
     private var isReady: Bool { if case .ready = env.loadState { return true } else { return false } }
     private var failure: ProviderError? { if case .failed(let e) = env.loadState { return e } else { return nil } }
     private var isConnecting: Bool { env.reachedPhases.isSubset(of: [.connecting]) }
@@ -270,16 +276,28 @@ struct LibraryLoadingView: View {
                     .frame(maxWidth: 640)
             }
 
-            if showStartButton, isReady {
-                Button("Start Watching", action: onStart)
-                    .buttonStyle(.borderedProminent)
-                    .font(.dsCardTitle)
-                    .focused($startFocused)
-                    .task { startFocused = true }
+            if showStartButton, isReady || canEscape {
+                VStack(alignment: .leading, spacing: Metrics.space1) {
+                    Button(isReady ? "Start Watching" : "Enter the app", action: onStart)
+                        .buttonStyle(.borderedProminent)
+                        .font(.dsCardTitle)
+                        .focused($startFocused)
+                    if !isReady {
+                        Text("Your library is still loading — it'll keep filling in while you browse.")
+                            .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                    }
+                }
+                .task(id: isReady) { startFocused = true }
             }
         }
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            while !Task.isCancelled, secondsElapsed < escapeAfter + 1 {
+                try? await Task.sleep(for: .seconds(1))
+                secondsElapsed += 1
+            }
+        }
     }
 
     private var subtitle: String {
