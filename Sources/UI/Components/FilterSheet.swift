@@ -90,7 +90,7 @@ struct FilterSheet: View {
     private func chipRow<Item, ID: Hashable>(
         _ items: [Item],
         id: KeyPath<Item, ID>,
-        label: (Item) -> String,
+        label: @escaping (Item) -> String,
         isOn: @escaping (Item) -> Bool,
         toggle: @escaping (Item) -> Void
     ) -> some View {
