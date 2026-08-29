@@ -52,7 +52,7 @@ struct SettingsView: View {
                     }
                     if config.kind != .mock {
                         Button(role: .destructive) {
-                            env.providers.remove(config.id)
+                            Task { await env.removeProvider(config.id) }
                         } label: { Image(systemName: "trash") }
                             .buttonStyle(.bordered)
                     }
@@ -61,12 +61,23 @@ struct SettingsView: View {
                 .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
             }
 
-            Button {
-                showAddProvider = true
-            } label: {
-                Label("Add a provider", systemImage: "plus")
+            HStack(spacing: Metrics.space2) {
+                Button {
+                    showAddProvider = true
+                } label: {
+                    Label("Add a provider", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    Task { await env.refreshLibrary() }
+                } label: {
+                    Label(env.isRefreshing ? "Refreshing…" : "Refresh library",
+                          systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(env.isRefreshing || env.activeProvider == nil)
             }
-            .buttonStyle(.bordered)
             .padding(.top, Metrics.space1)
         }
     }

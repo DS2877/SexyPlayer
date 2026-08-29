@@ -1,0 +1,86 @@
+import Foundation
+
+/// Persists a normalised `Catalog` per provider as JSON in Application Support,
+/// so relaunching doesn't re-download and re-parse the whole library.
+///
+/// Stale-while-revalidate: the app loads this instantly on launch, then
+/// refreshes from the provider in the background.
+public actor CatalogCache {
+
+    public struct Entry: Sendable {
+        public let catalog: Catalog
+        public let savedAt: Date
+        public var age: TimeInterval { Date().timeIntervalSince(savedAt) }
+    }
+
+    private struct Envelope: Codable {
+        let version: Int
+        let savedAt: Date
+        let catalog: Catalog
+    }
+
+    private static let currentVersion = 1
+    private let directory: URL
+
+    public init() {
+        let base = (try? FileManager.default.url(for: .applicationSupportDirectory,
+                                                 in: .userDomainMask,
+                                                 appropriateFor: nil,
+                                                 create: true))
+            ?? URL.temporaryDirectory
+        self.directory = base.appendingPathComponent("CatalogCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    private func fileURL(for providerID: String) -> URL {
+        let safe = providerID.replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        return directory.appendingPathComponent("\(safe).json")
+    }
+
+    public func load(providerID: String) -> Entry? {
+        let url = fileURL(for: providerID)
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        do {
+            let envelope = try JSONDecoder().decode(Envelope.self, from: data)
+            guard envelope.version == Self.currentVersion else {
+                try? FileManager.default.removeItem(at: url)
+                return nil
+            }
+            return Entry(catalog: envelope.catalog, savedAt: envelope.savedAt)
+        } catch {
+            AppLog.app.notice("Catalog cache unreadable, discarding.")
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+    }
+
+    public func save(_ catalog: Catalog, providerID: String) {
+        // EPG goes stale fast and is the bulk of the payload — keep only a
+        // relevant window so the cache file stays small.
+        var trimmed = catalog
+        let now = Date()
+        let lower = now.addingTimeInterval(-2 * 3600)
+        let upper = now.addingTimeInterval(3 * 24 * 3600)
+        trimmed.epg = catalog.epg.filter { $0.stop > lower && $0.start < upper }
+
+        let envelope = Envelope(version: Self.currentVersion, savedAt: Date(), catalog: trimmed)
+        guard let data = try? JSONEncoder().encode(envelope) else { return }
+        let url = fileURL(for: providerID)
+        do {
+            try data.write(to: url, options: .atomic)
+            AppLog.app.info("Catalog cached (\(data.count / 1024) KB) for provider.")
+        } catch {
+            AppLog.app.notice("Could not write catalog cache.")
+        }
+    }
+
+    public func clear(providerID: String) {
+        try? FileManager.default.removeItem(at: fileURL(for: providerID))
+    }
+
+    public func clearAll() {
+        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+}

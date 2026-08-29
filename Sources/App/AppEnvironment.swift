@@ -22,7 +22,15 @@ public final class AppEnvironment {
     public let favorites: FavoritesStore
     public let providers: ProviderStore
     private let normalizer: Normalizer
+    private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
+    private var refreshTask: Task<Void, Never>?
+
+    /// How old a cached catalog can be before we silently refresh it on launch.
+    private let staleAfter: TimeInterval = 60 * 60 * 6
+
+    /// True while a background library refresh is running (cache was shown first).
+    public private(set) var isRefreshing = false
 
     // State
     public private(set) var loadState: LoadState = .idle
@@ -52,7 +60,9 @@ public final class AppEnvironment {
 
     public static func live() -> AppEnvironment { AppEnvironment() }
 
-    /// Fetch + normalise + load the active provider's catalog.
+    /// Load the active provider's catalog: cached copy first (instant), then a
+    /// background refresh from the provider. A full foreground import (with the
+    /// progress checklist) only happens when there's no usable cache.
     public func bootstrap(forceReload: Bool = false) async {
         if case .loading = loadState { return }
         if case .ready = loadState, !forceReload { return }
@@ -63,21 +73,32 @@ public final class AppEnvironment {
             return
         }
         provider = client
+        let providerID = config.id
 
+        // Fast path: a cached catalog.
+        if !forceReload, let entry = await cache.load(providerID: providerID), !entry.catalog.isEmpty {
+            await repository.load(entry.catalog)
+            vocabulary = SearchVocabulary.from(catalog: entry.catalog)
+            loadState = .ready
+            hasLoadedOnce = true
+            AppLog.app.info("Loaded catalog from cache (\(Int(entry.age))s old).")
+            if entry.age > staleAfter {
+                startBackgroundRefresh(client: client, providerID: providerID)
+            }
+            return
+        }
+
+        // Slow path: full import with the progress checklist.
         reachedPhases = []
         loadState = .loading
         let reporter = ImportProgressReporter { [weak self] phase in
             Task { @MainActor in self?.markPhase(phase) }
         }
         do {
-            let raw = try await client.fetchRawCatalog(progress: reporter)
-            let normalizer = self.normalizer
-            let catalog = await Task.detached(priority: .userInitiated) {
-                normalizer.normalize(raw)
-            }.value
-
+            let catalog = try await importCatalog(client: client, reporter: reporter)
             await repository.load(catalog)
             vocabulary = SearchVocabulary.from(catalog: catalog)
+            await cache.save(catalog, providerID: providerID)
             markPhase(.finalizing)
             loadState = .ready
             hasLoadedOnce = true
@@ -89,18 +110,67 @@ public final class AppEnvironment {
         }
     }
 
+    /// Manually re-pull the active provider's library (Settings → Refresh).
+    public func refreshLibrary() async {
+        guard let client = provider, let providerID = providers.activeConfiguration?.id else { return }
+        startBackgroundRefresh(client: client, providerID: providerID)
+        await refreshTask?.value
+    }
+
+    private func importCatalog(client: any ProviderClient, reporter: ImportProgressReporter) async throws -> Catalog {
+        let raw = try await client.fetchRawCatalog(progress: reporter)
+        let normalizer = self.normalizer
+        return await Task.detached(priority: .userInitiated) { normalizer.normalize(raw) }.value
+    }
+
+    private func startBackgroundRefresh(client: any ProviderClient, providerID: String) {
+        guard refreshTask == nil else { return }
+        isRefreshing = true
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.refreshTask = nil; self.isRefreshing = false }
+            do {
+                let catalog = try await self.importCatalog(client: client, reporter: .ignore)
+                // Provider may have changed while we were fetching.
+                guard !Task.isCancelled,
+                      self.providers.activeConfiguration?.id == providerID else { return }
+                await self.repository.load(catalog)
+                self.vocabulary = SearchVocabulary.from(catalog: catalog)
+                await self.cache.save(catalog, providerID: providerID)
+                AppLog.app.info("Catalog refreshed in background.")
+            } catch {
+                AppLog.provider.notice("Background refresh failed; keeping cached catalog.")
+            }
+        }
+    }
+
     private func markPhase(_ phase: ImportPhase) {
         let order = ImportPhase.allCases
         guard let idx = order.firstIndex(of: phase) else { return }
         reachedPhases.formUnion(order.prefix(idx + 1))
     }
 
-    /// Make `config` active and (re)load its catalog.
+    /// Make `config` active and load its catalog (cache first, else full import).
     public func activate(_ config: ProviderConfiguration) async {
+        refreshTask?.cancel()
+        refreshTask = nil
         providers.setActive(config.id)
         loadState = .idle
+        hasLoadedOnce = false
+        reachedPhases = []
         await repository.load(Catalog())
-        await bootstrap(forceReload: true)
+        await bootstrap(forceReload: false)
+    }
+
+    /// Remove a provider and its cached catalog.
+    public func removeProvider(_ id: String) async {
+        providers.remove(id)
+        await cache.clear(providerID: id)
+        if !providers.hasAnyProvider {
+            await repository.load(Catalog())
+            loadState = .idle
+            hasLoadedOnce = false
+        }
     }
 
     /// Load episodes for a series that was imported as a shell (Xtream).

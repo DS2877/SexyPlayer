@@ -39,6 +39,10 @@ struct HomeView: View {
             // Returning to Home refreshes Continue Watching after playback.
             if backAtRoot { Task { await model?.rebuild() } }
         }
+        .onChange(of: environment.isRefreshing) { _, refreshing in
+            // A background library refresh just finished — rebuild shelves.
+            if !refreshing { Task { await model?.rebuild() } }
+        }
     }
 
     private var loadingView: some View {

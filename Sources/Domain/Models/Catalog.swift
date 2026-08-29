@@ -1,8 +1,9 @@
 import Foundation
 
-/// The full normalised library from one provider. In M1+ this is backed by
-/// SQLite and queried lazily; in M0 it lives in memory.
-public struct Catalog: Sendable {
+/// The full normalised library from one provider. Held in memory and persisted
+/// to disk as JSON between launches (see `CatalogCache`); an indexed SQLite
+/// store is the planned upgrade for very large libraries.
+public struct Catalog: Sendable, Codable {
     public var channels: [Channel]
     public var movies: [Movie]
     public var series: [Series]
