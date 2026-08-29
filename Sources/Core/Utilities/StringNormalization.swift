@@ -35,12 +35,12 @@ public extension String {
             current[0] = i
             for j in 1...b.count {
                 let cost = a[i - 1] == b[j - 1] ? 0 : 1
-                current[j] = min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+                current[j] = Swift.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
             }
             swap(&previous, &current)
         }
         let distance = Double(previous[b.count])
-        let maxLen = Double(max(a.count, b.count))
+        let maxLen = Double(Swift.max(a.count, b.count))
         return 1 - distance / maxLen
     }
 }
