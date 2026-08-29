@@ -1,21 +1,29 @@
 import SwiftUI
 
-/// Top-level flow. Runs the onboarding sequence (add provider → prepare →
-/// personalize) the first time, then hands off to the sidebar shell. The shell
-/// never blocks on the library import — a status pill shows instead.
+/// Top-level flow. Derives the onboarding step from app state (no flash on
+/// launch) and lets the user click forward through it. Once past onboarding it
+/// hands off to the sidebar shell, which never blocks on the library import.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
-    enum OnboardingStage: Equatable { case addProvider, preparing, personalize }
+    enum Stage: Equatable { case addProvider, preparing, personalize, app }
 
-    @State private var stage: OnboardingStage?
-    @State private var decidedInitialStage = false
+    /// Set only when the user clicks forward through a step. `nil` = derive from
+    /// state.
+    @State private var manualStage: Stage?
+
+    private var stage: Stage {
+        if let manualStage { return manualStage }
+        if environment.needsProviderSetup { return .addProvider }
+        if !environment.preferences.hasOnboarded { return .preparing }
+        return .app
+    }
 
     var body: some View {
         Group {
             switch stage {
             case .addProvider:
-                ProviderSetupView(onProviderReady: { stage = .preparing })
+                ProviderSetupView(onProviderReady: { manualStage = .preparing })
                     .transition(.opacity)
 
             case .preparing:
@@ -29,38 +37,29 @@ struct RootView: View {
                                    id != ProviderStore.demoID {
                                     await environment.removeProvider(id)
                                 }
-                                stage = .addProvider
+                                manualStage = nil   // back to derived -> addProvider
                             }
                         }
                     )
                 }
 
             case .personalize:
-                PersonalizeView(mode: .onboarding, onDone: { stage = nil })
+                PersonalizeView(mode: .onboarding, onDone: { manualStage = .app })
                     .transition(.opacity)
 
-            case nil:
+            case .app:
                 SidebarShell()
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: stage)
-        .task {
-            guard !decidedInitialStage else { return }
-            decidedInitialStage = true
-            if environment.needsProviderSetup {
-                stage = .addProvider
-            } else if !environment.preferences.hasOnboarded {
-                stage = .preparing
-            }
-        }
         .onChange(of: environment.needsProviderSetup) { _, needs in
-            if needs { stage = .addProvider }
+            if needs { manualStage = nil }
         }
     }
 
     private func advanceFromPreparing() {
-        stage = environment.preferences.hasOnboarded ? nil : .personalize
+        manualStage = environment.preferences.hasOnboarded ? .app : .personalize
     }
 
     private func fullScreen<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
