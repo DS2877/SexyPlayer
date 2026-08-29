@@ -32,6 +32,7 @@ public struct HomeRow: Identifiable, Sendable {
 
 public struct TonightItem: Identifiable, Sendable {
     public let id: String
+    public let channelID: CatalogID
     public let time: String
     public let programTitle: String
     public let channelName: String

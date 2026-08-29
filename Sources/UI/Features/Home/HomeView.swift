@@ -3,30 +3,41 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model: HomeViewModel?
+    @State private var path: [AppRoute] = []
 
     var body: some View {
-        Group {
-            switch environment.loadState {
-            case .idle, .loading:
-                loadingView
-            case .failed(let error):
-                ErrorStateView(error: error, onRetry: {
-                    Task { await environment.bootstrap(forceReload: true) }
-                })
-            case .ready:
-                if let model {
-                    readyView(model: model)
-                } else {
+        NavigationStack(path: $path) {
+            Group {
+                switch environment.loadState {
+                case .idle, .loading:
                     loadingView
+                case .failed(let error):
+                    ErrorStateView(error: error, onRetry: {
+                        Task { await environment.bootstrap(forceReload: true) }
+                    })
+                case .ready:
+                    if let model {
+                        readyView(model: model)
+                    } else {
+                        loadingView
+                    }
                 }
             }
+            .appThemeBackground()
+            .appRouteDestinations()
         }
-        .appThemeBackground()
         .task(id: environment.loadState) {
             guard case .ready = environment.loadState else { return }
-            let model = model ?? HomeViewModel(repository: environment.repository)
+            let model = model ?? HomeViewModel(
+                repository: environment.repository,
+                watchProgress: environment.watchProgress
+            )
             self.model = model
             await model.rebuild()
+        }
+        .onChange(of: path.isEmpty) { _, backAtRoot in
+            // Returning to Home refreshes Continue Watching after playback.
+            if backAtRoot { Task { await model?.rebuild() } }
         }
     }
 
@@ -60,8 +71,8 @@ struct HomeView: View {
                             tagline: hero.subtitle ?? "",
                             metadata: [],
                             artworkURL: hero.artworkURL,
-                            primaryActionTitle: "Play",
-                            primaryAction: {}
+                            primaryActionTitle: "More Info",
+                            primaryAction: { navigate(hero) }
                         )
                     }
 
@@ -89,7 +100,7 @@ struct HomeView: View {
                 logoURL: card.artworkURL,
                 nowTitle: card.subtitle,
                 quality: .unknown,
-                action: {}
+                action: { navigate(card) }
             )
         case .movie, .series:
             PosterCard(
@@ -98,8 +109,16 @@ struct HomeView: View {
                 artworkURL: card.artworkURL,
                 badge: card.badge,
                 progress: card.progress,
-                action: {}
+                action: { navigate(card) }
             )
+        }
+    }
+
+    private func navigate(_ card: HomeCard) {
+        switch card.kind {
+        case .movie:   path.append(.movie(card.id))
+        case .series:  path.append(.series(card.id))
+        case .channel: path.append(.channel(card.id))
         }
     }
 }
@@ -116,7 +135,7 @@ struct TonightRail: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: Metrics.space2) {
                     ForEach(items) { item in
-                        Button(action: {}) {
+                        NavigationLink(value: AppRoute.channel(item.channelID)) {
                             VStack(alignment: .leading, spacing: Metrics.space1) {
                                 HStack(spacing: Metrics.space1) {
                                     Text(item.time)

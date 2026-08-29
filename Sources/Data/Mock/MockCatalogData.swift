@@ -10,11 +10,45 @@ public enum MockCatalogData {
     public static func rawCatalog(now: Date = .now) -> RawCatalog {
         RawCatalog(
             providerID: providerID,
-            channels: channels,
-            vod: movies,
-            seriesEpisodes: episodes,
+            channels: channels.map { withPlayableStream($0) },
+            vod: movies.enumerated().map { withPlayableStream($1, index: $0) },
+            seriesEpisodes: episodes.enumerated().map { withPlayableStream($1, index: $0) },
             epg: epg(now: now)
         )
+    }
+
+    // MARK: - Real streams for the Simulator build
+
+    /// Public-domain HLS test streams so playback actually works in the Simulator
+    /// and for App Store review. Real providers supply their own URLs; nothing
+    /// here is bundled content.
+    static let testStreams: [String] = [
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8",
+        "https://test-streams.mux.dev/pts_shift/master.m3u8",
+    ]
+
+    private static func stream(_ index: Int) -> String {
+        testStreams[((index % testStreams.count) + testStreams.count) % testStreams.count]
+    }
+
+    private static func withPlayableStream(_ c: RawChannel) -> RawChannel {
+        let idx = Int(StableHash.hash(c.providerKey) % UInt64(testStreams.count))
+        return RawChannel(providerKey: c.providerKey, displayName: c.displayName, groupTitle: c.groupTitle,
+                          logo: c.logo, tvgID: c.tvgID, streamURL: stream(idx))
+    }
+
+    private static func withPlayableStream(_ v: RawVODItem, index: Int) -> RawVODItem {
+        RawVODItem(providerKey: v.providerKey, name: v.name, groupTitle: v.groupTitle, logo: v.logo,
+                   streamURL: stream(index), plot: v.plot, genreText: v.genreText,
+                   releaseDate: v.releaseDate, durationSecs: v.durationSecs, cast: v.cast, director: v.director)
+    }
+
+    private static func withPlayableStream(_ e: RawSeriesEpisode, index: Int) -> RawSeriesEpisode {
+        RawSeriesEpisode(providerKey: e.providerKey, name: e.name, groupTitle: e.groupTitle, logo: e.logo,
+                         streamURL: stream(index), plot: e.plot, explicitSeriesName: e.explicitSeriesName,
+                         explicitSeason: e.explicitSeason, explicitEpisode: e.explicitEpisode)
     }
 
     // MARK: - Channels (messy names on purpose)

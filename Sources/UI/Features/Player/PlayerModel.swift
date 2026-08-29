@@ -1,0 +1,139 @@
+import Foundation
+import AVFoundation
+import Observation
+
+/// Owns the `AVPlayer` lifecycle for one `PlaybackItem`: start/resume, periodic
+/// progress reporting, and failure detection mapped to a friendly message.
+///
+/// The player *UI* is Apple's `AVPlayerViewController` (see
+/// `SystemPlayerView`) — this type never rebuilds transport controls.
+@MainActor
+@Observable
+public final class PlayerModel {
+
+    public enum State: Equatable {
+        case loading
+        case playing
+        case failed(ProviderError)
+    }
+
+    public private(set) var state: State = .loading
+
+    @ObservationIgnored public let player: AVPlayer
+    @ObservationIgnored public let item: PlaybackItem
+
+    @ObservationIgnored private var statusObservation: NSKeyValueObservation?
+    @ObservationIgnored private var timeObserverToken: Any?
+    @ObservationIgnored private var failureObserver: NSObjectProtocol?
+    @ObservationIgnored private var hasSeekedToResume = false
+
+    /// Called ~every 10s and on teardown with the current position. No-op for live.
+    @ObservationIgnored
+    private let onProgress: @MainActor (_ position: Double, _ duration: Double) -> Void
+
+    public init(
+        item: PlaybackItem,
+        onProgress: @escaping @MainActor (Double, Double) -> Void
+    ) {
+        self.item = item
+        self.onProgress = onProgress
+        self.player = AVPlayer(url: item.url)
+        self.player.automaticallyWaitsToMinimizeStalling = true
+        configure()
+    }
+
+    private func configure() {
+        guard let currentItem = player.currentItem else { return }
+
+        statusObservation = currentItem.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
+            let status = observedItem.status
+            Task { @MainActor in self?.handleStatusChange(status) }
+        }
+
+        failureObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: currentItem,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fail(with: nil) }
+        }
+
+        if !item.isLive {
+            let interval = CMTime(seconds: 10, preferredTimescale: 1)
+            timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reportProgress() }
+            }
+        }
+    }
+
+    public func play() {
+        player.play()
+    }
+
+    public func retry() {
+        removeObservers()
+        state = .loading
+        hasSeekedToResume = false
+        player.replaceCurrentItem(with: AVPlayerItem(url: item.url))
+        configure()
+        player.play()
+    }
+
+    private func removeObservers() {
+        if let token = timeObserverToken { player.removeTimeObserver(token) }
+        timeObserverToken = nil
+        statusObservation?.invalidate()
+        statusObservation = nil
+        if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
+        failureObserver = nil
+    }
+
+    private func handleStatusChange(_ status: AVPlayerItem.Status) {
+        switch status {
+        case .readyToPlay:
+            seekToResumeIfNeeded()
+            state = .playing
+            player.play()
+        case .failed:
+            fail(with: player.currentItem?.error)
+        case .unknown:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func seekToResumeIfNeeded() {
+        guard !hasSeekedToResume, !item.isLive, let resumeAt = item.resumeAt, resumeAt > 1 else { return }
+        hasSeekedToResume = true
+        player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
+                    toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    private func fail(with error: Error?) {
+        let providerError: ProviderError = error.map(ProviderError.from) ?? .streamUnavailable
+        state = .failed(providerError)
+        AppLog.player.error("Playback failed for \(self.item.id.rawValue, privacy: .public): \(String(describing: providerError))")
+    }
+
+    private func reportProgress() {
+        guard !item.isLive else { return }
+        let position = player.currentTime().seconds
+        let duration = resolvedDuration()
+        guard position.isFinite, position > 0, duration > 0 else { return }
+        onProgress(position, duration)
+    }
+
+    private func resolvedDuration() -> Double {
+        if let known = item.durationSeconds, known > 0 { return known }
+        let d = player.currentItem?.duration.seconds ?? 0
+        return d.isFinite ? d : 0
+    }
+
+    /// Call from the view's `onDisappear`.
+    public func teardown() {
+        reportProgress()
+        player.pause()
+        removeObservers()
+    }
+}

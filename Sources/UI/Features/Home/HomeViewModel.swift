@@ -9,9 +9,11 @@ public final class HomeViewModel {
     public private(set) var isBuilding = false
 
     private let repository: any CatalogRepository
+    private let watchProgress: WatchProgressStore
 
-    public init(repository: any CatalogRepository) {
+    public init(repository: any CatalogRepository, watchProgress: WatchProgressStore) {
         self.repository = repository
+        self.watchProgress = watchProgress
     }
 
     public func rebuild(now: Date = .now) async {
@@ -23,8 +25,13 @@ public final class HomeViewModel {
 
         var rows: [HomeRow] = []
 
-        // Tonight (EPG-driven)
         let tonight = Self.buildTonight(from: catalog, now: now)
+
+        // Continue Watching
+        let continueCards = continueWatchingCards(catalog: catalog)
+        if !continueCards.isEmpty {
+            rows.append(HomeRow(id: "continue", title: "Continue Watching", subtitle: nil, cards: continueCards))
+        }
 
         // Live now
         let liveCards = catalog.channels.prefix(14).map { channel -> HomeCard in
@@ -44,25 +51,20 @@ public final class HomeViewModel {
             + catalog.series.suffix(6).reversed().map { Self.card(for: $0) }
         rows.append(HomeRow(id: "recent", title: "Recently Added", subtitle: nil, cards: Array(recent.prefix(14))))
 
-        // Movies
         rows.append(HomeRow(id: "movies", title: "Movies", subtitle: nil,
                             cards: catalog.movies.sorted { ($0.year ?? 0) > ($1.year ?? 0) }.map(Self.card(for:))))
 
-        // Series
         rows.append(HomeRow(id: "series", title: "Series", subtitle: nil,
                             cards: catalog.series.map(Self.card(for:))))
 
-        // Swedish content
         let swedish = catalog.movies.filter { $0.audioLanguages.contains(.swedish) }.map(Self.card(for:))
             + catalog.series.filter { $0.audioLanguages.contains(.swedish) }.map(Self.card(for:))
         rows.append(HomeRow(id: "swedish", title: "Swedish Content", subtitle: nil, cards: swedish))
 
-        // With Swedish subtitles
         let swedishSubs = catalog.movies.filter { $0.subtitleLanguages.contains(.swedish) }.map(Self.card(for:))
             + catalog.series.filter { $0.subtitleLanguages.contains(.swedish) }.map(Self.card(for:))
         rows.append(HomeRow(id: "swesub", title: "With Swedish Subtitles", subtitle: nil, cards: swedishSubs))
 
-        // Hero: newest high-quality movie
         let hero = catalog.movies
             .sorted { lhs, rhs in
                 let ly = lhs.year ?? 0, ry = rhs.year ?? 0
@@ -84,6 +86,39 @@ public final class HomeViewModel {
         )
     }
 
+    // MARK: - Continue Watching
+
+    private func continueWatchingCards(catalog: Catalog) -> [HomeCard] {
+        let moviesByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var episodeToSeries: [CatalogID: Series] = [:]
+        for series in catalog.series {
+            for season in series.seasons {
+                for episode in season.episodes { episodeToSeries[episode.id] = series }
+            }
+        }
+
+        return watchProgress.continueWatching(limit: 12).compactMap { progress -> HomeCard? in
+            switch progress.kind {
+            case .movie:
+                guard let movie = moviesByID[progress.itemID] else { return nil }
+                return HomeCard(id: movie.id, kind: .movie,
+                                title: movie.title,
+                                subtitle: Self.metadataSubtitle(for: movie),
+                                artworkURL: movie.posterURL,
+                                progress: progress.fraction)
+            case .series:
+                guard let series = episodeToSeries[progress.itemID] else { return nil }
+                return HomeCard(id: series.id, kind: .series,
+                                title: series.title,
+                                subtitle: "Resume watching",
+                                artworkURL: series.posterURL,
+                                progress: progress.fraction)
+            case .liveChannel:
+                return nil
+            }
+        }
+    }
+
     // MARK: - Builders
 
     static func buildTonight(from catalog: Catalog, now: Date) -> [TonightItem] {
@@ -101,6 +136,7 @@ public final class HomeViewModel {
             for event in events {
                 items.append(TonightItem(
                     id: event.id,
+                    channelID: channel.id,
                     time: formatter.string(from: event.start),
                     programTitle: event.title,
                     channelName: channel.name,
