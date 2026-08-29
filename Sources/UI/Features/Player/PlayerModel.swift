@@ -81,7 +81,7 @@ public final class PlayerModel {
         }
 
         endObserver = NotificationCenter.default.addObserver(
-            forName: AVPlayerItem.didPlayToEndTimeNotification,
+            forName: .AVPlayerItemDidPlayToEndTime,
             object: currentItem,
             queue: .main
         ) { [weak self] _ in
