@@ -31,3 +31,7 @@ Config/Secrets*.plist
 *.swp
 .idea/
 *.orig
+
+# brand tooling
+Tools/brand/node_modules/
+Tools/brand/package*.json
