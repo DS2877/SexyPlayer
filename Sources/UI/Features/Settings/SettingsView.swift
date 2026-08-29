@@ -4,7 +4,6 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showAddProvider = false
     @State private var showPersonalize = false
-    @State private var aiAssisted = false
 
     var body: some View {
         NavigationStack {
@@ -33,7 +32,6 @@ struct SettingsView: View {
             PersonalizeView(mode: .settings)
                 .environment(env)
         }
-        .task { aiAssisted = await env.aiService.mode == .assisted }
     }
 
     private var personalizeSection: some View {
@@ -120,16 +118,19 @@ struct SettingsView: View {
     private var aiSection: some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
             SectionHeader("AI Search", subtitle: "Natural-language search understanding")
-            Toggle(isOn: $aiAssisted) {
+            Toggle(isOn: Binding(
+                get: { env.preferences.preferences.aiAssistedSearch },
+                set: { on in
+                    env.preferences.update { $0.aiAssistedSearch = on }
+                    Task { await env.applyPreferences() }
+                }
+            )) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Use AI-assisted understanding").font(.dsBody)
                     Text("When on, ambiguous searches send only your words and the list of genres/languages in your library — never your provider details, stream links, or what you watch.")
                         .font(.dsCaption).foregroundStyle(Palette.textTertiary)
                         .frame(maxWidth: 900, alignment: .leading)
                 }
-            }
-            .onChange(of: aiAssisted) { _, on in
-                Task { await env.aiService.setMode(on ? .assisted : .onDeviceOnly) }
             }
             .padding(Metrics.space2)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))

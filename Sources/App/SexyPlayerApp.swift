@@ -8,7 +8,10 @@ struct SexyPlayerApp: App {
         WindowGroup {
             RootView()
                 .environment(environment)
-                .task { await environment.bootstrap() }
+                .task {
+                    await environment.applyPreferences()
+                    await environment.bootstrap()
+                }
         }
     }
 }

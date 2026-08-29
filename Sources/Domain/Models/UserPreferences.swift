@@ -64,6 +64,9 @@ public struct UserPreferences: Codable, Sendable, Equatable {
     /// Autoplay the next episode of a series.
     public var autoPlayNextEpisode: Bool
 
+    /// Use the AI-assisted parser for ambiguous searches (opt-in).
+    public var aiAssistedSearch: Bool
+
     /// Set once the user has been through onboarding.
     public var hasOnboarded: Bool
 
@@ -74,6 +77,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         homeRows: [HomeRowKind] = HomeRowKind.defaultEnabled,
         defaultSort: BrowseSort = .titleAscending,
         autoPlayNextEpisode: Bool = true,
+        aiAssistedSearch: Bool = false,
         hasOnboarded: Bool = false
     ) {
         self.preferredAudioLanguages = preferredAudioLanguages
@@ -82,8 +86,29 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         self.homeRows = homeRows
         self.defaultSort = defaultSort
         self.autoPlayNextEpisode = autoPlayNextEpisode
+        self.aiAssistedSearch = aiAssistedSearch
         self.hasOnboarded = hasOnboarded
     }
 
     public func isRowEnabled(_ kind: HomeRowKind) -> Bool { homeRows.contains(kind) }
+
+    private enum CodingKeys: String, CodingKey {
+        case preferredAudioLanguages, preferredSubtitleLanguage, hideAdultContent
+        case homeRows, defaultSort, autoPlayNextEpisode, aiAssistedSearch, hasOnboarded
+    }
+
+    // Lenient decoding: any key missing from stored JSON falls back to its
+    // default, so new preference fields never wipe a user's existing settings.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = UserPreferences()
+        preferredAudioLanguages   = try c.decodeIfPresent([Language].self, forKey: .preferredAudioLanguages) ?? d.preferredAudioLanguages
+        preferredSubtitleLanguage = try c.decodeIfPresent(Language.self, forKey: .preferredSubtitleLanguage) ?? d.preferredSubtitleLanguage
+        hideAdultContent          = try c.decodeIfPresent(Bool.self, forKey: .hideAdultContent) ?? d.hideAdultContent
+        homeRows                  = try c.decodeIfPresent([HomeRowKind].self, forKey: .homeRows) ?? d.homeRows
+        defaultSort               = try c.decodeIfPresent(BrowseSort.self, forKey: .defaultSort) ?? d.defaultSort
+        autoPlayNextEpisode       = try c.decodeIfPresent(Bool.self, forKey: .autoPlayNextEpisode) ?? d.autoPlayNextEpisode
+        hasOnboarded              = try c.decodeIfPresent(Bool.self, forKey: .hasOnboarded) ?? d.hasOnboarded
+        aiAssistedSearch          = try c.decodeIfPresent(Bool.self, forKey: .aiAssistedSearch) ?? d.aiAssistedSearch
+    }
 }

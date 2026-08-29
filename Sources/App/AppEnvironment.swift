@@ -60,10 +60,12 @@ public final class AppEnvironment {
         self.normalizer = Normalizer()
     }
 
-    /// Push the current content preferences into the repository. Call after a
-    /// load and whenever preferences change.
+    /// Push the current preferences into the parts of the app that need them.
+    /// Call after a load and whenever preferences change.
     public func applyPreferences() async {
-        await repository.setHideAdult(preferences.preferences.hideAdultContent)
+        let prefs = preferences.preferences
+        await repository.setHideAdult(prefs.hideAdultContent)
+        await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
     }
 
     public static func live() -> AppEnvironment { AppEnvironment() }

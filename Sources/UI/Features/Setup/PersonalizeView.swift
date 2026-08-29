@@ -84,6 +84,9 @@ struct PersonalizeView: View {
                 toggleRow(isOn: $working.autoPlayNextEpisode,
                           title: "Autoplay next episode",
                           note: "When an episode finishes, the next one starts automatically.")
+                toggleRow(isOn: $working.aiAssistedSearch,
+                          title: "AI-assisted search",
+                          note: "For vague searches, sends only your words plus the list of genres and languages in your library — never credentials, stream links, or your history.")
             }
         }
     }
