@@ -73,23 +73,23 @@ public final class SearchViewModel {
             case .series: label = "Series"
             case .liveChannel: label = "Live TV"
             }
-            chips.append(Chip(id: "kind-\(kind.rawValue)", label: label) {
-                $0.kinds.removeAll { $0 == kind }
+            chips.append(Chip(id: "kind-\(kind.rawValue)", label: label) { intent in
+                intent.kinds.removeAll { $0 == kind }
             })
         }
         for genre in intent.genres {
-            chips.append(Chip(id: "genre-\(genre.rawValue)", label: genre.displayName) {
-                $0.genres.removeAll { $0 == genre }
+            chips.append(Chip(id: "genre-\(genre.rawValue)", label: genre.displayName) { intent in
+                intent.genres.removeAll { $0 == genre }
             })
         }
         for lang in intent.audioLanguages {
-            chips.append(Chip(id: "audio-\(lang.code)", label: "\(lang.displayName) audio") {
-                $0.audioLanguages.removeAll { $0 == lang }
+            chips.append(Chip(id: "audio-\(lang.code)", label: "\(lang.displayName) audio") { intent in
+                intent.audioLanguages.removeAll { $0 == lang }
             })
         }
         for lang in intent.subtitleLanguages {
-            chips.append(Chip(id: "sub-\(lang.code)", label: "\(lang.displayName) subtitles") {
-                $0.subtitleLanguages.removeAll { $0 == lang }
+            chips.append(Chip(id: "sub-\(lang.code)", label: "\(lang.displayName) subtitles") { intent in
+                intent.subtitleLanguages.removeAll { $0 == lang }
             })
         }
         if let minYear = intent.minYear {
