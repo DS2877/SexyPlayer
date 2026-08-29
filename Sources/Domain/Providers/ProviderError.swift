@@ -10,6 +10,7 @@ public enum ProviderError: Error, Equatable, Sendable {
     case badResponse
     case playlistMalformed(reason: String)
     case streamUnavailable
+    case streamNotSupported(detail: String)
     case timedOut
     case cancelled
     case unknown
@@ -23,6 +24,7 @@ public enum ProviderError: Error, Equatable, Sendable {
         case .badResponse:           return "Your provider sent something unexpected"
         case .playlistMalformed:     return "This playlist couldn't be read"
         case .streamUnavailable:     return "This channel isn't available right now"
+        case .streamNotSupported:    return "Apple TV can't play this stream"
         case .timedOut:              return "Your provider took too long to respond"
         case .cancelled:             return "Cancelled"
         case .unknown:               return "Something went wrong"
@@ -44,6 +46,8 @@ public enum ProviderError: Error, Equatable, Sendable {
             return "The playlist file doesn't look valid. (\(reason))"
         case .streamUnavailable:
             return "The stream didn't respond. Try another channel or come back later."
+        case .streamNotSupported(let detail):
+            return detail
         case .timedOut:
             return "The connection timed out. Try again in a moment."
         case .cancelled:
@@ -62,6 +66,7 @@ public enum ProviderError: Error, Equatable, Sendable {
         case .timedOut, .streamUnavailable, .badResponse, .unknown:
             return [.retry]
         case .playlistMalformed:    return [.editProvider]
+        case .streamNotSupported:   return []
         case .cancelled:            return [.retry]
         }
     }

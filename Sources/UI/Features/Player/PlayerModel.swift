@@ -26,6 +26,7 @@ public final class PlayerModel {
     @ObservationIgnored private var timeObserverToken: Any?
     @ObservationIgnored private var failureObserver: NSObjectProtocol?
     @ObservationIgnored private var hasSeekedToResume = false
+    @ObservationIgnored private var loadTimeout: Task<Void, Never>?
 
     /// Called ~every 10s and on teardown with the current position. No-op for live.
     @ObservationIgnored
@@ -39,7 +40,23 @@ public final class PlayerModel {
         self.onProgress = onProgress
         self.player = AVPlayer(url: item.url)
         self.player.automaticallyWaitsToMinimizeStalling = true
+
+        // Refuse obviously unplayable streams up front rather than spinning.
+        if case .unsupported(let reason) = StreamCompatibility.verdict(for: item.url) {
+            state = .failed(.streamNotSupported(detail: reason))
+            return
+        }
         configure()
+        startLoadTimeout()
+    }
+
+    private func startLoadTimeout() {
+        loadTimeout?.cancel()
+        loadTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(25))
+            guard !Task.isCancelled, let self, self.state == .loading else { return }
+            self.fail(with: nil)
+        }
     }
 
     private func configure() {
@@ -76,10 +93,13 @@ public final class PlayerModel {
         hasSeekedToResume = false
         player.replaceCurrentItem(with: AVPlayerItem(url: item.url))
         configure()
+        startLoadTimeout()
         player.play()
     }
 
     private func removeObservers() {
+        loadTimeout?.cancel()
+        loadTimeout = nil
         if let token = timeObserverToken { player.removeTimeObserver(token) }
         timeObserverToken = nil
         statusObservation?.invalidate()
@@ -91,6 +111,7 @@ public final class PlayerModel {
     private func handleStatusChange(_ status: AVPlayerItem.Status) {
         switch status {
         case .readyToPlay:
+            loadTimeout?.cancel()
             seekToResumeIfNeeded()
             state = .playing
             player.play()

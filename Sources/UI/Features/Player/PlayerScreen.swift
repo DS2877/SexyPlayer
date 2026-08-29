@@ -15,24 +15,24 @@ struct PlayerScreen: View {
             Color.black.ignoresSafeArea()
 
             if let model {
-                SystemPlayerView(player: model.player)
+                if case .failed(let error) = model.state {
+                    VStack(spacing: Metrics.space3) {
+                        ErrorStateView(
+                            error: error,
+                            onRetry: canRetry(error) ? { model.retry() } : nil,
+                            onEditProvider: nil
+                        )
+                        Button("Close", action: { dismiss() })
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black.opacity(0.95))
                     .ignoresSafeArea()
-
-                switch model.state {
-                case .loading:
-                    ProgressView()
-                        .controlSize(.large)
-                        .tint(.white)
-                case .failed(let error):
-                    ErrorStateView(
-                        error: error,
-                        onRetry: { model.retry() },
-                        onEditProvider: { dismiss() }
-                    )
-                    .background(.black.opacity(0.85))
-                    .ignoresSafeArea()
-                case .playing:
-                    EmptyView()
+                } else {
+                    SystemPlayerView(player: model.player).ignoresSafeArea()
+                    if model.state == .loading {
+                        ProgressView().controlSize(.large).tint(.white)
+                    }
                 }
             }
         }
@@ -45,6 +45,11 @@ struct PlayerScreen: View {
             }
         }
         .onDisappear { model?.teardown() }
+    }
+
+    private func canRetry(_ error: ProviderError) -> Bool {
+        if case .streamNotSupported = error { return false }
+        return true
     }
 }
 
