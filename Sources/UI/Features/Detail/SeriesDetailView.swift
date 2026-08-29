@@ -6,6 +6,7 @@ struct SeriesDetailView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var series: Series?
     @State private var notFound = false
+    @State private var loadingEpisodes = false
     @State private var selectedSeason: Int?
     @State private var playback: PlaybackItem?
 
@@ -24,6 +25,11 @@ struct SeriesDetailView: View {
         .task(id: seriesID) {
             series = await env.repository.series(id: seriesID)
             notFound = series == nil
+            if let loaded = series, !loaded.hasEpisodes {
+                loadingEpisodes = true
+                series = await env.ensureEpisodes(forSeries: seriesID)
+                loadingEpisodes = false
+            }
             selectedSeason = series?.seasons.first?.number
         }
         .fullScreenCover(item: $playback) { item in
@@ -69,6 +75,16 @@ struct SeriesDetailView: View {
 
             if series.seasons.count > 1 {
                 seasonPicker(series)
+            }
+
+            if loadingEpisodes {
+                HStack(spacing: Metrics.space2) {
+                    ProgressView().tint(Palette.accent)
+                    Text("Loading episodes…").font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                }
+            } else if series.seasons.isEmpty {
+                Text("No episodes available for this series.")
+                    .font(.dsCaption).foregroundStyle(Palette.textTertiary)
             }
 
             if let season {

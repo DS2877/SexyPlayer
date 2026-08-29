@@ -1,0 +1,148 @@
+import Foundation
+
+/// `ProviderClient` for an Xtream Codes account. Fetches live + VOD + series
+/// shells in the bulk pass; series episodes load on demand.
+public struct XtreamProviderClient: ProviderClient {
+
+    public let descriptor: ProviderDescriptor
+    private let api: XtreamAPI
+    private let http: HTTPClient
+
+    public init?(configuration: ProviderConfiguration, password: String, http: HTTPClient = .init()) {
+        guard configuration.kind == .xtream,
+              let host = configuration.xtreamHost,
+              let username = configuration.xtreamUsername,
+              let api = XtreamAPI(host: host, username: username, password: password)
+        else { return nil }
+        self.descriptor = configuration.descriptor
+        self.api = api
+        self.http = http
+    }
+
+    // MARK: - Bulk catalog
+
+    public func fetchRawCatalog() async throws -> RawCatalog {
+        try await verifyAuth()
+
+        async let liveCats = categories(.liveCategories)
+        async let vodCats = categories(.vodCategories)
+        async let seriesCats = categories(.seriesCategories)
+        async let liveRaw = fetch([XtreamDTO.LiveStream].self, .liveStreams)
+        async let vodRaw = fetch([XtreamDTO.VODStream].self, .vodStreams)
+        async let seriesRaw = fetch([XtreamDTO.SeriesListItem].self, .series)
+
+        let (liveCategories, vodCategories, seriesCategories) = await (liveCats, vodCats, seriesCats)
+        let (live, vod, series) = try await (liveRaw, vodRaw, seriesRaw)
+
+        let channels: [RawChannel] = live.compactMap { s in
+            guard let id = s.stream_id, let name = s.name else { return nil }
+            return RawChannel(
+                providerKey: String(id),
+                displayName: name,
+                groupTitle: liveCategories[s.category_id ?? ""],
+                logo: s.stream_icon,
+                tvgID: s.epg_channel_id,
+                streamURL: api.liveStreamURL(id: id).absoluteString
+            )
+        }
+
+        let movies: [RawVODItem] = vod.compactMap { v in
+            guard let id = v.stream_id, let name = v.name else { return nil }
+            return RawVODItem(
+                providerKey: String(id),
+                name: name,
+                groupTitle: vodCategories[v.category_id ?? ""],
+                logo: v.stream_icon,
+                streamURL: api.vodStreamURL(id: id, extension: v.container_extension ?? "mp4").absoluteString,
+                plot: v.plot,
+                genreText: v.genre,
+                releaseDate: v.releaseDate ?? v.added,
+                durationSecs: v.episode_run_time.map { $0 * 60 },
+                cast: v.cast,
+                director: v.director
+            )
+        }
+
+        let shells: [RawSeriesShell] = series.compactMap { s in
+            guard let id = s.series_id, let name = s.name else { return nil }
+            return RawSeriesShell(
+                providerKey: String(id),
+                name: name,
+                cover: s.cover,
+                plot: s.plot,
+                genreText: s.genre,
+                cast: s.cast,
+                director: s.director,
+                releaseDate: s.releaseDate,
+                groupTitle: seriesCategories[s.category_id ?? ""]
+            )
+        }
+
+        let epg = (try? await fetchEPG()) ?? []
+
+        AppLog.provider.info("Xtream import: \(channels.count) channels, \(movies.count) movies, \(shells.count) series.")
+        return RawCatalog(providerID: descriptor.id, channels: channels, vod: movies,
+                          seriesEpisodes: [], seriesShells: shells, epg: epg)
+    }
+
+    // MARK: - On demand
+
+    public func fetchEpisodes(seriesKey: String) async throws -> [RawSeriesEpisode] {
+        let info = try await http.decode(XtreamDTO.SeriesInfo.self, from: api.seriesInfoURL(seriesID: seriesKey))
+        guard let episodesBySeason = info.episodes else { return [] }
+
+        var result: [RawSeriesEpisode] = []
+        for (seasonKey, episodes) in episodesBySeason {
+            let seasonNumber = Int(seasonKey) ?? 1
+            for ep in episodes {
+                guard let epID = ep.id else { continue }
+                result.append(RawSeriesEpisode(
+                    providerKey: epID,
+                    name: ep.title ?? "Episode \(ep.episode_num ?? 0)",
+                    groupTitle: nil,
+                    logo: ep.info?.movie_image,
+                    streamURL: api.seriesStreamURL(episodeID: epID,
+                                                   extension: ep.container_extension ?? "mp4").absoluteString,
+                    plot: ep.info?.plot,
+                    explicitSeriesName: nil,
+                    explicitSeason: seasonNumber,
+                    explicitEpisode: ep.episode_num ?? (result.count + 1)
+                ))
+            }
+        }
+        return result
+    }
+
+    public func resolveStreamURL(for _: String, kind _: ContentKind) async throws -> URL {
+        // Xtream stream URLs are deterministic; the catalog already carries them.
+        throw ProviderError.streamUnavailable
+    }
+
+    // MARK: - Helpers
+
+    private func verifyAuth() async throws {
+        let auth = try await http.decode(XtreamDTO.AuthResponse.self, from: api.authURL)
+        guard let info = auth.user_info else { throw ProviderError.authenticationFailed }
+        if let status = info.status?.lowercased(), status.contains("expired") || status.contains("banned") || status.contains("disabled") {
+            throw ProviderError.authenticationFailed
+        }
+        if info.auth == "0" { throw ProviderError.authenticationFailed }
+    }
+
+    private func fetch<T: Decodable>(_ type: T.Type, _ action: XtreamAPI.Action) async throws -> T {
+        try await http.decode(T.self, from: api.url(action))
+    }
+
+    private func categories(_ action: XtreamAPI.Action) async -> [String: String] {
+        guard let list = try? await fetch([XtreamDTO.Category].self, action) else { return [:] }
+        return Dictionary(list.compactMap { cat -> (String, String)? in
+            guard let id = cat.category_id, let name = cat.category_name else { return nil }
+            return (id, name)
+        }, uniquingKeysWith: { a, _ in a })
+    }
+
+    private func fetchEPG() async throws -> [RawEPGEvent] {
+        let data = try await http.data(from: api.xmltvURL)
+        return try XMLTVParser.parse(data)
+    }
+}

@@ -7,7 +7,10 @@ public struct RawCatalog: Sendable {
     public var providerID: String
     public var channels: [RawChannel]
     public var vod: [RawVODItem]
+    /// Episodes whose series structure must be reconstructed from names (M3U).
     public var seriesEpisodes: [RawSeriesEpisode]
+    /// Series known only as metadata; episodes fetched on demand (Xtream).
+    public var seriesShells: [RawSeriesShell]
     public var epg: [RawEPGEvent]
 
     public init(
@@ -15,13 +18,40 @@ public struct RawCatalog: Sendable {
         channels: [RawChannel] = [],
         vod: [RawVODItem] = [],
         seriesEpisodes: [RawSeriesEpisode] = [],
+        seriesShells: [RawSeriesShell] = [],
         epg: [RawEPGEvent] = []
     ) {
         self.providerID = providerID
         self.channels = channels
         self.vod = vod
         self.seriesEpisodes = seriesEpisodes
+        self.seriesShells = seriesShells
         self.epg = epg
+    }
+}
+
+/// A series known to exist, without its episode list yet.
+public struct RawSeriesShell: Sendable {
+    public let providerKey: String
+    public let name: String
+    public let cover: String?
+    public let plot: String?
+    public let genreText: String?
+    public let cast: String?
+    public let director: String?
+    public let releaseDate: String?
+    public let groupTitle: String?
+
+    public init(providerKey: String, name: String, cover: String? = nil, plot: String? = nil, genreText: String? = nil, cast: String? = nil, director: String? = nil, releaseDate: String? = nil, groupTitle: String? = nil) {
+        self.providerKey = providerKey
+        self.name = name
+        self.cover = cover
+        self.plot = plot
+        self.genreText = genreText
+        self.cast = cast
+        self.director = director
+        self.releaseDate = releaseDate
+        self.groupTitle = groupTitle
     }
 }
 

@@ -63,6 +63,35 @@ final class NormalizerTests: XCTestCase {
         XCTAssertTrue(catalog.epg.allSatisfy { $0.stop > $0.start })
     }
 
+    func testSeriesShellsCarryProviderKey() {
+        let raw = RawCatalog(
+            providerID: "p",
+            seriesShells: [
+                RawSeriesShell(providerKey: "42", name: "The Wire (2002)", plot: "Baltimore.", genreText: "Crime, Drama")
+            ]
+        )
+        let catalog = Normalizer().normalize(raw)
+        let wire = catalog.series.first { $0.title == "The Wire" }
+        XCTAssertEqual(wire?.providerSeriesKey, "42")
+        XCTAssertEqual(wire?.year, 2002)
+        XCTAssertTrue(wire?.genres.contains(.crime) ?? false)
+        XCTAssertFalse(wire?.hasEpisodes ?? true)
+    }
+
+    func testOnDemandSeasonsFromExplicitEpisodes() {
+        let seriesID = CatalogID(providerID: "p", kind: .series, providerItemKey: "shell:42")
+        let raw = [
+            RawSeriesEpisode(providerKey: "e1", name: "Pilot", groupTitle: nil, logo: nil,
+                             streamURL: "http://x/1.mp4", explicitSeason: 1, explicitEpisode: 1),
+            RawSeriesEpisode(providerKey: "e2", name: "Old Cases", groupTitle: nil, logo: nil,
+                             streamURL: "http://x/2.mp4", explicitSeason: 1, explicitEpisode: 2),
+        ]
+        let seasons = Normalizer().seasons(forEpisodes: raw, seriesID: seriesID, providerID: "p")
+        XCTAssertEqual(seasons.count, 1)
+        XCTAssertEqual(seasons.first?.episodes.map(\.episodeNumber), [1, 2])
+        XCTAssertEqual(seasons.first?.episodes.first?.title, "Pilot")
+    }
+
     func testDeterministic() {
         let a = Normalizer().normalize(MockCatalogData.rawCatalog())
         let b = Normalizer().normalize(MockCatalogData.rawCatalog())

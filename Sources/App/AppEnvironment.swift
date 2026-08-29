@@ -20,40 +20,49 @@ public final class AppEnvironment {
     public let aiService: AIService
     public let watchProgress: WatchProgressStore
     public let favorites: FavoritesStore
+    public let providers: ProviderStore
     private let normalizer: Normalizer
-    private var provider: any ProviderClient
+    private var provider: (any ProviderClient)?
 
     // State
     public private(set) var loadState: LoadState = .idle
-    public private(set) var activeProvider: ProviderDescriptor
     public private(set) var vocabulary: SearchVocabulary = .init()
 
-    public init(provider: any ProviderClient) {
-        self.provider = provider
-        self.activeProvider = provider.descriptor
+    public var activeProvider: ProviderDescriptor? {
+        providers.activeConfiguration?.descriptor
+    }
+
+    /// True when there's no provider configured yet — the UI shows onboarding.
+    public var needsProviderSetup: Bool { !providers.hasAnyProvider }
+
+    public init() {
         self.repository = InMemoryCatalogRepository()
         self.searchEngine = SearchEngine()
         self.aiService = AIService(mode: .onDeviceOnly)
         self.watchProgress = WatchProgressStore()
         self.favorites = FavoritesStore()
+        self.providers = ProviderStore()
         self.normalizer = Normalizer()
     }
 
-    /// The default app wiring: the bundled demo provider.
-    public static func live() -> AppEnvironment {
-        AppEnvironment(provider: MockProviderClient())
-    }
+    public static func live() -> AppEnvironment { AppEnvironment() }
 
     /// Fetch + normalise + load the active provider's catalog.
     public func bootstrap(forceReload: Bool = false) async {
         if case .loading = loadState { return }
         if case .ready = loadState, !forceReload { return }
 
+        guard let config = providers.activeConfiguration,
+              let client = providers.makeClient(for: config) else {
+            loadState = .idle
+            return
+        }
+        provider = client
+
         loadState = .loading
         do {
-            let raw = try await provider.fetchRawCatalog()
+            let raw = try await client.fetchRawCatalog()
             let normalizer = self.normalizer
-            // Normalisation is pure and potentially heavy — run it off the main actor.
             let catalog = await Task.detached(priority: .userInitiated) {
                 normalizer.normalize(raw)
             }.value
@@ -69,12 +78,33 @@ public final class AppEnvironment {
         }
     }
 
-    /// Swap the active provider (used by provider setup in M6).
-    public func switchProvider(_ newProvider: any ProviderClient) async {
-        provider = newProvider
-        activeProvider = newProvider.descriptor
+    /// Make `config` active and (re)load its catalog.
+    public func activate(_ config: ProviderConfiguration) async {
+        providers.setActive(config.id)
         loadState = .idle
+        await repository.load(Catalog())
         await bootstrap(forceReload: true)
+    }
+
+    /// Load episodes for a series that was imported as a shell (Xtream).
+    public func ensureEpisodes(forSeries id: CatalogID) async -> Series? {
+        guard var series = await repository.series(id: id) else { return nil }
+        if series.hasEpisodes { return series }
+        guard let key = series.providerSeriesKey, let client = provider,
+              let providerID = providers.activeConfiguration?.id else { return series }
+        do {
+            let rawEpisodes = try await client.fetchEpisodes(seriesKey: key)
+            let normalizer = self.normalizer
+            let seasons = await Task.detached(priority: .userInitiated) {
+                normalizer.seasons(forEpisodes: rawEpisodes, seriesID: id, providerID: providerID)
+            }.value
+            await repository.attachSeasons(seasons, toSeriesID: id)
+            series.seasons = seasons
+            return series
+        } catch {
+            AppLog.provider.error("Episode load failed: \(String(describing: ProviderError.from(error)))")
+            return series
+        }
     }
 
     public func setAIMode(_ mode: AIService.Mode) async {

@@ -27,9 +27,20 @@ public protocol ProviderClient: Sendable {
 
     /// Fetch the provider's catalog in its own shape. Implementations must not
     /// block; heavy parsing belongs on a background executor.
+    ///
+    /// Series may come back as shells (no episodes) when episode listings are
+    /// expensive — episodes are then loaded on demand via `fetchEpisodes`.
     func fetchRawCatalog() async throws -> RawCatalog
 
     /// Resolve a playable URL for an item. For some providers this is a cheap
     /// passthrough; for others it hits the API. Called at playback time only.
     func resolveStreamURL(for providerItemKey: String, kind: ContentKind) async throws -> URL
+
+    /// Load the episodes for one series on demand. `seriesKey` is the value the
+    /// adapter put in `RawSeriesShell.providerKey`. Default: none.
+    func fetchEpisodes(seriesKey: String) async throws -> [RawSeriesEpisode]
+}
+
+public extension ProviderClient {
+    func fetchEpisodes(seriesKey: String) async throws -> [RawSeriesEpisode] { [] }
 }

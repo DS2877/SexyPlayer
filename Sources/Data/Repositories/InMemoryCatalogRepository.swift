@@ -59,6 +59,11 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func series(id: CatalogID) -> Series? { catalog.series.first { $0.id == id } }
     public func channel(id: CatalogID) -> Channel? { catalog.channels.first { $0.id == id } }
 
+    public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) {
+        guard let idx = catalog.series.firstIndex(where: { $0.id == id }) else { return }
+        catalog.series[idx].seasons = seasons
+    }
+
     public func recentlyAdded(limit: Int) -> [SearchResult.Item] {
         let movies = catalog.movies.suffix(limit).reversed().map { SearchResult.Item.movie($0) }
         let series = catalog.series.suffix(limit).reversed().map { SearchResult.Item.series($0) }

@@ -15,7 +15,11 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
     public let backdropURL: URL?
     public let synopsis: String?
 
-    public let seasons: [Season]
+    public var seasons: [Season]
+
+    /// Provider's own key for on-demand episode loading (Xtream `series_id`).
+    /// `nil` when the series was reconstructed from episode names (M3U).
+    public let providerSeriesKey: String?
 
     public init(
         id: CatalogID,
@@ -29,7 +33,8 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
         posterURL: URL? = nil,
         backdropURL: URL? = nil,
         synopsis: String? = nil,
-        seasons: [Season] = []
+        seasons: [Season] = [],
+        providerSeriesKey: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -43,11 +48,14 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
         self.backdropURL = backdropURL
         self.synopsis = synopsis
         self.seasons = seasons
+        self.providerSeriesKey = providerSeriesKey
     }
 
     public var episodeCount: Int {
         seasons.reduce(0) { $0 + $1.episodes.count }
     }
+
+    public var hasEpisodes: Bool { !seasons.isEmpty }
 }
 
 public struct Season: Identifiable, Hashable, Codable, Sendable {

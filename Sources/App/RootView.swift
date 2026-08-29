@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Top-level tab navigation. Only Home is built in M0; the other tabs show a
-/// styled "coming soon" placeholder so the product shape is visible.
+/// Top-level navigation. Shows onboarding until a provider is configured, then
+/// the tabbed app.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -12,32 +12,44 @@ struct RootView: View {
     @State private var selection: Tab = .home
 
     var body: some View {
+        Group {
+            if environment.needsProviderSetup {
+                ProviderSetupView()
+                    .transition(.opacity)
+            } else {
+                tabs
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: environment.needsProviderSetup)
+    }
+
+    private var tabs: some View {
         TabView(selection: $selection) {
             HomeView()
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(Tab.home)
 
-            ComingSoonView(feature: "Live TV", milestone: "M2")
+            ComingSoonView(feature: "Live TV", milestone: "the next milestone")
                 .tabItem { Label("Live TV", systemImage: "tv") }
                 .tag(Tab.liveTV)
 
-            ComingSoonView(feature: "TV Guide", milestone: "M2")
+            ComingSoonView(feature: "TV Guide", milestone: "the next milestone")
                 .tabItem { Label("Guide", systemImage: "calendar") }
                 .tag(Tab.guide)
 
-            ComingSoonView(feature: "Movies", milestone: "M3")
+            ComingSoonView(feature: "Movies", milestone: "the next milestone")
                 .tabItem { Label("Movies", systemImage: "film") }
                 .tag(Tab.movies)
 
-            ComingSoonView(feature: "Series", milestone: "M3")
+            ComingSoonView(feature: "Series", milestone: "the next milestone")
                 .tabItem { Label("Series", systemImage: "rectangle.stack") }
                 .tag(Tab.series)
 
-            ComingSoonView(feature: "Search", milestone: "M4")
+            ComingSoonView(feature: "Search", milestone: "the next milestone")
                 .tabItem { Label("Search", systemImage: "magnifyingglass") }
                 .tag(Tab.search)
 
-            ComingSoonView(feature: "Settings", milestone: "M6")
+            SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(Tab.settings)
         }
@@ -53,7 +65,7 @@ struct ComingSoonView: View {
         EmptyStateView(
             icon: "hammer",
             title: "\(feature) is on the way",
-            message: "This screen arrives in milestone \(milestone). The foundation it needs — domain models, normalization, repository — is already in place."
+            message: "This screen arrives in \(milestone). The foundation it needs is already in place."
         )
         .appThemeBackground()
     }

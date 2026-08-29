@@ -19,6 +19,9 @@ public protocol CatalogRepository: Sendable {
     func series(id: CatalogID) async -> Series?
     func channel(id: CatalogID) async -> Channel?
 
+    /// Attach on-demand-loaded episodes to a series shell.
+    func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) async
+
     func recentlyAdded(limit: Int) async -> [SearchResult.Item]
 
     /// EPG events for a channel within a window.

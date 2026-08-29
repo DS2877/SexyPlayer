@@ -10,8 +10,47 @@ public struct Normalizer: Sendable {
         Catalog(
             channels: raw.channels.map { normalizeChannel($0, providerID: raw.providerID) },
             movies:   raw.vod.map { normalizeMovie($0, providerID: raw.providerID) },
-            series:   normalizeSeries(raw.seriesEpisodes, providerID: raw.providerID),
+            series:   normalizeSeries(raw.seriesEpisodes, providerID: raw.providerID)
+                        + raw.seriesShells.map { normalizeShell($0, providerID: raw.providerID) },
             epg:      raw.epg.map(normalizeEPG)
+        )
+    }
+
+    /// Normalize an on-demand batch of episodes for one already-known series.
+    public func seasons(
+        forEpisodes rawEpisodes: [RawSeriesEpisode],
+        seriesID: CatalogID,
+        providerID: String
+    ) -> [Season] {
+        let entries: [(season: Int, episode: Int, raw: RawSeriesEpisode)] = rawEpisodes.map { raw in
+            if let s = raw.explicitSeason, let e = raw.explicitEpisode {
+                return (s, e, raw)
+            }
+            if let parsed = EpisodeParser.parse(TitleNormalizer.episodeRawName(raw.name)) {
+                return (parsed.season, parsed.episode, raw)
+            }
+            return (1, (rawEpisodes.firstIndex { $0.providerKey == raw.providerKey } ?? 0) + 1, raw)
+        }
+        return buildSeasons(from: entries, seriesID: seriesID, providerID: providerID, keyPrefix: seriesID.rawValue)
+    }
+
+    private func normalizeShell(_ shell: RawSeriesShell, providerID: String) -> Series {
+        let seriesID = CatalogID(providerID: providerID, kind: .series, providerItemKey: "shell:\(shell.providerKey)")
+        let (title, nameYear) = TitleNormalizer.movieTitle(shell.name)
+        return Series(
+            id: seriesID,
+            title: title,
+            year: shell.releaseDate.flatMap(TitleNormalizer.extractYear) ?? nameYear,
+            genres: GenreDetector.detect(from: [shell.genreText, shell.groupTitle, shell.name]),
+            audioLanguages: LanguageDetector.detect(name: shell.name, groupTitle: shell.groupTitle).audio,
+            subtitleLanguages: LanguageDetector.detect(name: shell.name, groupTitle: shell.groupTitle).subtitles,
+            quality: .unknown,
+            countryCode: nil,
+            posterURL: shell.cover.flatMap(URL.init(string:)),
+            backdropURL: nil,
+            synopsis: shell.plot?.nonEmpty,
+            seasons: [],
+            providerSeriesKey: shell.providerKey
         )
     }
 
@@ -98,27 +137,7 @@ public struct Normalizer: Sendable {
         return grouped.map { key, entries in
             let title = displayTitle[key] ?? key
             let seriesID = CatalogID(providerID: providerID, kind: .series, providerItemKey: key)
-
-            let bySeason = Dictionary(grouping: entries, by: { $0.season })
-            let seasons = bySeason.keys.sorted().map { seasonNumber -> Season in
-                let eps = bySeason[seasonNumber]!
-                    .sorted { $0.episode < $1.episode }
-                    .map { entry -> Episode in
-                        Episode(
-                            id: CatalogID(providerID: providerID, kind: .series,
-                                          providerItemKey: "\(key)-s\(entry.season)e\(entry.episode)"),
-                            seriesID: seriesID,
-                            seasonNumber: entry.season,
-                            episodeNumber: entry.episode,
-                            title: episodeTitle(entry.raw.name, season: entry.season, episode: entry.episode),
-                            overview: entry.raw.plot?.nonEmpty,
-                            durationMinutes: nil,
-                            stillURL: entry.raw.logo.flatMap(URL.init(string:)),
-                            streamURL: URL(string: entry.raw.streamURL) ?? Self.placeholderURL
-                        )
-                    }
-                return Season(seriesID: seriesID, number: seasonNumber, episodes: eps)
-            }
+            let seasons = buildSeasons(from: entries, seriesID: seriesID, providerID: providerID, keyPrefix: key)
 
             let allNames = entries.map { $0.raw.name }
             let allGroups = entries.compactMap { $0.raw.groupTitle }
@@ -139,10 +158,39 @@ public struct Normalizer: Sendable {
                 posterURL: entries.first?.raw.logo.flatMap(URL.init(string:)),
                 backdropURL: nil,
                 synopsis: entries.compactMap { $0.raw.plot?.nonEmpty }.first,
-                seasons: seasons
+                seasons: seasons,
+                providerSeriesKey: nil
             )
         }
         .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+    }
+
+    private func buildSeasons(
+        from entries: [(season: Int, episode: Int, raw: RawSeriesEpisode)],
+        seriesID: CatalogID,
+        providerID: String,
+        keyPrefix: String
+    ) -> [Season] {
+        let bySeason = Dictionary(grouping: entries, by: { $0.season })
+        return bySeason.keys.sorted().map { seasonNumber -> Season in
+            let eps = bySeason[seasonNumber]!
+                .sorted { $0.episode < $1.episode }
+                .map { entry -> Episode in
+                    Episode(
+                        id: CatalogID(providerID: providerID, kind: .series,
+                                      providerItemKey: "\(keyPrefix)-s\(entry.season)e\(entry.episode)"),
+                        seriesID: seriesID,
+                        seasonNumber: entry.season,
+                        episodeNumber: entry.episode,
+                        title: episodeTitle(entry.raw.name, season: entry.season, episode: entry.episode),
+                        overview: entry.raw.plot?.nonEmpty,
+                        durationMinutes: nil,
+                        stillURL: entry.raw.logo.flatMap(URL.init(string:)),
+                        streamURL: URL(string: entry.raw.streamURL) ?? Self.placeholderURL
+                    )
+                }
+            return Season(seriesID: seriesID, number: seasonNumber, episodes: eps)
+        }
     }
 
     private func episodeTitle(_ raw: String, season: Int, episode: Int) -> String {
