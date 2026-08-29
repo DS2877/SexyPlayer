@@ -27,6 +27,7 @@ struct VODBrowseView: View {
         .task {
             if model == nil {
                 let vm = VODBrowseViewModel(kind: kind, repository: env.repository, watchProgress: env.watchProgress)
+                vm.filter.sort = env.preferences.preferences.defaultSort
                 model = vm
                 await vm.start()
             }

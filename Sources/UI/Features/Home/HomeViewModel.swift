@@ -10,10 +10,14 @@ public final class HomeViewModel {
 
     private let repository: any CatalogRepository
     private let watchProgress: WatchProgressStore
+    private let preferences: PreferencesStore
 
-    public init(repository: any CatalogRepository, watchProgress: WatchProgressStore) {
+    public init(repository: any CatalogRepository,
+                watchProgress: WatchProgressStore,
+                preferences: PreferencesStore) {
         self.repository = repository
         self.watchProgress = watchProgress
+        self.preferences = preferences
     }
 
     public func rebuild(now: Date = .now) async {
@@ -23,18 +27,20 @@ public final class HomeViewModel {
         let catalog = await repository.snapshot()
         guard !catalog.isEmpty else { content = .empty; return }
 
+        let prefs = preferences.preferences
+        let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
 
-        let tonight = Self.buildTonight(from: catalog, now: now)
+        let tonight = prefs.isRowEnabled(.tonight) ? Self.buildTonight(from: catalog, now: now) : []
 
-        // Continue Watching
-        let continueCards = continueWatchingCards(catalog: catalog)
-        if !continueCards.isEmpty {
-            rows.append(HomeRow(id: "continue", title: "Continue Watching", subtitle: nil, cards: continueCards))
+        func add(_ kind: HomeRowKind, _ title: String, _ cards: [HomeCard], subtitle: String? = nil) {
+            guard enabled.contains(kind) else { return }
+            rows.append(HomeRow(id: kind.rawValue, title: title, subtitle: subtitle, cards: cards))
         }
 
-        // Live now
-        let liveCards = catalog.channels.prefix(14).map { channel -> HomeCard in
+        add(.continueWatching, "Continue Watching", continueWatchingCards(catalog: catalog))
+
+        let liveCards = catalog.channels.prefix(16).map { channel -> HomeCard in
             let currentEvent = catalog.nowPlaying(forEPGID: channel.epgID ?? "", at: now)
             return HomeCard(
                 id: channel.id, kind: .channel,
@@ -44,26 +50,36 @@ public final class HomeViewModel {
                 badge: currentEvent != nil ? "LIVE" : nil
             )
         }
-        rows.append(HomeRow(id: "live", title: "Live Now", subtitle: nil, cards: Array(liveCards)))
+        add(.liveNow, "Live Now", Array(liveCards))
 
-        // Recently added
         let recent = catalog.movies.suffix(12).reversed().map { Self.card(for: $0) }
             + catalog.series.suffix(6).reversed().map { Self.card(for: $0) }
-        rows.append(HomeRow(id: "recent", title: "Recently Added", subtitle: nil, cards: Array(recent.prefix(14))))
+        add(.recentlyAdded, "Recently Added", Array(recent.prefix(16)))
 
-        rows.append(HomeRow(id: "movies", title: "Movies", subtitle: nil,
-                            cards: catalog.movies.sorted { ($0.year ?? 0) > ($1.year ?? 0) }.map(Self.card(for:))))
+        // In your languages
+        if !prefs.preferredAudioLanguages.isEmpty {
+            let want = Set(prefs.preferredAudioLanguages)
+            let cards = catalog.movies.filter { !Set($0.audioLanguages).isDisjoint(with: want) }.prefix(20).map(Self.card(for:))
+                + catalog.series.filter { !Set($0.audioLanguages).isDisjoint(with: want) }.prefix(10).map(Self.card(for:))
+            add(.inYourLanguages, "In Your Languages", Array(cards))
+        }
 
-        rows.append(HomeRow(id: "series", title: "Series", subtitle: nil,
-                            cards: catalog.series.map(Self.card(for:))))
+        // With your subtitles
+        if let sub = prefs.preferredSubtitleLanguage {
+            let cards = catalog.movies.filter { $0.subtitleLanguages.contains(sub) }.prefix(20).map(Self.card(for:))
+                + catalog.series.filter { $0.subtitleLanguages.contains(sub) }.prefix(10).map(Self.card(for:))
+            add(.withYourSubtitles, "With \(sub.displayName) Subtitles", Array(cards))
+        }
 
-        let swedish = catalog.movies.filter { $0.audioLanguages.contains(.swedish) }.map(Self.card(for:))
-            + catalog.series.filter { $0.audioLanguages.contains(.swedish) }.map(Self.card(for:))
-        rows.append(HomeRow(id: "swedish", title: "Swedish Content", subtitle: nil, cards: swedish))
+        add(.movies, "Movies",
+            catalog.movies.sorted { ($0.year ?? 0) > ($1.year ?? 0) }.prefix(30).map(Self.card(for:)))
+        add(.series, "Series", catalog.series.prefix(30).map(Self.card(for:)))
 
-        let swedishSubs = catalog.movies.filter { $0.subtitleLanguages.contains(.swedish) }.map(Self.card(for:))
-            + catalog.series.filter { $0.subtitleLanguages.contains(.swedish) }.map(Self.card(for:))
-        rows.append(HomeRow(id: "swesub", title: "With Swedish Subtitles", subtitle: nil, cards: swedishSubs))
+        // Order rows to match the user's preference order.
+        rows.sort { lhs, rhs in
+            (prefs.homeRows.firstIndex { $0.rawValue == lhs.id } ?? 99)
+                < (prefs.homeRows.firstIndex { $0.rawValue == rhs.id } ?? 99)
+        }
 
         let hero = catalog.movies
             .sorted { lhs, rhs in

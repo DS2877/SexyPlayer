@@ -26,6 +26,9 @@ public struct Channel: Identifiable, Hashable, Codable, Sendable {
     /// Provider-assigned ordering hint, used as a stable tiebreaker.
     public let sortIndex: Int
 
+    /// Best-effort adult-category flag (see `AdultContentDetector`).
+    public var isAdult: Bool
+
     public init(
         id: CatalogID,
         name: String,
@@ -37,7 +40,8 @@ public struct Channel: Identifiable, Hashable, Codable, Sendable {
         quality: VideoQuality = .unknown,
         streamURL: URL,
         epgID: String? = nil,
-        sortIndex: Int = 0
+        sortIndex: Int = 0,
+        isAdult: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -50,5 +54,6 @@ public struct Channel: Identifiable, Hashable, Codable, Sendable {
         self.streamURL = streamURL
         self.epgID = epgID
         self.sortIndex = sortIndex
+        self.isAdult = isAdult
     }
 }

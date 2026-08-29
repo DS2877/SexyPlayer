@@ -50,7 +50,8 @@ public struct Normalizer: Sendable {
             backdropURL: nil,
             synopsis: shell.plot?.nonEmpty,
             seasons: [],
-            providerSeriesKey: shell.providerKey
+            providerSeriesKey: shell.providerKey,
+            isAdult: AdultContentDetector.isAdult(name: shell.name, groupTitle: shell.groupTitle)
         )
     }
 
@@ -72,7 +73,8 @@ public struct Normalizer: Sendable {
             quality: quality,
             streamURL: URL(string: raw.streamURL) ?? Self.placeholderURL,
             epgID: raw.tvgID?.isEmpty == false ? raw.tvgID : nil,
-            sortIndex: 0
+            sortIndex: 0,
+            isAdult: AdultContentDetector.isAdult(name: raw.displayName, groupTitle: raw.groupTitle)
         )
     }
 
@@ -99,7 +101,8 @@ public struct Normalizer: Sendable {
             synopsis: raw.plot?.nonEmpty,
             cast: raw.cast?.splitList() ?? [],
             directors: raw.director?.splitList() ?? [],
-            streamURL: URL(string: raw.streamURL) ?? Self.placeholderURL
+            streamURL: URL(string: raw.streamURL) ?? Self.placeholderURL,
+            isAdult: AdultContentDetector.isAdult(name: raw.name, groupTitle: raw.groupTitle)
         )
     }
 
@@ -159,7 +162,10 @@ public struct Normalizer: Sendable {
                 backdropURL: nil,
                 synopsis: entries.compactMap { $0.raw.plot?.nonEmpty }.first,
                 seasons: seasons,
-                providerSeriesKey: nil
+                providerSeriesKey: nil,
+                isAdult: entries.contains {
+                    AdultContentDetector.isAdult(name: $0.raw.name, groupTitle: $0.raw.groupTitle)
+                }
             )
         }
         .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }

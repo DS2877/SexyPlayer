@@ -25,6 +25,9 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
 
     public let streamURL: URL
 
+    /// Best-effort adult-category flag (see `AdultContentDetector`).
+    public var isAdult: Bool
+
     public init(
         id: CatalogID,
         title: String,
@@ -40,7 +43,8 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
         synopsis: String? = nil,
         cast: [String] = [],
         directors: [String] = [],
-        streamURL: URL
+        streamURL: URL,
+        isAdult: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -57,5 +61,6 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
         self.cast = cast
         self.directors = directors
         self.streamURL = streamURL
+        self.isAdult = isAdult
     }
 }

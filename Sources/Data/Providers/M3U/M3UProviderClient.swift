@@ -35,7 +35,6 @@ public struct M3UProviderClient: ProviderClient {
                 catalog.epg = events
             }
         }
-        progress.reached(.finalizing)
         AppLog.provider.info("M3U import: \(catalog.channels.count) channels, \(catalog.vod.count) movies, \(catalog.seriesEpisodes.count) episodes.")
         return catalog
     }

@@ -21,6 +21,7 @@ public final class AppEnvironment {
     public let watchProgress: WatchProgressStore
     public let favorites: FavoritesStore
     public let providers: ProviderStore
+    public let preferences: PreferencesStore
     private let normalizer: Normalizer
     private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
@@ -55,7 +56,14 @@ public final class AppEnvironment {
         self.watchProgress = WatchProgressStore()
         self.favorites = FavoritesStore()
         self.providers = ProviderStore()
+        self.preferences = PreferencesStore()
         self.normalizer = Normalizer()
+    }
+
+    /// Push the current content preferences into the repository. Call after a
+    /// load and whenever preferences change.
+    public func applyPreferences() async {
+        await repository.setHideAdult(preferences.preferences.hideAdultContent)
     }
 
     public static func live() -> AppEnvironment { AppEnvironment() }
@@ -78,6 +86,7 @@ public final class AppEnvironment {
         // Fast path: a cached catalog.
         if !forceReload, let entry = await cache.load(providerID: providerID), !entry.catalog.isEmpty {
             await repository.load(entry.catalog)
+            await applyPreferences()
             vocabulary = SearchVocabulary.from(catalog: entry.catalog)
             loadState = .ready
             hasLoadedOnce = true
@@ -96,13 +105,18 @@ public final class AppEnvironment {
         }
         do {
             let catalog = try await importCatalog(client: client, reporter: reporter)
+            markPhase(.finalizing)                       // normalize done; now indexing
             await repository.load(catalog)
+            await applyPreferences()
             vocabulary = SearchVocabulary.from(catalog: catalog)
-            await cache.save(catalog, providerID: providerID)
-            markPhase(.finalizing)
-            loadState = .ready
+            loadState = .ready                           // app is usable now
             hasLoadedOnce = true
             AppLog.app.info("Catalog ready: \(catalog.channels.count) channels, \(catalog.movies.count) movies, \(catalog.series.count) series.")
+            // Persist in the background — a large catalog can take seconds to encode.
+            let toCache = catalog
+            Task.detached(priority: .utility) { [cache] in
+                await cache.save(toCache, providerID: providerID)
+            }
         } catch {
             let providerError = ProviderError.from(error)
             loadState = .failed(providerError)
@@ -135,6 +149,7 @@ public final class AppEnvironment {
                 guard !Task.isCancelled,
                       self.providers.activeConfiguration?.id == providerID else { return }
                 await self.repository.load(catalog)
+                await self.applyPreferences()
                 self.vocabulary = SearchVocabulary.from(catalog: catalog)
                 await self.cache.save(catalog, providerID: providerID)
                 AppLog.app.info("Catalog refreshed in background.")

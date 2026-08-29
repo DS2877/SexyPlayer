@@ -84,7 +84,6 @@ public struct XtreamProviderClient: ProviderClient {
 
         progress.reached(.guide)
         let epg = (try? await fetchEPG()) ?? []
-        progress.reached(.finalizing)
 
         AppLog.provider.info("Xtream import: \(channels.count) channels, \(movies.count) movies, \(shells.count) series.")
         return RawCatalog(providerID: descriptor.id, channels: channels, vod: movies,

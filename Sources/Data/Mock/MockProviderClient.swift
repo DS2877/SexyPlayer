@@ -24,7 +24,6 @@ public struct MockProviderClient: ProviderClient {
             try await Task.sleep(for: artificialDelay / 4)
             progress.reached(phase)
         }
-        progress.reached(.finalizing)
         return MockCatalogData.rawCatalog()
     }
 

@@ -5,17 +5,40 @@ import Foundation
 /// callers are already written for the SQLite implementation.
 public actor InMemoryCatalogRepository: CatalogRepository {
 
+    /// Full imported catalog.
+    private var source: Catalog
+    /// `source` with adult items removed when `hideAdult` is on — every query
+    /// reads this.
     private var catalog: Catalog
     private var ready: Bool
+    private var hideAdult = false
 
     public init(catalog: Catalog = Catalog(), ready: Bool = false) {
+        self.source = catalog
         self.catalog = catalog
         self.ready = ready
     }
 
     public func load(_ catalog: Catalog) {
-        self.catalog = catalog
+        self.source = catalog
         self.ready = true
+        rebuildVisible()
+    }
+
+    public func setHideAdult(_ hide: Bool) {
+        guard hide != hideAdult else { return }
+        hideAdult = hide
+        rebuildVisible()
+    }
+
+    private func rebuildVisible() {
+        guard hideAdult else { catalog = source; return }
+        catalog = Catalog(
+            channels: source.channels.filter { !$0.isAdult },
+            movies: source.movies.filter { !$0.isAdult },
+            series: source.series.filter { !$0.isAdult },
+            epg: source.epg
+        )
     }
 
     public func isReady() -> Bool { ready }
@@ -95,8 +118,8 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func channel(id: CatalogID) -> Channel? { catalog.channels.first { $0.id == id } }
 
     public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) {
-        guard let idx = catalog.series.firstIndex(where: { $0.id == id }) else { return }
-        catalog.series[idx].seasons = seasons
+        if let i = source.series.firstIndex(where: { $0.id == id }) { source.series[i].seasons = seasons }
+        if let j = catalog.series.firstIndex(where: { $0.id == id }) { catalog.series[j].seasons = seasons }
     }
 
     public func recentlyAdded(limit: Int) -> [SearchResult.Item] {

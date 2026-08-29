@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showAddProvider = false
+    @State private var showPersonalize = false
     @State private var aiAssisted = false
 
     var body: some View {
@@ -13,6 +14,7 @@ struct SettingsView: View {
                         .padding(.top, Metrics.space4)
 
                     providersSection
+                    personalizeSection
                     aiSection
                     aboutSection
                 }
@@ -27,7 +29,40 @@ struct SettingsView: View {
             ProviderSetupView(isDismissable: true)
                 .environment(env)
         }
+        .fullScreenCover(isPresented: $showPersonalize) {
+            PersonalizeView(mode: .settings)
+                .environment(env)
+        }
         .task { aiAssisted = await env.aiService.mode == .assisted }
+    }
+
+    private var personalizeSection: some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
+            SectionHeader("Personalize", subtitle: "Languages, subtitles, adult filter, Home rows")
+            Button {
+                showPersonalize = true
+            } label: {
+                HStack {
+                    Label("Edit your preferences", systemImage: "slider.horizontal.3")
+                    Spacer()
+                    Text(preferenceSummary).font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                }
+                .padding(Metrics.space2)
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var preferenceSummary: String {
+        let p = env.preferences.preferences
+        var parts: [String] = []
+        if !p.preferredAudioLanguages.isEmpty {
+            parts.append(p.preferredAudioLanguages.map(\.displayName).joined(separator: ", "))
+        }
+        if let s = p.preferredSubtitleLanguage { parts.append("\(s.displayName) subs") }
+        if p.hideAdultContent { parts.append("Adult hidden") }
+        return parts.isEmpty ? "Not set" : parts.joined(separator: " · ")
     }
 
     private var providersSection: some View {

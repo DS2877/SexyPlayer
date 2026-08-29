@@ -30,7 +30,8 @@ struct HomeView: View {
             guard case .ready = environment.loadState else { return }
             let model = model ?? HomeViewModel(
                 repository: environment.repository,
-                watchProgress: environment.watchProgress
+                watchProgress: environment.watchProgress,
+                preferences: environment.preferences
             )
             self.model = model
             await model.rebuild()
@@ -42,6 +43,9 @@ struct HomeView: View {
         .onChange(of: environment.isRefreshing) { _, refreshing in
             // A background library refresh just finished — rebuild shelves.
             if !refreshing { Task { await model?.rebuild() } }
+        }
+        .onChange(of: environment.preferences.preferences) { _, _ in
+            Task { await model?.rebuild() }
         }
     }
 

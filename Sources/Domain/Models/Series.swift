@@ -21,6 +21,9 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
     /// `nil` when the series was reconstructed from episode names (M3U).
     public let providerSeriesKey: String?
 
+    /// Best-effort adult-category flag (see `AdultContentDetector`).
+    public var isAdult: Bool
+
     public init(
         id: CatalogID,
         title: String,
@@ -34,7 +37,8 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
         backdropURL: URL? = nil,
         synopsis: String? = nil,
         seasons: [Season] = [],
-        providerSeriesKey: String? = nil
+        providerSeriesKey: String? = nil,
+        isAdult: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -49,6 +53,7 @@ public struct Series: Identifiable, Hashable, Codable, Sendable {
         self.synopsis = synopsis
         self.seasons = seasons
         self.providerSeriesKey = providerSeriesKey
+        self.isAdult = isAdult
     }
 
     public var episodeCount: Int {

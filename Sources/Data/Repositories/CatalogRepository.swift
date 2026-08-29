@@ -9,6 +9,9 @@ public protocol CatalogRepository: Sendable {
     /// True once a catalog has been loaded.
     func isReady() async -> Bool
 
+    /// When `true`, every query and `snapshot()` excludes adult-flagged items.
+    func setHideAdult(_ hide: Bool) async
+
     func channels(in category: String?, page: Int, pageSize: Int) async -> [Channel]
     func allChannelCategories() async -> [String]
 

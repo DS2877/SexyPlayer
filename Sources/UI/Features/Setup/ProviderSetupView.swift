@@ -7,6 +7,9 @@ struct ProviderSetupView: View {
     /// When presented from Settings we can be dismissed; at first launch we can't.
     var isDismissable: Bool = false
     var onFinished: (() -> Void)? = nil
+    /// Onboarding: fired once a provider has been chosen and the import kicked
+    /// off, so the parent can take over the "preparing" and "personalize" steps.
+    var onProviderReady: (() -> Void)? = nil
 
     @Environment(AppEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
@@ -56,7 +59,7 @@ struct ProviderSetupView: View {
         case .choose:      chooser
         case .xtream:      xtreamForm
         case .m3u:         m3uForm
-        case .preparing:   PreparingView()
+        case .preparing:   LibraryLoadingView()
         case .failed(let error):
             ErrorStateView(error: error,
                            onRetry: { step = .choose },
@@ -163,7 +166,11 @@ struct ProviderSetupView: View {
                                           epgURL: epgURL.isEmpty ? nil : epgURL,
                                           displayName: nickname)
         }
-        step = .preparing
+        if let onProviderReady {
+            onProviderReady()
+        } else {
+            step = .preparing
+        }
         await env.activate(config)
     }
 }
@@ -201,49 +208,91 @@ struct LabeledField: View {
     }
 }
 
-/// "Preparing your library" checklist, driven by `AppEnvironment.reachedPhases`.
-struct PreparingView: View {
-    @Environment(AppEnvironment.self) private var env
+/// The library-import checklist. `isReady` reflects the app actually being
+/// usable (`loadState == .ready`), not a self-reported provider phase — so
+/// "Your TV is ready" never shows prematurely.
+struct LibraryLoadingView: View {
+    /// Show a "Start Watching" button on completion (onboarding). Otherwise the
+    /// parent dismisses this view when `loadState` becomes ready.
+    var showStartButton: Bool = false
+    var onStart: () -> Void = {}
+    /// Called when the user chooses to fix a failed import (e.g. bad credentials).
+    var onRetry: (() -> Void)? = nil
 
+    @Environment(AppEnvironment.self) private var env
+    @FocusState private var startFocused: Bool
+
+    private var isReady: Bool { if case .ready = env.loadState { return true } else { return false } }
+    private var failure: ProviderError? { if case .failed(let e) = env.loadState { return e } else { return nil } }
     private var isConnecting: Bool { env.reachedPhases.isSubset(of: [.connecting]) }
-    private var isDone: Bool { env.reachedPhases.contains(.finalizing) }
+    private var isNormalizing: Bool {
+        !isReady && env.reachedPhases.contains(.guide)
+    }
 
     var body: some View {
+        if let failure {
+            ErrorStateView(
+                error: failure,
+                onRetry: {
+                    if let onRetry { onRetry() }
+                    else { Task { await env.bootstrap(forceReload: true) } }
+                },
+                onEditProvider: { onRetry?() }
+            )
+        } else {
+            checklist
+        }
+    }
+
+    private var checklist: some View {
         VStack(alignment: .leading, spacing: Metrics.space4) {
             VStack(alignment: .leading, spacing: Metrics.space1) {
-                Text(isDone ? "Your TV is ready" : "Preparing your library")
+                Text(isReady ? "Your TV is ready" : "Preparing your library")
                     .font(.dsHero)
-                Text(isConnecting
-                     ? "Connecting to your provider…"
-                     : "This can take a minute the first time for a large library.")
+                Text(subtitle)
                     .font(.dsBody).foregroundStyle(Palette.textSecondary)
             }
 
             VStack(alignment: .leading, spacing: Metrics.space2) {
                 ForEach(ImportPhase.checklist) { phase in
-                    ChecklistRow(
-                        label: phase.label,
-                        state: rowState(for: phase)
-                    )
+                    ChecklistRow(label: phase.label, state: rowState(for: phase))
                 }
+                ChecklistRow(label: "Organising your library",
+                             state: isReady ? .done : (isNormalizing ? .active : .pending))
             }
             .padding(Metrics.space3)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cornerRadius))
 
-            ProgressView(value: Double(env.reachedPhases.count),
-                         total: Double(ImportPhase.allCases.count))
-                .tint(Palette.accent)
-                .frame(maxWidth: 640)
+            if !isReady {
+                ProgressView(value: Double(env.reachedPhases.count),
+                             total: Double(ImportPhase.allCases.count))
+                    .tint(Palette.accent)
+                    .frame(maxWidth: 640)
+            }
+
+            if showStartButton, isReady {
+                Button("Start Watching", action: onStart)
+                    .buttonStyle(.borderedProminent)
+                    .font(.dsCardTitle)
+                    .focused($startFocused)
+                    .task { startFocused = true }
+            }
         }
         .frame(maxWidth: 760)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var subtitle: String {
+        if isReady { return "Everything's imported and tidied up." }
+        if isConnecting { return "Connecting to your provider…" }
+        if isNormalizing { return "Cleaning up channel names, matching episodes and languages…" }
+        return "This can take a minute the first time for a large library."
     }
 
     private enum RowState: Equatable { case pending, active, done }
 
     private func rowState(for phase: ImportPhase) -> RowState {
         if env.reachedPhases.contains(phase) { return .done }
-        // The active row is the first checklist item not yet done.
         let firstPending = ImportPhase.checklist.first { !env.reachedPhases.contains($0) }
         return firstPending == phase ? .active : .pending
     }
