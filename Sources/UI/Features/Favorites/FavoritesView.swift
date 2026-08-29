@@ -23,7 +23,9 @@ struct FavoritesView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if sections.isEmpty {
+                if sections.isEmpty, env.loadState.isImporting, !env.favorites.all().isEmpty {
+                    LibraryLoadingPlaceholder()
+                } else if sections.isEmpty {
                     EmptyStateView(
                         icon: "heart",
                         title: "No favorites yet",

@@ -118,7 +118,9 @@ struct LiveTVBrowseView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    if model.rows.isEmpty && !model.isLoading {
+                    if model.rows.isEmpty && !model.isLoading && env.loadState.isImporting {
+                        LibraryLoadingPlaceholder().frame(minHeight: 400)
+                    } else if model.rows.isEmpty && !model.isLoading {
                         EmptyStateView(icon: "tv", title: "No channels",
                                        message: "No channels in this category.")
                             .frame(minHeight: 400)

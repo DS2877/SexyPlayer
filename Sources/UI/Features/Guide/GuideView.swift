@@ -69,6 +69,8 @@ struct GuideView: View {
         if model.isLoading {
             ProgressView().controlSize(.large).tint(Palette.accent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.rows.isEmpty, env.loadState.isImporting {
+            LibraryLoadingPlaceholder()
         } else if model.rows.isEmpty {
             EmptyStateView(
                 icon: "rectangle.grid.1x2",

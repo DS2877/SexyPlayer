@@ -48,6 +48,8 @@ struct SearchView: View {
                         .frame(maxWidth: .infinity).padding(.top, Metrics.space6)
                 } else if !model.hasSearched {
                     exampleQueries(model)
+                } else if model.results.isEmpty, env.loadState.isImporting {
+                    LibraryLoadingPlaceholder().frame(minHeight: 360)
                 } else if model.results.isEmpty {
                     EmptyStateView(
                         icon: "magnifyingglass",

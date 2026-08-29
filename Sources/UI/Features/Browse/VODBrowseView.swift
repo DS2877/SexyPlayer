@@ -42,11 +42,15 @@ struct VODBrowseView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    if model.cards.isEmpty && !model.isLoading {
+                    if model.cards.isEmpty && !model.isLoading && env.loadState.isImporting {
+                        LibraryLoadingPlaceholder().frame(minHeight: 400)
+                    } else if model.cards.isEmpty && !model.isLoading {
                         EmptyStateView(
                             icon: "line.3.horizontal.decrease.circle",
-                            title: "No matches",
-                            message: "Nothing in your library matches these filters.",
+                            title: model.filter.isNarrowed ? "No matches" : "Nothing here yet",
+                            message: model.filter.isNarrowed
+                                ? "Nothing in your library matches these filters."
+                                : "Your provider didn't return any \(kind.title.lowercased()).",
                             actionTitle: model.filter.isNarrowed ? "Clear filters" : nil,
                             action: model.filter.isNarrowed ? { model.clearFilters() } : nil
                         )
