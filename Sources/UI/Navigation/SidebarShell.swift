@@ -108,34 +108,50 @@ private struct SidebarItem: View {
     let isSelected: Bool
     let action: () -> Void
 
-    @Environment(\.isFocused) private var isFocused
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: Metrics.space2) {
                 Image(systemName: section.icon)
                     .font(.system(size: 24))
                     .frame(width: 32)
-                Text(section.title)
-                    .font(.dsBody)
+                Text(section.title).font(.dsBody)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, Metrics.space2)
-            .padding(.vertical, Metrics.space1 + 4)
-            .foregroundStyle(isSelected || isFocused ? Palette.textPrimary : Palette.textSecondary)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(background)
-            )
-            .padding(.horizontal, Metrics.space2)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SidebarButtonStyle(isSelected: isSelected))
+    }
+}
+
+private struct SidebarButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        Body(configuration: configuration, isSelected: isSelected)
     }
 
-    private var background: Color {
-        if isFocused { return Palette.accent.opacity(0.9) }
-        if isSelected { return Palette.accentSoft }
-        return .clear
+    private struct Body: View {
+        let configuration: SidebarButtonStyle.Configuration
+        let isSelected: Bool
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, Metrics.space2)
+                .padding(.vertical, Metrics.space1 + 4)
+                .foregroundStyle(isSelected || isFocused ? Palette.textPrimary : Palette.textSecondary)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
+                )
+                .padding(.horizontal, Metrics.space2)
+                .scaleEffect(isFocused ? 1.03 : 1)
+                .animation(Metrics.focusAnimation, value: isFocused)
+        }
+
+        private var fill: Color {
+            if isFocused { return Palette.accent.opacity(0.9) }
+            if isSelected { return Palette.accentSoft }
+            return .clear
+        }
     }
 }
 

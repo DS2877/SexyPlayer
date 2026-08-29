@@ -20,7 +20,7 @@ struct SearchView: View {
         NavigationStack(path: $path) {
             Group {
                 if let model {
-                    body(model)
+                    contentBody(model)
                 } else {
                     Color.clear
                 }
@@ -38,7 +38,7 @@ struct SearchView: View {
     }
 
     @ViewBuilder
-    private func body(_ model: SearchViewModel) -> some View {
+    private func contentBody(_ model: SearchViewModel) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.space4) {
                 header(model)
