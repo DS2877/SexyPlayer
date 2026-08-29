@@ -1,0 +1,8 @@
+# Keep source and project files LF so they're clean on macOS.
+*.swift   text eol=lf
+*.yml     text eol=lf
+*.md      text eol=lf
+*.json    text eol=lf
+*.plist   text eol=lf
+*.pbxproj text eol=lf
+*.xcconfig text eol=lf
