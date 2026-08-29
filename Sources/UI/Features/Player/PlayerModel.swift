@@ -25,12 +25,17 @@ public final class PlayerModel {
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeObserverToken: Any?
     @ObservationIgnored private var failureObserver: NSObjectProtocol?
+    @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var hasSeekedToResume = false
     @ObservationIgnored private var loadTimeout: Task<Void, Never>?
 
     /// Called ~every 10s and on teardown with the current position. No-op for live.
     @ObservationIgnored
     private let onProgress: @MainActor (_ position: Double, _ duration: Double) -> Void
+
+    /// Fired when the item plays to its end, so the host can dismiss and let
+    /// "up next" take over.
+    @ObservationIgnored public var onFinished: (@MainActor () -> Void)?
 
     public init(
         item: PlaybackItem,
@@ -75,6 +80,14 @@ public final class PlayerModel {
             MainActor.assumeIsolated { self?.fail(with: nil) }
         }
 
+        endObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.didPlayToEndTimeNotification,
+            object: currentItem,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handlePlayedToEnd() }
+        }
+
         if !item.isLive {
             let interval = CMTime(seconds: 10, preferredTimescale: 1)
             timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
@@ -106,6 +119,16 @@ public final class PlayerModel {
         statusObservation = nil
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         failureObserver = nil
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+    }
+
+    /// The item finished — record it as watched so "up next" logic can fire.
+    private func handlePlayedToEnd() {
+        guard !item.isLive else { return }
+        let duration = resolvedDuration()
+        if duration > 0 { onProgress(duration, duration) }   // -> WatchProgress.isFinished
+        onFinished?()
     }
 
     private func handleStatusChange(_ status: AVPlayerItem.Status) {

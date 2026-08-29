@@ -76,17 +76,27 @@ struct PersonalizeView: View {
     }
 
     private var adultSection: some View {
-        section("Adult content", nil) {
-            Toggle(isOn: $working.hideAdultContent) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Hide adult categories").font(.dsBody)
-                    Text("Keeps adult-flagged channels and titles out of Home, browsing and search.")
-                        .font(.dsCaption).foregroundStyle(Palette.textTertiary)
-                }
+        section("Playback & content", nil) {
+            VStack(spacing: Metrics.space1) {
+                toggleRow(isOn: $working.hideAdultContent,
+                          title: "Hide adult categories",
+                          note: "Keeps adult-flagged channels and titles out of Home, browsing and search.")
+                toggleRow(isOn: $working.autoPlayNextEpisode,
+                          title: "Autoplay next episode",
+                          note: "When an episode finishes, the next one starts automatically.")
             }
-            .padding(Metrics.space2)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
         }
+    }
+
+    private func toggleRow(isOn: Binding<Bool>, title: String, note: String) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.dsBody)
+                Text(note).font(.dsCaption).foregroundStyle(Palette.textTertiary)
+            }
+        }
+        .padding(Metrics.space2)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
     }
 
     private var homeRowsSection: some View {

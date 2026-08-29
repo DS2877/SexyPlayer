@@ -38,10 +38,12 @@ struct PlayerScreen: View {
         }
         .onAppear {
             if model == nil {
-                model = PlayerModel(item: item) { position, duration in
+                let m = PlayerModel(item: item) { position, duration in
                     onProgress(item.id, item.kind, position, duration)
                 }
-                model?.play()
+                m.onFinished = { dismiss() }
+                model = m
+                m.play()
             }
         }
         .onDisappear { model?.teardown() }
