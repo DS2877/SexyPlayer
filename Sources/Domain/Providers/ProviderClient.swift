@@ -30,7 +30,7 @@ public protocol ProviderClient: Sendable {
     ///
     /// Series may come back as shells (no episodes) when episode listings are
     /// expensive — episodes are then loaded on demand via `fetchEpisodes`.
-    func fetchRawCatalog() async throws -> RawCatalog
+    func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog
 
     /// Resolve a playable URL for an item. For some providers this is a cheap
     /// passthrough; for others it hits the API. Called at playback time only.
@@ -43,4 +43,9 @@ public protocol ProviderClient: Sendable {
 
 public extension ProviderClient {
     func fetchEpisodes(seriesKey: String) async throws -> [RawSeriesEpisode] { [] }
+
+    /// Convenience for callers that don't need progress.
+    func fetchRawCatalog() async throws -> RawCatalog {
+        try await fetchRawCatalog(progress: .ignore)
+    }
 }

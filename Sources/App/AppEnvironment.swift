@@ -27,6 +27,11 @@ public final class AppEnvironment {
     // State
     public private(set) var loadState: LoadState = .idle
     public private(set) var vocabulary: SearchVocabulary = .init()
+    /// Phases the current/most-recent import has reached — drives the
+    /// "Preparing your library" checklist.
+    public private(set) var reachedPhases: Set<ImportPhase> = []
+    /// True once a catalog has loaded at least once this session.
+    public private(set) var hasLoadedOnce = false
 
     public var activeProvider: ProviderDescriptor? {
         providers.activeConfiguration?.descriptor
@@ -59,9 +64,13 @@ public final class AppEnvironment {
         }
         provider = client
 
+        reachedPhases = []
         loadState = .loading
+        let reporter = ImportProgressReporter { [weak self] phase in
+            Task { @MainActor in self?.markPhase(phase) }
+        }
         do {
-            let raw = try await client.fetchRawCatalog()
+            let raw = try await client.fetchRawCatalog(progress: reporter)
             let normalizer = self.normalizer
             let catalog = await Task.detached(priority: .userInitiated) {
                 normalizer.normalize(raw)
@@ -69,13 +78,21 @@ public final class AppEnvironment {
 
             await repository.load(catalog)
             vocabulary = SearchVocabulary.from(catalog: catalog)
+            markPhase(.finalizing)
             loadState = .ready
+            hasLoadedOnce = true
             AppLog.app.info("Catalog ready: \(catalog.channels.count) channels, \(catalog.movies.count) movies, \(catalog.series.count) series.")
         } catch {
             let providerError = ProviderError.from(error)
             loadState = .failed(providerError)
             AppLog.provider.error("Bootstrap failed: \(String(describing: providerError))")
         }
+    }
+
+    private func markPhase(_ phase: ImportPhase) {
+        let order = ImportPhase.allCases
+        guard let idx = order.firstIndex(of: phase) else { return }
+        reachedPhases.formUnion(order.prefix(idx + 1))
     }
 
     /// Make `config` active and (re)load its catalog.

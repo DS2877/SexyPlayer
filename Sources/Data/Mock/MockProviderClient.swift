@@ -18,8 +18,13 @@ public struct MockProviderClient: ProviderClient {
         self.artificialDelay = artificialDelay
     }
 
-    public func fetchRawCatalog() async throws -> RawCatalog {
-        try await Task.sleep(for: artificialDelay)
+    public func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog {
+        progress.reached(.connecting)
+        for phase in ImportPhase.checklist {
+            try await Task.sleep(for: artificialDelay / 4)
+            progress.reached(phase)
+        }
+        progress.reached(.finalizing)
         return MockCatalogData.rawCatalog()
     }
 

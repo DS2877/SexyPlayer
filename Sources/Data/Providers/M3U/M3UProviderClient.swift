@@ -20,16 +20,22 @@ public struct M3UProviderClient: ProviderClient {
         self.http = http
     }
 
-    public func fetchRawCatalog() async throws -> RawCatalog {
+    public func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog {
+        progress.reached(.connecting)
         let data = try await http.data(from: playlistURL)
         var catalog = try M3UParser.parse(data, providerID: descriptor.id)
+        progress.reached(.channels)
+        progress.reached(.movies)
+        progress.reached(.series)
 
+        progress.reached(.guide)
         if let epgURL {
             if let epgData = try? await http.data(from: epgURL),
                let events = try? XMLTVParser.parse(epgData) {
                 catalog.epg = events
             }
         }
+        progress.reached(.finalizing)
         AppLog.provider.info("M3U import: \(catalog.channels.count) channels, \(catalog.vod.count) movies, \(catalog.seriesEpisodes.count) episodes.")
         return catalog
     }

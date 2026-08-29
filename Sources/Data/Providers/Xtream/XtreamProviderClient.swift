@@ -21,7 +21,8 @@ public struct XtreamProviderClient: ProviderClient {
 
     // MARK: - Bulk catalog
 
-    public func fetchRawCatalog() async throws -> RawCatalog {
+    public func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog {
+        progress.reached(.connecting)
         try await verifyAuth()
 
         async let liveCats = categories(.liveCategories)
@@ -32,7 +33,10 @@ public struct XtreamProviderClient: ProviderClient {
         async let seriesRaw = fetch([XtreamDTO.SeriesListItem].self, .series)
 
         let (liveCategories, vodCategories, seriesCategories) = await (liveCats, vodCats, seriesCats)
-        let (live, vod, series) = try await (liveRaw, vodRaw, seriesRaw)
+
+        let live = try await liveRaw;   progress.reached(.channels)
+        let vod = try await vodRaw;     progress.reached(.movies)
+        let series = try await seriesRaw; progress.reached(.series)
 
         let channels: [RawChannel] = live.compactMap { s in
             guard let id = s.stream_id, let name = s.name else { return nil }
@@ -78,7 +82,9 @@ public struct XtreamProviderClient: ProviderClient {
             )
         }
 
+        progress.reached(.guide)
         let epg = (try? await fetchEPG()) ?? []
+        progress.reached(.finalizing)
 
         AppLog.provider.info("Xtream import: \(channels.count) channels, \(movies.count) movies, \(shells.count) series.")
         return RawCatalog(providerID: descriptor.id, channels: channels, vod: movies,

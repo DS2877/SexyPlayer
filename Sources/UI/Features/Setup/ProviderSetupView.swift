@@ -201,24 +201,74 @@ struct LabeledField: View {
     }
 }
 
+/// "Preparing your library" checklist, driven by `AppEnvironment.reachedPhases`.
 struct PreparingView: View {
-    @State private var dots = 0
+    @Environment(AppEnvironment.self) private var env
+
+    private var isConnecting: Bool { env.reachedPhases.isSubset(of: [.connecting]) }
+    private var isDone: Bool { env.reachedPhases.contains(.finalizing) }
 
     var body: some View {
-        VStack(spacing: Metrics.space3) {
-            ProgressView().controlSize(.large).tint(Palette.accent)
-            Text("Preparing your library" + String(repeating: ".", count: dots))
-                .font(.dsTitle)
-                .animation(.none, value: dots)
-            Text("Fetching channels, movies and series, and tidying up the messy bits.")
-                .font(.dsBody).foregroundStyle(Palette.textSecondary)
-                .multilineTextAlignment(.center)
+        VStack(alignment: .leading, spacing: Metrics.space4) {
+            VStack(alignment: .leading, spacing: Metrics.space1) {
+                Text(isDone ? "Your TV is ready" : "Preparing your library")
+                    .font(.dsHero)
+                Text(isConnecting
+                     ? "Connecting to your provider…"
+                     : "This can take a minute the first time for a large library.")
+                    .font(.dsBody).foregroundStyle(Palette.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: Metrics.space2) {
+                ForEach(ImportPhase.checklist) { phase in
+                    ChecklistRow(
+                        label: phase.label,
+                        state: rowState(for: phase)
+                    )
+                }
+            }
+            .padding(Metrics.space3)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cornerRadius))
+
+            ProgressView(value: Double(env.reachedPhases.count),
+                         total: Double(ImportPhase.allCases.count))
+                .tint(Palette.accent)
+                .frame(maxWidth: 640)
         }
+        .frame(maxWidth: 760)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(450))
-                dots = (dots + 1) % 4
+    }
+
+    private enum RowState: Equatable { case pending, active, done }
+
+    private func rowState(for phase: ImportPhase) -> RowState {
+        if env.reachedPhases.contains(phase) { return .done }
+        // The active row is the first checklist item not yet done.
+        let firstPending = ImportPhase.checklist.first { !env.reachedPhases.contains($0) }
+        return firstPending == phase ? .active : .pending
+    }
+
+    private struct ChecklistRow: View {
+        let label: String
+        let state: RowState
+
+        var body: some View {
+            HStack(spacing: Metrics.space2) {
+                Group {
+                    switch state {
+                    case .done:
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.accent)
+                    case .active:
+                        ProgressView().controlSize(.small).tint(Palette.accent)
+                    case .pending:
+                        Image(systemName: "circle").foregroundStyle(Palette.textTertiary)
+                    }
+                }
+                .frame(width: 34)
+                Text(label)
+                    .font(.dsBody)
+                    .foregroundStyle(state == .pending ? Palette.textTertiary : Palette.textPrimary)
+                Spacer()
             }
         }
     }
