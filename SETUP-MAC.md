@@ -75,11 +75,10 @@ versions of the app will reach you.
 
 ### Option A — via GitHub (recommended)
 
-Claude will create a private GitHub repository and give you its address. Then:
-
 ```bash
-cd ~/Developer            # or wherever you keep projects; mkdir -p ~/Developer first
-git clone <the-repo-address-Claude-gives-you>
+mkdir -p ~/Developer
+cd ~/Developer
+git clone https://github.com/DS2877/SexyPlayer.git
 cd SexyPlayer
 ```
 
