@@ -119,6 +119,8 @@ private struct SidebarItem: View {
             }
         }
         .buttonStyle(SidebarButtonStyle(isSelected: isSelected))
+        .accessibilityLabel(section.title)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

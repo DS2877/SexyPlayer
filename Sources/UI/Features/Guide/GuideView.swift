@@ -116,6 +116,7 @@ struct GuideView: View {
                             ProgrammeCell(event: event, now: now)
                         }
                         .buttonStyle(.card)
+                        .accessibilityLabel("\(row.name), \(event.start.formatted(date: .omitted, time: .shortened)), \(event.title)\(event.isLive(at: now) ? ", on now" : "")")
                     }
                 }
                 .padding(.horizontal, Metrics.screenMargin)

@@ -118,6 +118,7 @@ struct SearchView: View {
                     .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Search: \(example)")
             }
         }
         .frame(maxWidth: 900, alignment: .leading)

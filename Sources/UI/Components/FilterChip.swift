@@ -38,6 +38,8 @@ public struct FilterChip: View {
             .foregroundStyle(isSelected ? Palette.textPrimary : Palette.textSecondary)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(showsRemoveIcon ? "Remove filter: \(label)" : label)
+        .accessibilityAddTraits(isSelected && !showsRemoveIcon ? [.isButton, .isSelected] : .isButton)
     }
 
     private var background: Color {
