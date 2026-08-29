@@ -30,7 +30,9 @@ struct SeriesDetailView: View {
                 series = await env.ensureEpisodes(forSeries: seriesID)
                 loadingEpisodes = false
             }
-            selectedSeason = series?.seasons.first?.number
+            // Jump to the season of an in-progress episode, else the first.
+            selectedSeason = resumeEpisode(in: series)?.seasonNumber
+                ?? series?.seasons.first?.number
         }
         .fullScreenCover(item: $playback) { item in
             PlayerScreen(item: item) { id, kind, position, duration in
@@ -59,6 +61,19 @@ struct SeriesDetailView: View {
         return ordered[idx + 1]
     }
 
+    /// The most recently-watched, not-yet-finished episode of this series.
+    private func resumeEpisode(in series: Series?) -> Episode? {
+        guard let series else { return nil }
+        return series.seasons
+            .flatMap(\.episodes)
+            .compactMap { ep -> (episode: Episode, watched: Date)? in
+                guard let p = env.watchProgress.progress(for: ep.id), p.isResumable else { return nil }
+                return (ep, p.updatedAt)
+            }
+            .max { $0.watched < $1.watched }?
+            .episode
+    }
+
     @ViewBuilder
     private func loaded(_ series: Series) -> some View {
         let season = series.seasons.first { $0.number == selectedSeason } ?? series.seasons.first
@@ -74,6 +89,18 @@ struct SeriesDetailView: View {
             ])
 
             HStack(spacing: Metrics.space2) {
+                if let resume = resumeEpisode(in: series) {
+                    Button {
+                        playback = env.playback(forEpisode: resume, seriesTitle: series.title)
+                    } label: {
+                        Label("Resume \(resume.code)", systemImage: "play.fill")
+                            .font(.dsCardTitle)
+                            .padding(.horizontal, Metrics.space3)
+                            .padding(.vertical, Metrics.space1)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
                 Button {
                     env.favorites.toggle(id: series.id, kind: .series)
                 } label: {
