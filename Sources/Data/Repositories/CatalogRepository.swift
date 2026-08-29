@@ -48,7 +48,7 @@ public protocol CatalogRepository: Sendable {
 /// Composable, structured filter used by browse screens (distinct from
 /// `SearchIntent`, which is the *parsed* form of a natural-language query —
 /// though a `SearchIntent` maps cleanly onto a `CatalogFilter`).
-public enum BrowseSort: String, CaseIterable, Sendable {
+public enum BrowseSort: String, CaseIterable, Sendable, Codable {
     case titleAscending
     case newest
     case oldest
