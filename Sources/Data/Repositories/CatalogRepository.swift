@@ -15,6 +15,15 @@ public protocol CatalogRepository: Sendable {
     func movies(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Movie]
     func series(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Series]
 
+    func moviesCount(filter: CatalogFilter) async -> Int
+    func seriesCount(filter: CatalogFilter) async -> Int
+    func channelsCount(in category: String?) async -> Int
+
+    /// Genres actually present among movies + series — for the filter UI.
+    func availableGenres() async -> [Genre]
+    func availableAudioLanguages() async -> [Language]
+    func availableSubtitleLanguages() async -> [Language]
+
     func movie(id: CatalogID) async -> Movie?
     func series(id: CatalogID) async -> Series?
     func channel(id: CatalogID) async -> Channel?
@@ -36,6 +45,20 @@ public protocol CatalogRepository: Sendable {
 /// Composable, structured filter used by browse screens (distinct from
 /// `SearchIntent`, which is the *parsed* form of a natural-language query —
 /// though a `SearchIntent` maps cleanly onto a `CatalogFilter`).
+public enum BrowseSort: String, CaseIterable, Sendable {
+    case titleAscending
+    case newest
+    case oldest
+
+    public var label: String {
+        switch self {
+        case .titleAscending: return "A–Z"
+        case .newest:         return "Newest"
+        case .oldest:         return "Oldest"
+        }
+    }
+}
+
 public struct CatalogFilter: Equatable, Sendable {
     public var genres: [Genre]
     public var audioLanguages: [Language]
@@ -45,6 +68,7 @@ public struct CatalogFilter: Equatable, Sendable {
     public var maxDurationMinutes: Int?
     public var minQuality: VideoQuality?
     public var text: String
+    public var sort: BrowseSort
 
     public init(
         genres: [Genre] = [],
@@ -54,7 +78,8 @@ public struct CatalogFilter: Equatable, Sendable {
         maxYear: Int? = nil,
         maxDurationMinutes: Int? = nil,
         minQuality: VideoQuality? = nil,
-        text: String = ""
+        text: String = "",
+        sort: BrowseSort = .titleAscending
     ) {
         self.genres = genres
         self.audioLanguages = audioLanguages
@@ -64,11 +89,31 @@ public struct CatalogFilter: Equatable, Sendable {
         self.maxDurationMinutes = maxDurationMinutes
         self.minQuality = minQuality
         self.text = text
+        self.sort = sort
+    }
+
+    /// Whether any narrowing filter is active (ignores sort + text).
+    public var isNarrowed: Bool {
+        !genres.isEmpty || !audioLanguages.isEmpty || !subtitleLanguages.isEmpty
+            || minYear != nil || maxYear != nil || maxDurationMinutes != nil || minQuality != nil
+    }
+
+    public var activeChips: [String] {
+        var chips: [String] = []
+        chips += genres.map(\.displayName)
+        chips += audioLanguages.map { "\($0.displayName) audio" }
+        chips += subtitleLanguages.map { "\($0.displayName) subs" }
+        if let minYear, let maxYear { chips.append("\(minYear)–\(maxYear)") }
+        else if let minYear { chips.append("From \(minYear)") }
+        else if let maxYear { chips.append("Until \(maxYear)") }
+        if let minQuality, minQuality > .unknown { chips.append("\(minQuality.shortLabel)+") }
+        return chips
     }
 
     public static let none = CatalogFilter()
 
     public init(intent: SearchIntent) {
+        let sort: BrowseSort = intent.sort == .newest ? .newest : .titleAscending
         self.init(
             genres: intent.genres,
             audioLanguages: intent.audioLanguages,
@@ -77,7 +122,8 @@ public struct CatalogFilter: Equatable, Sendable {
             maxYear: intent.maxYear,
             maxDurationMinutes: intent.maxDurationMinutes,
             minQuality: intent.minQuality,
-            text: intent.freeText
+            text: intent.freeText,
+            sort: sort
         )
     }
 }

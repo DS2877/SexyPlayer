@@ -16,11 +16,27 @@ struct RootView: View {
             if environment.needsProviderSetup {
                 ProviderSetupView()
                     .transition(.opacity)
+            } else if isPreparing {
+                ZStack {
+                    Palette.canvas.ignoresSafeArea()
+                    PreparingView()
+                        .padding(Metrics.screenMargin)
+                        .frame(maxWidth: 1100)
+                }
             } else {
                 tabs
             }
         }
         .animation(.easeInOut(duration: 0.3), value: environment.needsProviderSetup)
+        .animation(.easeInOut(duration: 0.3), value: isPreparing)
+    }
+
+    /// First catalog load for a freshly-activated provider — show the checklist
+    /// full-screen rather than the tab bar over empty screens.
+    private var isPreparing: Bool {
+        guard !environment.hasLoadedOnce else { return false }
+        if case .loading = environment.loadState { return true }
+        return false
     }
 
     private var tabs: some View {
@@ -29,7 +45,7 @@ struct RootView: View {
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(Tab.home)
 
-            ComingSoonView(feature: "Live TV", milestone: "the next milestone")
+            LiveTVBrowseView()
                 .tabItem { Label("Live TV", systemImage: "tv") }
                 .tag(Tab.liveTV)
 
@@ -37,11 +53,11 @@ struct RootView: View {
                 .tabItem { Label("Guide", systemImage: "calendar") }
                 .tag(Tab.guide)
 
-            ComingSoonView(feature: "Movies", milestone: "the next milestone")
+            VODBrowseView(kind: .movies)
                 .tabItem { Label("Movies", systemImage: "film") }
                 .tag(Tab.movies)
 
-            ComingSoonView(feature: "Series", milestone: "the next milestone")
+            VODBrowseView(kind: .series)
                 .tabItem { Label("Series", systemImage: "rectangle.stack") }
                 .tag(Tab.series)
 

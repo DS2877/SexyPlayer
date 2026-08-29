@@ -44,15 +44,50 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func movies(filter: CatalogFilter, page: Int, pageSize: Int) -> [Movie] {
         catalog.movies
             .filter { filter.matches(movie: $0) }
-            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+            .sorted { Self.order($0.title, $0.year, $1.title, $1.year, filter.sort) }
             .page(page, size: pageSize)
     }
 
     public func series(filter: CatalogFilter, page: Int, pageSize: Int) -> [Series] {
         catalog.series
             .filter { filter.matches(series: $0) }
-            .sorted { $0.title.localizedCompare($1.title) == .orderedAscending }
+            .sorted { Self.order($0.title, $0.year, $1.title, $1.year, filter.sort) }
             .page(page, size: pageSize)
+    }
+
+    public func moviesCount(filter: CatalogFilter) -> Int {
+        catalog.movies.reduce(0) { filter.matches(movie: $1) ? $0 + 1 : $0 }
+    }
+    public func seriesCount(filter: CatalogFilter) -> Int {
+        catalog.series.reduce(0) { filter.matches(series: $1) ? $0 + 1 : $0 }
+    }
+    public func channelsCount(in category: String?) -> Int {
+        guard let category, category != "All" else { return catalog.channels.count }
+        return catalog.channels.reduce(0) { $1.category == category ? $0 + 1 : $0 }
+    }
+
+    public func availableGenres() -> [Genre] {
+        let set = Set(catalog.movies.flatMap(\.genres) + catalog.series.flatMap(\.genres))
+        return Genre.allCases.filter(set.contains)
+    }
+    public func availableAudioLanguages() -> [Language] {
+        Array(Set(catalog.movies.flatMap(\.audioLanguages) + catalog.series.flatMap(\.audioLanguages))).sorted()
+    }
+    public func availableSubtitleLanguages() -> [Language] {
+        Array(Set(catalog.movies.flatMap(\.subtitleLanguages) + catalog.series.flatMap(\.subtitleLanguages))).sorted()
+    }
+
+    private static func order(_ lt: String, _ ly: Int?, _ rt: String, _ ry: Int?, _ sort: BrowseSort) -> Bool {
+        switch sort {
+        case .titleAscending:
+            return lt.localizedCompare(rt) == .orderedAscending
+        case .newest:
+            if (ly ?? 0) != (ry ?? 0) { return (ly ?? 0) > (ry ?? 0) }
+            return lt.localizedCompare(rt) == .orderedAscending
+        case .oldest:
+            if (ly ?? Int.max) != (ry ?? Int.max) { return (ly ?? Int.max) < (ry ?? Int.max) }
+            return lt.localizedCompare(rt) == .orderedAscending
+        }
     }
 
     public func movie(id: CatalogID) -> Movie? { catalog.movies.first { $0.id == id } }
