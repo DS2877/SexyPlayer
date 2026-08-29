@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 720px; margin: 0 auto; padding: 48px 24px;
+    color: #1a1a1a; background: #fff;
+  }
+  @media (prefers-color-scheme: dark) { body { color: #e8e8e8; background: #131313; } }
+  h1 { font-size: 28px; }
+  h2 { font-size: 20px; margin-top: 32px; }
+  dt { font-weight: 600; margin-top: 16px; }
+  dd { margin: 4px 0 0; }
+</style>
+</head>
+<body>
+
+<h1>Support</h1>
+
+<p>Need help? Email <a href="mailto:REPLACE_WITH_SUPPORT_EMAIL">REPLACE_WITH_SUPPORT_EMAIL</a>.</p>
+
+<h2>Getting started</h2>
+<p>
+  On first launch, choose how you connect: <strong>Xtream Codes</strong> (server address,
+  username, password) or an <strong>M3U playlist URL</strong>. Your details are stored
+  securely on the Apple&nbsp;TV and used only to reach the provider you entered. There's
+  also a <strong>Demo Library</strong> if you just want to look around.
+</p>
+
+<h2>Common questions</h2>
+<dl>
+  <dt>"Sign-in failed"</dt>
+  <dd>Double-check the server address (include <code>http://</code> and the port, e.g.
+      <code>http://example.com:8080</code>), the username, and the password. Some providers
+      also cap the number of connections — make sure another device isn't using the slot.</dd>
+
+  <dt>A live channel says "Apple TV can't play this stream"</dt>
+  <dd>Apple&nbsp;TV's player needs <strong>HLS</strong> (<code>.m3u8</code>). Many IPTV
+      providers serve live channels as raw MPEG-TS (<code>.ts</code>), which it can't play.
+      Ask your provider whether they offer an HLS output. Movies and series usually play fine.</dd>
+
+  <dt>The library is taking a long time to load</dt>
+  <dd>The first import of a very large library can take a minute or two. After that it's
+      cached and starts quickly; it refreshes in the background. You can enter the app
+      before it finishes.</dd>
+
+  <dt>Channel or movie names look messy</dt>
+  <dd>The app cleans up provider names automatically, but very unusual formatting can slip
+      through. Let us know examples and we'll improve it.</dd>
+
+  <dt>How do I change my languages / which rows show on Home?</dt>
+  <dd>Settings → Personalize.</dd>
+
+  <dt>How do I remove or switch providers?</dt>
+  <dd>Settings → Your Provider.</dd>
+</dl>
+
+<h2>About this app</h2>
+<p>
+  It is a player only. It does not provide, sell, host, or recommend any channels or
+  content. You bring your own IPTV service.
+</p>
+
+</body>
+</html>
