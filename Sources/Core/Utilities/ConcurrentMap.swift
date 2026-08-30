@@ -10,7 +10,7 @@ public extension Array where Element: Sendable {
     ) async -> [T] {
         guard count > minimumBatch else { return map(transform) }
 
-        let cores = max(2, ProcessInfo.processInfo.activeProcessorCount)
+        let cores = Swift.max(2, ProcessInfo.processInfo.activeProcessorCount)
         let batchSize = Swift.max(minimumBatch, (count + cores - 1) / cores)
         let input = self
 
