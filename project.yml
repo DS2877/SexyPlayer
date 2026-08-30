@@ -15,7 +15,9 @@ settings:
     SWIFT_STRICT_CONCURRENCY: targeted
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
+    # Your Apple Developer Team ID — developer.apple.com → Membership details.
+    # Safe to commit (it's embedded in every shipped app anyway).
+    DEVELOPMENT_TEAM: "YOUR_TEAM_ID"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
@@ -69,3 +71,7 @@ schemes:
       gatherCoverageData: true
       targets:
         - SexyPlayerTests
+    profile:
+      config: Release
+    archive:
+      config: Release
