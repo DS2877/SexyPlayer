@@ -86,7 +86,7 @@ struct GuideView: View {
                         }
                     } header: {
                         HStack {
-                            Text("TV Guide").font(.dsTitle)
+                            Text("TV Guide").font(.dsTitle).accessibilityAddTraits(.isHeader)
                             Spacer()
                             Text(model.now.formatted(date: .abbreviated, time: .shortened))
                                 .font(.dsCaption).foregroundStyle(Palette.textTertiary)

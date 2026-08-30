@@ -68,6 +68,7 @@ struct SidebarShell: View {
             .padding(.horizontal, Metrics.space2)
             .padding(.top, Metrics.space4)
             .padding(.bottom, Metrics.space3)
+            .accessibilityHidden(true)
 
             ForEach(Self.primary) { item in
                 SidebarItem(section: item, isSelected: selection == item) { select(item) }

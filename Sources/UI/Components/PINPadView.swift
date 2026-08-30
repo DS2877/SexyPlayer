@@ -51,6 +51,9 @@ struct PINPadView: View {
                 }
             }
             .padding(.vertical, Metrics.space2)
+            .accessibilityElement()
+            .accessibilityLabel("PIN entry")
+            .accessibilityValue("\(entry.count) of 4 digits")
 
             LazyVGrid(columns: columns, spacing: Metrics.space2) {
                 ForEach(1...9, id: \.self) { digit($0) }

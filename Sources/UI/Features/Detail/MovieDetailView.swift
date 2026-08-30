@@ -65,6 +65,7 @@ struct MovieDetailView: View {
                         .padding(Metrics.space1)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel(env.favorites.isFavorite(movie.id) ? "Remove from Favorites" : "Add to Favorites")
             }
 
             if let progress, progress.isResumable {

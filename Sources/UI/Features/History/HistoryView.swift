@@ -68,7 +68,7 @@ struct HistoryView: View {
 
     private var header: some View {
         HStack {
-            Text("History").font(.dsTitle)
+            Text("History").font(.dsTitle).accessibilityAddTraits(.isHeader)
             Spacer()
             Button(role: .destructive) { confirmClear = true } label: {
                 Label("Clear All", systemImage: "trash")

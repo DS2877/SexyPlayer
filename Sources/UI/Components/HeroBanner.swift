@@ -46,22 +46,26 @@ public struct HeroBanner: View {
                 )
 
             VStack(alignment: .leading, spacing: Metrics.space2) {
-                if !metadata.isEmpty {
-                    Text(metadata.joined(separator: "   ·   "))
-                        .font(.dsTag)
-                        .foregroundStyle(Palette.accent)
-                        .textCase(.uppercase)
-                        .tracking(1.5)
+                Group {
+                    if !metadata.isEmpty {
+                        Text(metadata.joined(separator: "   ·   "))
+                            .font(.dsTag)
+                            .foregroundStyle(Palette.accent)
+                            .textCase(.uppercase)
+                            .tracking(1.5)
+                    }
+                    Text(title).font(.dsHero).lineLimit(2)
+                        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                    if !tagline.isEmpty {
+                        Text(tagline)
+                            .font(.dsBody)
+                            .foregroundStyle(Palette.textSecondary)
+                            .lineLimit(2)
+                            .frame(maxWidth: 820, alignment: .leading)
+                    }
                 }
-                Text(title).font(.dsHero).lineLimit(2)
-                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
-                if !tagline.isEmpty {
-                    Text(tagline)
-                        .font(.dsBody)
-                        .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(2)
-                        .frame(maxWidth: 820, alignment: .leading)
-                }
+                .accessibilityElement(children: .combine)
+
                 Button(action: primaryAction) {
                     Label(primaryActionTitle, systemImage: "info.circle")
                         .font(.dsCardTitle)
@@ -70,6 +74,7 @@ public struct HeroBanner: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .padding(.top, Metrics.space2)
+                .accessibilityLabel("\(primaryActionTitle), \(title)")
             }
             .padding(.horizontal, Metrics.screenMargin)
             .padding(.bottom, Metrics.space5)

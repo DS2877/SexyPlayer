@@ -154,7 +154,7 @@ struct LiveTVBrowseView: View {
     private func header(_ model: LiveTVBrowseViewModel) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
             HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
-                Text("Live TV").font(.dsTitle)
+                Text("Live TV").font(.dsTitle).accessibilityAddTraits(.isHeader)
                 Text("\(model.total)").font(.dsCardTitle).foregroundStyle(Palette.textTertiary)
             }
             if model.categories.count > 1 {

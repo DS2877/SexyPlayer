@@ -40,6 +40,7 @@ public struct ArtworkView: View {
             }
         }
         .clipped()
+        .accessibilityHidden(true)   // always decorative; the parent supplies the label
     }
 
     @ViewBuilder

@@ -10,6 +10,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Metrics.space5) {
                     Text("Settings").font(.dsTitle)
+                        .accessibilityAddTraits(.isHeader)
                         .padding(.top, Metrics.space4)
 
                     providersSection
@@ -88,6 +89,7 @@ struct SettingsView: View {
                             Task { await env.removeProvider(config.id) }
                         } label: { Image(systemName: "trash") }
                             .buttonStyle(.bordered)
+                            .accessibilityLabel("Remove \(config.displayName)")
                     }
                 }
                 .padding(Metrics.space2)

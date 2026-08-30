@@ -84,7 +84,7 @@ struct VODBrowseView: View {
     private func header(_ model: VODBrowseViewModel) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
             HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
-                Text(kind.title).font(.dsTitle)
+                Text(kind.title).font(.dsTitle).accessibilityAddTraits(.isHeader)
                 if !(model.isLoading && model.cards.isEmpty) {
                     Text("\(model.total)")
                         .font(.dsCardTitle).foregroundStyle(Palette.textTertiary)

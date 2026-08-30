@@ -69,7 +69,7 @@ struct SearchView: View {
 
     private func header(_ model: SearchViewModel) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space3) {
-            Text("Search").font(.dsTitle)
+            Text("Search").font(.dsTitle).accessibilityAddTraits(.isHeader)
 
             TextField("What do you want to watch?", text: Binding(
                 get: { model.query },
