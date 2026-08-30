@@ -98,8 +98,8 @@ public final class VLCPlayerModel {
     }
 
     fileprivate func timeChanged() {
-        position = Double(player.time?.intValue ?? 0) / 1000
-        let length = player.media?.length?.intValue ?? 0
+        position = Double(player.time.intValue) / 1000
+        let length = player.media?.length.intValue ?? 0
         if length > 0 { duration = Double(length) / 1000 }
         reportProgress()
     }
