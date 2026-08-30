@@ -78,13 +78,15 @@ public struct PosterCard: View {
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
                 }
-                Text(captionLine)
-                    .font(.dsCaption)
-                    .foregroundStyle(Palette.textSecondary)
-                    .lineLimit(1)
+                if !captionLine.isEmpty {
+                    Text(captionLine)
+                        .font(.dsCaption)
+                        .foregroundStyle(Palette.textSecondary)
+                        .lineLimit(1)
+                }
             }
             .padding(.horizontal, 2)
-            .frame(height: 58, alignment: .top)
+            .frame(minHeight: 30, alignment: .top)
         }
         .frame(width: Metrics.posterWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)

@@ -42,7 +42,7 @@ struct FavoritesView: View {
                             ForEach(sections) { section in
                                 VStack(alignment: .leading, spacing: Metrics.space2) {
                                     SectionHeader(section.id).padding(.horizontal, Metrics.screenMargin)
-                                    LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.shelfSpacing) {
+                                    LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
                                         ForEach(section.items) { item in
                                             PosterCard(title: item.title, subtitle: item.subtitle,
                                                        artworkURL: item.art,

@@ -16,7 +16,9 @@ public enum Metrics {
 
     public static let screenMargin: CGFloat = 90
     /// Vertical gap between Home shelves — deliberately generous, Apple TV+ style.
-    public static let shelfSpacing: CGFloat = 64
+    public static let shelfSpacing: CGFloat = 60
+    /// Vertical gap between rows in a poster/card grid.
+    public static let gridSpacing: CGFloat = 44
     public static let cardSpacing: CGFloat = 28
 
     public static let cornerRadius: CGFloat = 14

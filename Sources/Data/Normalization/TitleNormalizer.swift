@@ -77,6 +77,7 @@ public enum TitleNormalizer {
             .replacingOccurrences(of: "_", with: " ")
             .replacingOccurrences(of: ".", with: " ")
         s = leadingJunk.removingMatches(in: s)
+        s = leadingCountryTag.removingMatches(in: s)
         s = bracketTags.removingMatches(in: s)
         s = noiseWords.removingMatches(in: s)
         return s.collapsingWhitespace()

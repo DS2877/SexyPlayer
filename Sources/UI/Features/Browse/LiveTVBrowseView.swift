@@ -125,7 +125,7 @@ struct LiveTVBrowseView: View {
                                        message: "No channels in this category.")
                             .frame(minHeight: 400)
                     } else {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.shelfSpacing) {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
                             ForEach(model.rows) { row in
                                 ChannelCard(
                                     name: row.name,

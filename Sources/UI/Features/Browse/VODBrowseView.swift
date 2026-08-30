@@ -56,7 +56,7 @@ struct VODBrowseView: View {
                         )
                         .frame(minHeight: 400)
                     } else {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.shelfSpacing) {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
                             ForEach(model.cards) { card in
                                 PosterCard(
                                     title: card.title,

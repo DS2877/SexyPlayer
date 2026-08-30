@@ -136,7 +136,7 @@ struct SearchView: View {
     }
 
     private func results(_ model: SearchViewModel) -> some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.shelfSpacing) {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
             ForEach(model.results) { result in
                 switch result.item {
                 case .movie(let m):
