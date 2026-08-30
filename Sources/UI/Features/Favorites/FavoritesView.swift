@@ -14,6 +14,7 @@ struct FavoritesView: View {
         let subtitle: String
         let art: URL?
         let route: AppRoute
+        var ref: ArtworkRef?
     }
     struct FavSection: Identifiable {
         let id: String
@@ -45,7 +46,7 @@ struct FavoritesView: View {
                                     LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
                                         ForEach(section.items) { item in
                                             PosterCard(title: item.title, subtitle: item.subtitle,
-                                                       artworkURL: item.art,
+                                                       artworkURL: item.art, ref: item.ref,
                                                        action: { path.append(item.route) })
                                         }
                                     }
@@ -71,12 +72,14 @@ struct FavoritesView: View {
         let movies = catalog.movies.filter { ids.contains($0.id) }.map { m in
             FavItem(id: m.id, title: m.title,
                     subtitle: [m.year.map(String.init), m.genres.first?.displayName].compactMap { $0 }.joined(separator: " · "),
-                    art: m.posterURL, route: .movie(m.id))
+                    art: m.posterURL, route: .movie(m.id),
+                    ref: ArtworkRef(id: m.id, title: m.title, year: m.year, isSeries: false))
         }
         let series = catalog.series.filter { ids.contains($0.id) }.map { s in
             FavItem(id: s.id, title: s.title,
                     subtitle: "\(s.seasons.count) season\(s.seasons.count == 1 ? "" : "s")",
-                    art: s.posterURL, route: .series(s.id))
+                    art: s.posterURL, route: .series(s.id),
+                    ref: ArtworkRef(id: s.id, title: s.title, year: s.year, isSeries: true))
         }
         let channels = catalog.channels.filter { ids.contains($0.id) }.map { c in
             FavItem(id: c.id, title: c.name, subtitle: c.category, art: c.logoURL, route: .channel(c.id))

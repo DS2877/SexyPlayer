@@ -136,13 +136,13 @@ public final class HomeViewModel {
 
     nonisolated static func card(for movie: Movie) -> HomeCard {
         HomeCard(id: movie.id, kind: .movie, title: movie.title,
-                 subtitle: metadataSubtitle(for: movie), artworkURL: movie.posterURL)
+                 subtitle: metadataSubtitle(for: movie), artworkURL: movie.posterURL, year: movie.year)
     }
 
     nonisolated static func card(for series: Series) -> HomeCard {
         HomeCard(id: series.id, kind: .series, title: series.title,
                  subtitle: "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")",
-                 artworkURL: series.posterURL)
+                 artworkURL: series.posterURL, year: series.year)
     }
 
     nonisolated static func metadataSubtitle(for movie: Movie) -> String {

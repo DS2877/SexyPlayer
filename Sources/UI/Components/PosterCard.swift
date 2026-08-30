@@ -7,6 +7,7 @@ public struct PosterCard: View {
     let title: String
     let subtitle: String?
     let artworkURL: URL?
+    let ref: ArtworkRef?
     let badge: String?
     let progress: Double?
     let action: () -> Void
@@ -15,6 +16,7 @@ public struct PosterCard: View {
         title: String,
         subtitle: String? = nil,
         artworkURL: URL? = nil,
+        ref: ArtworkRef? = nil,
         badge: String? = nil,
         progress: Double? = nil,
         action: @escaping () -> Void
@@ -22,23 +24,26 @@ public struct PosterCard: View {
         self.title = title
         self.subtitle = subtitle
         self.artworkURL = artworkURL
+        self.ref = ref
         self.badge = badge
         self.progress = progress
         self.action = action
     }
 
+    @State private var showsRealImage = false
+
     private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
 
     private var captionLine: String {
         if let subtitle, !subtitle.isEmpty { return subtitle }
-        return artworkURL == nil ? "" : title
+        return showsRealImage ? title : ""
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Metrics.space1 + 2) {
             Button(action: action) {
                 ZStack(alignment: .topTrailing) {
-                    ArtworkView(url: artworkURL, title: title, aspect: 2.0 / 3.0)
+                    artwork
                         .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
                         .overlay(alignment: .bottom) {
                             if (progress ?? 0) > 0 {
@@ -70,9 +75,9 @@ public struct PosterCard: View {
             .buttonStyle(.card)
 
             VStack(alignment: .leading, spacing: 3) {
-                // With no artwork the poster itself carries the title, so the
+                // With no artwork the generated poster carries the title, so the
                 // caption drops to just the metadata line.
-                if artworkURL != nil {
+                if showsRealImage {
                     Text(title)
                         .font(.dsCardTitle)
                         .foregroundStyle(Palette.textPrimary)
@@ -89,8 +94,19 @@ public struct PosterCard: View {
             .frame(minHeight: 30, alignment: .top)
         }
         .frame(width: Metrics.posterWidth, alignment: .leading)
+        .onAppear { if artworkURL != nil { showsRealImage = true } }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(subtitle.map { "\(title), \($0)" } ?? title))
         .accessibilityAddTraits(.isButton)
+    }
+
+    @ViewBuilder
+    private var artwork: some View {
+        if let ref {
+            EnrichedArtwork(ref: ref, providerURL: artworkURL, aspect: 2.0 / 3.0, style: .poster,
+                            onResolvedImage: { showsRealImage = true })
+        } else {
+            ArtworkView(url: artworkURL, title: title, aspect: 2.0 / 3.0)
+        }
     }
 }

@@ -23,6 +23,7 @@ public final class AppEnvironment {
     public let providers: ProviderStore
     public let preferences: PreferencesStore
     public let parental: ParentalControlsStore
+    public let metadata = MetadataService()
     private let normalizer: Normalizer
     private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
@@ -62,8 +63,9 @@ public final class AppEnvironment {
         self.normalizer = Normalizer()
     }
 
-    /// Keychain account for the optional Anthropic API key (AI-assisted search).
+    /// Keychain accounts for the optional API keys.
     static let aiKeyAccount = "anthropic.apiKey.v1"
+    static let tmdbKeyAccount = "tmdb.apiKey.v1"
 
     /// Push the current preferences into the parts of the app that need them.
     /// Call after a load and whenever preferences change.
@@ -72,8 +74,20 @@ public final class AppEnvironment {
         await repository.setHideAdult(prefs.hideAdultContent)
         await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
 
-        let key = KeychainStore.get(Self.aiKeyAccount) ?? ""
-        await aiService.setRemoteParser(key.isEmpty ? nil : ClaudeQueryParser(apiKey: key))
+        let aiKey = KeychainStore.get(Self.aiKeyAccount) ?? ""
+        await aiService.setRemoteParser(aiKey.isEmpty ? nil : ClaudeQueryParser(apiKey: aiKey))
+        await metadata.setKey(KeychainStore.get(Self.tmdbKeyAccount))
+    }
+
+    public func setTMDBKey(_ key: String) async {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { KeychainStore.delete(Self.tmdbKeyAccount) }
+        else { KeychainStore.set(trimmed, for: Self.tmdbKeyAccount) }
+        await metadata.setKey(trimmed.isEmpty ? nil : trimmed)
+    }
+
+    public var hasTMDBKey: Bool {
+        !(KeychainStore.get(Self.tmdbKeyAccount) ?? "").isEmpty
     }
 
     /// Store or clear the AI-assisted-search API key, then re-wire the parser.

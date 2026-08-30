@@ -62,6 +62,7 @@ struct VODBrowseView: View {
                                     title: card.title,
                                     subtitle: card.subtitle,
                                     artworkURL: card.posterURL,
+                                    ref: card.artworkRef,
                                     progress: card.progress,
                                     action: { path.append(card.route) }
                                 )

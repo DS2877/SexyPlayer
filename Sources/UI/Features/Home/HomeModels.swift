@@ -9,20 +9,31 @@ public struct HomeCard: Identifiable, Sendable {
     public let title: String
     public let subtitle: String?
     public let artworkURL: URL?
+    public let year: Int?
     public let badge: String?
     public let progress: Double?
     /// Small uppercase line above the title (hero only): "2024 · Sci-Fi · 4K".
     public let eyebrow: String?
 
-    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil) {
+    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
         self.subtitle = subtitle
         self.artworkURL = artworkURL
+        self.year = year
         self.badge = badge
         self.progress = progress
         self.eyebrow = eyebrow
+    }
+
+    /// A TMDB match reference for movie / series cards (nil for channels).
+    public var artworkRef: ArtworkRef? {
+        switch kind {
+        case .movie:   return ArtworkRef(id: id, title: title, year: year, isSeries: false)
+        case .series:  return ArtworkRef(id: id, title: title, year: year, isSeries: true)
+        case .channel: return nil
+        }
     }
 }
 

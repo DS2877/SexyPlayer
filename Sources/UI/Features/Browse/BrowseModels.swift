@@ -20,6 +20,12 @@ public struct BrowseCard: Identifiable, Sendable {
     public let subtitle: String?
     public let posterURL: URL?
     public let progress: Double?
+    public let year: Int?
+    public let isSeries: Bool
+
+    public var artworkRef: ArtworkRef {
+        ArtworkRef(id: id, title: title, year: year, isSeries: isSeries)
+    }
 }
 
 extension BrowseCard {
@@ -31,7 +37,9 @@ extension BrowseCard {
             subtitle: [movie.year.map(String.init), movie.genres.first?.displayName]
                 .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
             posterURL: movie.posterURL,
-            progress: progress
+            progress: progress,
+            year: movie.year,
+            isSeries: false
         )
     }
 
@@ -43,7 +51,9 @@ extension BrowseCard {
             subtitle: [series.year.map(String.init), series.genres.first?.displayName]
                 .compactMap { $0 }.joined(separator: " · ").nilIfBlank,
             posterURL: series.posterURL,
-            progress: nil
+            progress: nil,
+            year: series.year,
+            isSeries: true
         )
     }
 }

@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var showAddProvider = false
     @State private var showPersonalize = false
     @State private var showAIKey = false
+    @State private var showTMDBKey = false
 
     var body: some View {
         NavigationStack {
@@ -16,6 +17,7 @@ struct SettingsView: View {
 
                     providersSection
                     personalizeSection
+                    artworkSection
                     aiSection
                     aboutSection
                 }
@@ -36,6 +38,28 @@ struct SettingsView: View {
         }
         .fullScreenCover(isPresented: $showAIKey) {
             AIKeyView().environment(env)
+        }
+        .fullScreenCover(isPresented: $showTMDBKey) {
+            TMDBKeyView().environment(env)
+        }
+    }
+
+    private var artworkSection: some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
+            SectionHeader("Artwork & metadata", subtitle: "Real posters, backdrops and synopses from The Movie Database")
+            Button { showTMDBKey = true } label: {
+                HStack {
+                    Label(env.hasTMDBKey ? "TMDB key connected" : "Connect a TMDB API key",
+                          systemImage: env.hasTMDBKey ? "checkmark.seal" : "photo.on.rectangle")
+                        .font(.dsBody)
+                    Spacer()
+                    Text(env.hasTMDBKey ? "Change" : "Add").font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                }
+            }
+            .buttonStyle(RowButtonStyle())
+            Text("Free from themoviedb.org. Without it, titles show a generated placeholder. Only the title and year of what you browse are ever sent.")
+                .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                .frame(maxWidth: 900, alignment: .leading)
         }
     }
 

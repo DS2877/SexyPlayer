@@ -118,6 +118,7 @@ struct HomeView: View {
                 title: card.title,
                 subtitle: card.subtitle,
                 artworkURL: card.artworkURL,
+                ref: card.artworkRef,
                 badge: card.badge,
                 progress: card.progress,
                 action: { navigate(card) }
