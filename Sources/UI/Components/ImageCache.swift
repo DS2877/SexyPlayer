@@ -2,17 +2,33 @@ import SwiftUI
 import UIKit
 import CryptoKit
 
-/// Two-tier image cache: decoded `UIImage`s in memory (instant on re-scroll)
-/// and raw bytes on disk (survives relaunch, no re-download). `AsyncImage`
-/// does neither well, which is why a 40k-poster grid felt slow.
-actor ImageCache {
-    static let shared = ImageCache()
+/// Decoded `UIImage`s kept in memory for instant redisplay while scrolling.
+/// Split out of the actor so views can read it synchronously; `NSCache` is
+/// itself thread-safe.
+final class DecodedImageMemoryCache: @unchecked Sendable {
+    static let shared = DecodedImageMemoryCache()
 
-    private let memory: NSCache<NSString, UIImage> = {
+    private let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
         c.totalCostLimit = 140 * 1024 * 1024      // ~140 MB of decoded images
         return c
     }()
+
+    func image(for url: URL) -> UIImage? {
+        cache.object(forKey: url.absoluteString as NSString)
+    }
+
+    func store(_ image: UIImage, for url: URL) {
+        cache.setObject(image, forKey: url.absoluteString as NSString, cost: image.estimatedBytes)
+    }
+}
+
+/// Two-tier image cache: decoded images in memory (`DecodedImageMemoryCache`)
+/// and raw bytes on disk (survives relaunch, no re-download). `AsyncImage` does
+/// neither, which is why a 40k-poster grid felt slow.
+actor ImageCache {
+    static let shared = ImageCache()
+
     private let directory: URL
     private var inFlight: [String: Task<UIImage?, Never>] = [:]
     private let session: URLSession
@@ -29,26 +45,23 @@ actor ImageCache {
         session = URLSession(configuration: config)
 
         // Crude cap: if the on-disk cache has grown past ~600 MB, wipe it.
-        if let size = try? FileManager.default.allocatedSizeOfDirectory(at: directory), size > 600 * 1024 * 1024 {
+        if let size = try? FileManager.default.allocatedSizeOfDirectory(at: directory),
+           size > 600 * 1024 * 1024 {
             try? FileManager.default.removeItem(at: directory)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
     }
 
-    /// Synchronous memory hit only — for `CachedImage` to skip the fade on
-    /// something it already has.
-    nonisolated func memoryImage(for url: URL) -> UIImage? {
-        memory.object(forKey: url.absoluteString as NSString)
-    }
-
     func image(for url: URL) async -> UIImage? {
+        if let hit = DecodedImageMemoryCache.shared.image(for: url) { return hit }
+
         let key = url.absoluteString
-        if let hit = memory.object(forKey: key as NSString) { return hit }
         if let running = inFlight[key] { return await running.value }
 
-        let task = Task<UIImage?, Never> { [directory, session] in
-            let fileURL = directory.appendingPathComponent(Self.filename(for: url))
-
+        let dir = directory
+        let session = self.session
+        let task = Task<UIImage?, Never> {
+            let fileURL = dir.appendingPathComponent(Self.filename(for: url))
             if let data = try? Data(contentsOf: fileURL), let image = Self.decode(data) {
                 return image
             }
@@ -62,9 +75,7 @@ actor ImageCache {
         inFlight[key] = task
         let image = await task.value
         inFlight[key] = nil
-        if let image {
-            memory.setObject(image, forKey: key as NSString, cost: image.estimatedBytes)
-        }
+        if let image { DecodedImageMemoryCache.shared.store(image, for: url) }
         return image
     }
 
@@ -72,7 +83,6 @@ actor ImageCache {
 
     private static func decode(_ data: Data) -> UIImage? {
         guard let image = UIImage(data: data) else { return nil }
-        // Force-decode off the main thread so scrolling doesn't hitch.
         return image.preparingForDisplay() ?? image
     }
 
@@ -91,18 +101,18 @@ private extension UIImage {
 
 private extension FileManager {
     func allocatedSizeOfDirectory(at url: URL) throws -> Int {
-        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
-        guard let e = enumerator(at: url, includingPropertiesForKeys: Array(keys)) else { return 0 }
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]
+        guard let enumerator = enumerator(at: url, includingPropertiesForKeys: keys) else { return 0 }
         var total = 0
-        for case let fileURL as URL in e {
-            let v = try fileURL.resourceValues(forKeys: keys)
-            total += v.totalFileAllocatedSize ?? v.fileAllocatedSize ?? 0
+        for case let fileURL as URL in enumerator {
+            let values = try fileURL.resourceValues(forKeys: Set(keys))
+            total += values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0
         }
         return total
     }
 }
 
-/// Drop-in replacement for `AsyncImage` that uses `ImageCache`. Shows `fallback`
+/// Drop-in replacement for `AsyncImage` backed by `ImageCache`. Shows `fallback`
 /// while loading and if the load fails.
 struct CachedImage<Fallback: View>: View {
     let url: URL?
@@ -122,7 +132,7 @@ struct CachedImage<Fallback: View>: View {
         .task(id: url) {
             didFail = false
             guard let url else { image = nil; return }
-            if let hit = ImageCache.shared.memoryImage(for: url) {
+            if let hit = DecodedImageMemoryCache.shared.image(for: url) {
                 image = hit
                 return
             }
