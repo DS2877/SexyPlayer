@@ -20,7 +20,10 @@ public final class PlayerModel {
     public private(set) var state: State = .loading
 
     @ObservationIgnored public let player: AVPlayer
+    /// The item playback started with.
     @ObservationIgnored public let item: PlaybackItem
+    /// The item currently loaded — changes when the user zaps between channels.
+    public private(set) var activeItem: PlaybackItem
 
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeObserverToken: Any?
@@ -31,7 +34,7 @@ public final class PlayerModel {
 
     /// Called ~every 10s and on teardown with the current position. No-op for live.
     @ObservationIgnored
-    private let onProgress: @MainActor (_ position: Double, _ duration: Double) -> Void
+    private let onProgress: @MainActor (_ item: PlaybackItem, _ position: Double, _ duration: Double) -> Void
 
     /// Fired when the item plays to its end, so the host can dismiss and let
     /// "up next" take over.
@@ -39,9 +42,10 @@ public final class PlayerModel {
 
     public init(
         item: PlaybackItem,
-        onProgress: @escaping @MainActor (Double, Double) -> Void
+        onProgress: @escaping @MainActor (PlaybackItem, Double, Double) -> Void
     ) {
         self.item = item
+        self.activeItem = item
         self.onProgress = onProgress
         self.player = AVPlayer(url: item.url)
         self.player.automaticallyWaitsToMinimizeStalling = true
@@ -88,7 +92,7 @@ public final class PlayerModel {
             MainActor.assumeIsolated { self?.handlePlayedToEnd() }
         }
 
-        if !item.isLive {
+        if !activeItem.isLive {
             let interval = CMTime(seconds: 10, preferredTimescale: 1)
             timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.reportProgress() }
@@ -104,7 +108,27 @@ public final class PlayerModel {
         removeObservers()
         state = .loading
         hasSeekedToResume = false
-        player.replaceCurrentItem(with: AVPlayerItem(url: item.url))
+        player.replaceCurrentItem(with: AVPlayerItem(url: activeItem.url))
+        configure()
+        startLoadTimeout()
+        player.play()
+    }
+
+    /// Swap to a different stream in place — used for live channel zapping.
+    /// Keeps the same `AVPlayer` and view controller so there's no black flash.
+    public func switchTo(_ newItem: PlaybackItem) {
+        guard newItem.url != activeItem.url else { return }
+        reportProgress()            // flush the outgoing item (no-op for live)
+        removeObservers()
+        activeItem = newItem
+        hasSeekedToResume = false
+        state = .loading
+        player.replaceCurrentItem(with: AVPlayerItem(url: newItem.url))
+
+        if case .unsupported(let reason) = StreamCompatibility.verdict(for: newItem.url) {
+            state = .failed(.streamNotSupported(detail: reason))
+            return
+        }
         configure()
         startLoadTimeout()
         player.play()
@@ -125,9 +149,9 @@ public final class PlayerModel {
 
     /// The item finished — record it as watched so "up next" logic can fire.
     private func handlePlayedToEnd() {
-        guard !item.isLive else { return }
+        guard !activeItem.isLive else { return }
         let duration = resolvedDuration()
-        if duration > 0 { onProgress(duration, duration) }   // -> WatchProgress.isFinished
+        if duration > 0 { onProgress(activeItem, duration, duration) }   // -> WatchProgress.isFinished
         onFinished?()
     }
 
@@ -148,7 +172,7 @@ public final class PlayerModel {
     }
 
     private func seekToResumeIfNeeded() {
-        guard !hasSeekedToResume, !item.isLive, let resumeAt = item.resumeAt, resumeAt > 1 else { return }
+        guard !hasSeekedToResume, !activeItem.isLive, let resumeAt = activeItem.resumeAt, resumeAt > 1 else { return }
         hasSeekedToResume = true
         player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
                     toleranceBefore: .zero, toleranceAfter: .zero)
@@ -157,19 +181,19 @@ public final class PlayerModel {
     private func fail(with error: Error?) {
         let providerError: ProviderError = error.map(ProviderError.from) ?? .streamUnavailable
         state = .failed(providerError)
-        AppLog.player.error("Playback failed for \(self.item.id.rawValue, privacy: .public): \(String(describing: providerError))")
+        AppLog.player.error("Playback failed for \(self.activeItem.id.rawValue, privacy: .public): \(String(describing: providerError))")
     }
 
     private func reportProgress() {
-        guard !item.isLive else { return }
+        guard !activeItem.isLive else { return }
         let position = player.currentTime().seconds
         let duration = resolvedDuration()
         guard position.isFinite, position > 0, duration > 0 else { return }
-        onProgress(position, duration)
+        onProgress(activeItem, position, duration)
     }
 
     private func resolvedDuration() -> Double {
-        if let known = item.durationSeconds, known > 0 { return known }
+        if let known = activeItem.durationSeconds, known > 0 { return known }
         let d = player.currentItem?.duration.seconds ?? 0
         return d.isFinite ? d : 0
     }

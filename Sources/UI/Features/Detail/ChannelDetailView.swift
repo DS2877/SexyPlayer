@@ -9,6 +9,7 @@ struct ChannelDetailView: View {
     @State private var channel: Channel?
     @State private var nowEvent: EPGEvent?
     @State private var playback: PlaybackItem?
+    @State private var lineup: [Channel] = []
 
     var body: some View {
         Group {
@@ -52,9 +53,20 @@ struct ChannelDetailView: View {
             if let epgID = channel?.epgID {
                 nowEvent = await env.repository.nowPlaying(forEPGID: epgID, at: .now)
             }
+            if lineup.isEmpty {
+                lineup = await env.repository.snapshot().channels
+            }
         }
         .fullScreenCover(item: $playback) { item in
-            PlayerScreen(item: item) { id, kind, position, duration in
+            PlayerScreen(
+                item: item,
+                lineup: ChannelLineup(channels: lineup, currentID: item.id),
+                makePlayback: { channel in await env.playback(forChannel: channel.id) },
+                nowText: { channel in
+                    guard let epgID = channel.epgID else { return nil }
+                    return await env.repository.nowPlaying(forEPGID: epgID, at: .now)?.title
+                }
+            ) { id, kind, position, duration in
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }
         }
