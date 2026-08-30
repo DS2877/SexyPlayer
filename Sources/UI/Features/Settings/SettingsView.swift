@@ -9,7 +9,7 @@ struct SettingsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Metrics.space5) {
-                    Text("Settings").font(.dsHero)
+                    Text("Settings").font(.dsTitle)
                         .padding(.top, Metrics.space4)
 
                     providersSection

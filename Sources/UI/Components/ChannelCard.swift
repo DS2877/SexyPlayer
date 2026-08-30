@@ -52,11 +52,16 @@ public struct ChannelCard: View {
                 }
                 .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
+                        .strokeBorder(.white.opacity(0.06))
+                )
 
                 Text(name)
                     .font(.dsCardTitle)
                     .foregroundStyle(isFocused ? Palette.textPrimary : Palette.textSecondary)
                     .lineLimit(1)
+                    .padding(.top, 2)
 
                 if let nowTitle {
                     HStack(spacing: 6) {
@@ -64,7 +69,7 @@ public struct ChannelCard: View {
                         Text(nowTitle).font(.dsCaption).foregroundStyle(Palette.textSecondary).lineLimit(1)
                     }
                     if let nowProgress {
-                        ProgressView(value: min(1, max(0, nowProgress)))
+                        ProgressView(value: Swift.min(1, Swift.max(0, nowProgress)))
                             .tint(Palette.accent)
                             .frame(width: Metrics.wideCardWidth)
                     }
