@@ -310,6 +310,9 @@ struct LibraryLoadingView: View {
     private enum RowState: Equatable { case pending, active, done }
 
     private func rowState(for phase: ImportPhase) -> RowState {
+        // Cache fast-path flips `isReady` without ever reporting phases, so a
+        // ready library must show every row complete regardless.
+        if isReady { return .done }
         if env.reachedPhases.contains(phase) { return .done }
         let firstPending = ImportPhase.checklist.first { !env.reachedPhases.contains($0) }
         return firstPending == phase ? .active : .pending
