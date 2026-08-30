@@ -109,6 +109,27 @@ public final class HomeViewModel {
                                 subtitle: "Highest rated in your library", cards: Array(topRated)))
         }
 
+        // Genre shelves — the biggest few genres in the library. Like "Top
+        // Rated" these are new, so they're shown regardless of the saved row
+        // list (which predates the option); a future opt-out can gate them.
+        var genreRows: [HomeRow] = []
+        do {
+            var counts: [Genre: Int] = [:]
+            for movie in catalog.movies { for g in movie.genres { counts[g, default: 0] += 1 } }
+            for series in catalog.series { for g in series.genres { counts[g, default: 0] += 1 } }
+            let topGenres = counts.sorted { $0.value > $1.value }.prefix(5).map(\.key)
+            for genre in topGenres where counts[genre, default: 0] >= 8 {
+                var cards = Array(moviesByRecency.lazy.filter { $0.genres.contains(genre) }.prefix(18))
+                    .map { card(for: $0) }
+                cards += Array(seriesByRecency.lazy.filter { $0.genres.contains(genre) }.prefix(6))
+                    .map { card(for: $0) }
+                if cards.count >= 5 {
+                    genreRows.append(HomeRow(id: "genre-\(genre.rawValue)", title: genre.displayName,
+                                             subtitle: nil, cards: Array(cards.prefix(22))))
+                }
+            }
+        }
+
         add(.movies, "Movies", Array(moviesByRecency.prefix(30)).map { card(for: $0) })
         add(.series, "Series", Array(catalog.series.prefix(30)).map { card(for: $0) })
 
@@ -125,6 +146,14 @@ public final class HomeViewModel {
             let insertAt = rows.firstIndex { $0.id == HomeRowKind.continueWatching.rawValue }
                 .map { $0 + 1 } ?? 0
             rows.insert(row, at: Swift.min(insertAt, rows.count))
+        }
+
+        // Genre shelves sit just above the generic Movies / Series shelves.
+        if !genreRows.isEmpty {
+            let anchor = rows.firstIndex {
+                $0.id == HomeRowKind.movies.rawValue || $0.id == HomeRowKind.series.rawValue
+            } ?? rows.count
+            rows.insert(contentsOf: genreRows, at: anchor)
         }
 
         let hero = moviesByRecency.first.map { movie in
