@@ -29,6 +29,11 @@ public struct PosterCard: View {
 
     private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
 
+    private var captionLine: String {
+        if let subtitle, !subtitle.isEmpty { return subtitle }
+        return artworkURL == nil ? "" : title
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: Metrics.space1 + 2) {
             Button(action: action) {
@@ -65,18 +70,21 @@ public struct PosterCard: View {
             .buttonStyle(.card)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.dsCardTitle)
-                    .foregroundStyle(Palette.textPrimary)
-                    .lineLimit(1)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.dsCaption)
-                        .foregroundStyle(Palette.textSecondary)
+                // With no artwork the poster itself carries the title, so the
+                // caption drops to just the metadata line.
+                if artworkURL != nil {
+                    Text(title)
+                        .font(.dsCardTitle)
+                        .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
                 }
+                Text(captionLine)
+                    .font(.dsCaption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(1)
             }
             .padding(.horizontal, 2)
+            .frame(height: 58, alignment: .top)
         }
         .frame(width: Metrics.posterWidth, alignment: .leading)
         .accessibilityElement(children: .ignore)
