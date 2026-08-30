@@ -8,7 +8,7 @@ struct SidebarShell: View {
     @Environment(AppEnvironment.self) private var env
 
     enum Section: String, CaseIterable, Identifiable {
-        case home, search, liveTV, guide, movies, series, favorites, settings
+        case home, search, liveTV, guide, movies, series, favorites, history, settings
         var id: String { rawValue }
 
         var title: String {
@@ -20,6 +20,7 @@ struct SidebarShell: View {
             case .movies: return "Movies"
             case .series: return "Series"
             case .favorites: return "Favorites"
+            case .history: return "History"
             case .settings: return "Settings"
             }
         }
@@ -32,12 +33,13 @@ struct SidebarShell: View {
             case .movies: return "film.fill"
             case .series: return "rectangle.stack.fill"
             case .favorites: return "heart.fill"
+            case .history: return "clock.arrow.circlepath"
             case .settings: return "gearshape.fill"
             }
         }
     }
 
-    private static let primary: [Section] = [.home, .search, .liveTV, .guide, .movies, .series, .favorites]
+    private static let primary: [Section] = [.home, .search, .liveTV, .guide, .movies, .series, .favorites, .history]
 
     @State private var selection: Section = .home
 
@@ -98,6 +100,7 @@ struct SidebarShell: View {
         case .movies:    VODBrowseView(kind: .movies)
         case .series:    VODBrowseView(kind: .series)
         case .favorites: FavoritesView()
+        case .history:   HistoryView()
         case .settings:  SettingsView()
         }
     }
