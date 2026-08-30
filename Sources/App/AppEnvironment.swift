@@ -62,12 +62,33 @@ public final class AppEnvironment {
         self.normalizer = Normalizer()
     }
 
+    /// Keychain account for the optional Anthropic API key (AI-assisted search).
+    static let aiKeyAccount = "anthropic.apiKey.v1"
+
     /// Push the current preferences into the parts of the app that need them.
     /// Call after a load and whenever preferences change.
     public func applyPreferences() async {
         let prefs = preferences.preferences
         await repository.setHideAdult(prefs.hideAdultContent)
         await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
+
+        let key = KeychainStore.get(Self.aiKeyAccount) ?? ""
+        await aiService.setRemoteParser(key.isEmpty ? nil : ClaudeQueryParser(apiKey: key))
+    }
+
+    /// Store or clear the AI-assisted-search API key, then re-wire the parser.
+    public func setAIKey(_ key: String) async {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.delete(Self.aiKeyAccount)
+        } else {
+            KeychainStore.set(trimmed, for: Self.aiKeyAccount)
+        }
+        await applyPreferences()
+    }
+
+    public var hasAIKey: Bool {
+        !(KeychainStore.get(Self.aiKeyAccount) ?? "").isEmpty
     }
 
     public static func live() -> AppEnvironment { AppEnvironment() }

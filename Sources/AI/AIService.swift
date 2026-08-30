@@ -21,7 +21,7 @@ public actor AIService {
     }
 
     private let deterministic: DeterministicQueryParser
-    private let remote: AIQueryParser?
+    private var remote: AIQueryParser?
     public private(set) var mode: Mode
 
     public init(
@@ -37,6 +37,15 @@ public actor AIService {
     public func setMode(_ newMode: Mode) {
         mode = newMode
     }
+
+    /// Install (or clear) the remote parser — called when the user adds/removes
+    /// an API key. `nil` means assisted mode silently stays on-device.
+    public func setRemoteParser(_ parser: AIQueryParser?) {
+        remote = parser
+    }
+
+    /// True when a remote parser is available (a key is configured).
+    public var hasRemoteParser: Bool { remote != nil }
 
     /// Parse a query into a `SearchIntent`. Always returns something usable.
     public func intent(for query: String, vocabulary: SearchVocabulary) async -> SearchIntent {

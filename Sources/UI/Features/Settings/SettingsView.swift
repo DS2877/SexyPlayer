@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var showAddProvider = false
     @State private var showPersonalize = false
+    @State private var showAIKey = false
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,9 @@ struct SettingsView: View {
         .fullScreenCover(isPresented: $showPersonalize) {
             PersonalizeView(mode: .settings)
                 .environment(env)
+        }
+        .fullScreenCover(isPresented: $showAIKey) {
+            AIKeyView().environment(env)
         }
     }
 
@@ -136,6 +140,24 @@ struct SettingsView: View {
             }
             .padding(Metrics.space2)
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
+
+            if env.preferences.preferences.aiAssistedSearch {
+                Button {
+                    showAIKey = true
+                } label: {
+                    HStack {
+                        Label(env.hasAIKey ? "Claude key connected" : "Connect a Claude API key",
+                              systemImage: env.hasAIKey ? "checkmark.seal" : "key")
+                            .font(.dsBody)
+                        Spacer()
+                        Text(env.hasAIKey ? "Change" : "Add").font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                    }
+                }
+                .buttonStyle(RowButtonStyle())
+
+                Text("Without a key, AI-assisted search quietly falls back to on-device understanding.")
+                    .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+            }
         }
     }
 
