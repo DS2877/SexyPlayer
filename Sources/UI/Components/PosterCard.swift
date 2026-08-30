@@ -28,13 +28,29 @@ public struct PosterCard: View {
         self.action = action
     }
 
+    private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
+
     public var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: Metrics.space1) {
-                ZStack(alignment: .bottomLeading) {
+                ZStack(alignment: .topLeading) {
                     ArtworkView(url: artworkURL, title: title, aspect: 2.0 / 3.0)
                         .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
+                        .overlay(alignment: .bottom) {
+                            if (progress ?? 0) > 0 {
+                                ZStack(alignment: .leading) {
+                                    Rectangle().fill(.black.opacity(0.35))
+                                    Rectangle().fill(Palette.accent)
+                                        .frame(width: Metrics.posterWidth * clampedProgress)
+                                }
+                                .frame(height: 5)
+                            }
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
+                                .strokeBorder(.white.opacity(0.06))
+                        )
 
                     if let badge {
                         Text(badge)
@@ -43,17 +59,6 @@ public struct PosterCard: View {
                             .background(.ultraThinMaterial, in: Capsule())
                             .padding(Metrics.space1)
                     }
-
-                    if let progress, progress > 0 {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(.white.opacity(0.25))
-                                Rectangle().fill(Palette.accent)
-                                    .frame(width: geo.size.width * min(1, max(0, progress)))
-                            }
-                        }
-                        .frame(height: 6)
-                    }
                 }
                 .frame(width: Metrics.posterWidth)
 
@@ -61,8 +66,9 @@ public struct PosterCard: View {
                     .font(.dsCardTitle)
                     .foregroundStyle(isFocused ? Palette.textPrimary : Palette.textSecondary)
                     .lineLimit(1)
+                    .padding(.top, 2)
 
-                if let subtitle {
+                if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.dsCaption)
                         .foregroundStyle(Palette.textTertiary)
