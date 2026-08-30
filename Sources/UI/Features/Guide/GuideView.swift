@@ -13,7 +13,12 @@ struct GuideChannelRow: Identifiable, Sendable {
 final class GuideViewModel {
     private(set) var rows: [GuideChannelRow] = []
     private(set) var isLoading = true
+    /// The guide is capped so a 15k-channel provider doesn't build 15k rows.
+    private(set) var truncated = false
     let now = Date()
+
+    /// Most people never scroll past a few hundred channels in a guide.
+    private static let rowCap = 250
 
     private let repository: any CatalogRepository
 
@@ -24,15 +29,26 @@ final class GuideViewModel {
         defer { isLoading = false }
         let catalog = await repository.snapshot()
         let epg = await repository.epgIndex()
-        let window = DateInterval(start: now.addingTimeInterval(-3600),
-                                  end: now.addingTimeInterval(8 * 3600))
-        rows = catalog.channels.compactMap { channel -> GuideChannelRow? in
-            guard let epgID = channel.epgID else { return nil }
-            let events = epg.events(forChannel: epgID, in: window)
-            guard !events.isEmpty else { return nil }
-            return GuideChannelRow(id: channel.id, name: channel.name,
-                                   logoURL: channel.logoURL, events: events)
-        }
+        let anchor = now
+        let cap = Self.rowCap
+
+        let result = await Task.detached(priority: .userInitiated) { () -> (rows: [GuideChannelRow], truncated: Bool) in
+            let window = DateInterval(start: anchor.addingTimeInterval(-3600),
+                                      end: anchor.addingTimeInterval(8 * 3600))
+            var rows: [GuideChannelRow] = []
+            for channel in catalog.channels {
+                guard let epgID = channel.epgID, epg[epgID] != nil else { continue }
+                let events = epg.events(forChannel: epgID, in: window)
+                guard !events.isEmpty else { continue }
+                rows.append(GuideChannelRow(id: channel.id, name: channel.name,
+                                            logoURL: channel.logoURL, events: events))
+                if rows.count >= cap { return (rows, true) }
+            }
+            return (rows, false)
+        }.value
+
+        rows = result.rows
+        truncated = result.truncated
     }
 }
 
@@ -84,6 +100,12 @@ struct GuideView: View {
                     Section {
                         ForEach(model.rows) { row in
                             channelRow(row, now: model.now)
+                        }
+                        if model.truncated {
+                            Text("Showing the first \(model.rows.count) channels with guide data. Use Live TV to browse the rest.")
+                                .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                                .padding(.horizontal, Metrics.screenMargin)
+                                .padding(.top, Metrics.space2)
                         }
                     } header: {
                         HStack {

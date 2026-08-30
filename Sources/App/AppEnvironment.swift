@@ -110,9 +110,10 @@ public final class AppEnvironment {
 
         // Fast path: a cached catalog.
         if !forceReload, let entry = await cache.load(providerID: providerID), !entry.catalog.isEmpty {
-            await repository.load(entry.catalog)
+            let cached = entry.catalog
+            await repository.load(cached)
             await applyPreferences()
-            vocabulary = SearchVocabulary.from(catalog: entry.catalog)
+            vocabulary = await Task.detached { SearchVocabulary.from(catalog: cached) }.value
             loadState = .ready
             hasLoadedOnce = true
             AppLog.app.info("Loaded catalog from cache (\(Int(entry.age))s old) — \(RuntimeStats.catalogSummary(entry.catalog)).")
@@ -134,7 +135,8 @@ public final class AppEnvironment {
             markPhase(.finalizing)                       // normalize done; now indexing
             await repository.load(catalog)
             await applyPreferences()
-            vocabulary = SearchVocabulary.from(catalog: catalog)
+            let forVocab = catalog
+            vocabulary = await Task.detached { SearchVocabulary.from(catalog: forVocab) }.value
             loadState = .ready                           // app is usable now
             hasLoadedOnce = true
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
@@ -194,7 +196,8 @@ public final class AppEnvironment {
                       self.providers.activeConfiguration?.id == providerID else { return }
                 await self.repository.load(catalog)
                 await self.applyPreferences()
-                self.vocabulary = SearchVocabulary.from(catalog: catalog)
+                let forVocab = catalog
+                self.vocabulary = await Task.detached { SearchVocabulary.from(catalog: forVocab) }.value
                 await self.cache.save(catalog, providerID: providerID)
                 AppLog.app.info("Catalog refreshed in background.")
             } catch {

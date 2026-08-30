@@ -21,6 +21,7 @@ public final class VODBrowseViewModel {
     private let watchProgress: WatchProgressStore
     private let pageSize = 60
     private var page = 0
+    private var reloadTask: Task<Void, Never>?
 
     public init(kind: BrowseKind, repository: any CatalogRepository, watchProgress: WatchProgressStore) {
         self.kind = kind
@@ -40,6 +41,17 @@ public final class VODBrowseViewModel {
 
     public func clearFilters() {
         filter = CatalogFilter(sort: filter.sort)
+    }
+
+    /// Debounced — the filter UI calls this on every chip tap; only the settled
+    /// filter runs a query.
+    public func scheduleReload() {
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(280))
+            guard !Task.isCancelled else { return }
+            await self?.reload()
+        }
     }
 
     public func reload() async {

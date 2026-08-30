@@ -77,7 +77,7 @@ struct VODBrowseView: View {
             }
         }
         .onChange(of: model.filter) { _, _ in
-            Task { await model.reload() }
+            model.scheduleReload()
         }
     }
 
