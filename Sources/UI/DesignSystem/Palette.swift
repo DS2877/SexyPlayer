@@ -26,21 +26,4 @@ public enum Palette {
 
     public static let liveDot = Color(red: 0.918, green: 0.263, blue: 0.337)
     public static let hairline = Color.white.opacity(0.06)
-
-    /// Deterministic placeholder artwork — a small set of restrained, cinematic
-    /// dark gradients so a grid of missing-poster cards reads as one palette
-    /// rather than a bag of colours.
-    private static let placeholderPairs: [(top: Color, bottom: Color)] = [
-        (Color(red: 0.22, green: 0.20, blue: 0.17), Color(red: 0.09, green: 0.082, blue: 0.070)),  // warm charcoal
-        (Color(red: 0.17, green: 0.20, blue: 0.24), Color(red: 0.072, green: 0.085, blue: 0.105)), // slate blue
-        (Color(red: 0.21, green: 0.18, blue: 0.24), Color(red: 0.088, green: 0.076, blue: 0.108)), // plum
-        (Color(red: 0.16, green: 0.21, blue: 0.19), Color(red: 0.070, green: 0.094, blue: 0.086)), // deep pine
-        (Color(red: 0.24, green: 0.19, blue: 0.16), Color(red: 0.10, green: 0.078, blue: 0.066)),  // umber
-    ]
-
-    public static func placeholderGradient(for seed: String) -> LinearGradient {
-        let pair = placeholderPairs[Int(StableHash.hash(seed) % UInt64(placeholderPairs.count))]
-        return LinearGradient(colors: [pair.top, pair.bottom],
-                              startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
 }

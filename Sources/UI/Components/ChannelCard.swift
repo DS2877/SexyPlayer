@@ -33,7 +33,7 @@ public struct ChannelCard: View {
         VStack(alignment: .leading, spacing: Metrics.space1 + 2) {
             Button(action: action) {
                 ZStack {
-                    Palette.placeholderGradient(for: name)
+                    GeneratedArtwork(seed: name)
 
                     if let logoURL {
                         AsyncImage(url: logoURL) { $0.resizable().scaledToFit().padding(Metrics.space3) }
