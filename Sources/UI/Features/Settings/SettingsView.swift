@@ -49,15 +49,15 @@ struct SettingsView: View {
             SectionHeader("Artwork & metadata", subtitle: "Real posters, backdrops and synopses from The Movie Database")
             Button { showTMDBKey = true } label: {
                 HStack {
-                    Label(env.hasTMDBKey ? "TMDB key connected" : "Connect a TMDB API key",
-                          systemImage: env.hasTMDBKey ? "checkmark.seal" : "photo.on.rectangle")
+                    Label(env.hasTMDBKey ? "Using your own TMDB key" : "The Movie Database — on",
+                          systemImage: "checkmark.seal")
                         .font(.dsBody)
                     Spacer()
-                    Text(env.hasTMDBKey ? "Change" : "Add").font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                    Text(env.hasTMDBKey ? "Change" : "Use my own key").font(.dsCaption).foregroundStyle(Palette.textTertiary)
                 }
             }
             .buttonStyle(RowButtonStyle())
-            Text("Free from themoviedb.org. Without it, titles show a generated placeholder. Only the title and year of what you browse are ever sent.")
+            Text("Enrichment is on by default. You can supply your own free themoviedb.org key here if you prefer. Only the title and year of what you browse are ever sent.")
                 .font(.dsCaption).foregroundStyle(Palette.textTertiary)
                 .frame(maxWidth: 900, alignment: .leading)
         }

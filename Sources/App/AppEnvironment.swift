@@ -76,16 +76,23 @@ public final class AppEnvironment {
 
         let aiKey = KeychainStore.get(Self.aiKeyAccount) ?? ""
         await aiService.setRemoteParser(aiKey.isEmpty ? nil : ClaudeQueryParser(apiKey: aiKey))
-        await metadata.setKey(KeychainStore.get(Self.tmdbKeyAccount))
+        await metadata.setKey(effectiveTMDBKey)
+    }
+
+    /// A key entered in Settings wins; otherwise the bundled default.
+    private var effectiveTMDBKey: String {
+        let custom = (KeychainStore.get(Self.tmdbKeyAccount) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return custom.isEmpty ? TMDBDefaults.readAccessToken : custom
     }
 
     public func setTMDBKey(_ key: String) async {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { KeychainStore.delete(Self.tmdbKeyAccount) }
         else { KeychainStore.set(trimmed, for: Self.tmdbKeyAccount) }
-        await metadata.setKey(trimmed.isEmpty ? nil : trimmed)
+        await metadata.setKey(effectiveTMDBKey)
     }
 
+    /// True when a *custom* key is set (the default always works regardless).
     public var hasTMDBKey: Bool {
         !(KeychainStore.get(Self.tmdbKeyAccount) ?? "").isEmpty
     }
