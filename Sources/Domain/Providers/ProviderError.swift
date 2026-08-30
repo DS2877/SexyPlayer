@@ -7,6 +7,7 @@ public enum ProviderError: Error, Equatable, Sendable {
     case offline
     case cannotReachProvider
     case authenticationFailed
+    case emptyLibrary
     case badResponse
     case playlistMalformed(reason: String)
     case streamUnavailable
@@ -21,6 +22,7 @@ public enum ProviderError: Error, Equatable, Sendable {
         case .offline:               return "You're offline"
         case .cannotReachProvider:   return "Can't reach your provider"
         case .authenticationFailed:  return "Sign-in failed"
+        case .emptyLibrary:          return "Your provider returned nothing"
         case .badResponse:           return "Your provider sent something unexpected"
         case .playlistMalformed:     return "This playlist couldn't be read"
         case .streamUnavailable:     return "This channel isn't available right now"
@@ -40,6 +42,8 @@ public enum ProviderError: Error, Equatable, Sendable {
             return "We couldn't connect. Your provider may be down, or the address may be wrong."
         case .authenticationFailed:
             return "Your username or password wasn't accepted. Check your provider details."
+        case .emptyLibrary:
+            return "We connected successfully, but your provider sent no channels, movies or series. This usually means the subscription isn't active, or these details are for a different service."
         case .badResponse:
             return "We reached your provider but couldn't understand the response."
         case .playlistMalformed(let reason):
@@ -63,6 +67,7 @@ public enum ProviderError: Error, Equatable, Sendable {
         case .offline:              return [.retry, .checkConnection]
         case .cannotReachProvider:  return [.retry, .editProvider]
         case .authenticationFailed: return [.editProvider]
+        case .emptyLibrary:         return [.retry, .editProvider]
         case .timedOut, .streamUnavailable, .badResponse, .unknown:
             return [.retry]
         case .playlistMalformed:    return [.editProvider]

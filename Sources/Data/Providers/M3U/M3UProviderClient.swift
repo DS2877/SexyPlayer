@@ -24,6 +24,10 @@ public struct M3UProviderClient: ProviderClient {
         progress.reached(.connecting)
         let data = try await http.data(from: playlistURL)
         var catalog = try M3UParser.parse(data, providerID: descriptor.id)
+        guard !catalog.channels.isEmpty || !catalog.vod.isEmpty || !catalog.seriesEpisodes.isEmpty else {
+            AppLog.provider.error("M3U import: playlist parsed but contained no entries.")
+            throw ProviderError.emptyLibrary
+        }
         progress.reached(.channels)
         progress.reached(.movies)
         progress.reached(.series)

@@ -22,8 +22,9 @@ final class ProviderErrorTests: XCTestCase {
 
     func testEveryErrorHasUserFacingText() {
         let all: [ProviderError] = [
-            .offline, .cannotReachProvider, .authenticationFailed, .badResponse,
-            .playlistMalformed(reason: "x"), .streamUnavailable, .timedOut, .cancelled, .unknown,
+            .offline, .cannotReachProvider, .authenticationFailed, .emptyLibrary, .badResponse,
+            .playlistMalformed(reason: "x"), .streamUnavailable, .streamNotSupported(detail: "x"),
+            .timedOut, .cancelled, .unknown,
         ]
         for error in all {
             XCTAssertFalse(error.title.isEmpty)

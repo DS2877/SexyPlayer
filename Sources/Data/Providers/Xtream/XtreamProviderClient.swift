@@ -82,6 +82,11 @@ public struct XtreamProviderClient: ProviderClient {
             )
         }
 
+        guard !channels.isEmpty || !movies.isEmpty || !shells.isEmpty else {
+            AppLog.provider.error("Xtream import: authenticated but every list came back empty.")
+            throw ProviderError.emptyLibrary
+        }
+
         progress.reached(.guide)
         let epg = (try? await fetchEPG()) ?? []
 
