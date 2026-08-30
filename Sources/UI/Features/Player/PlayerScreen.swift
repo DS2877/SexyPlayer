@@ -28,7 +28,17 @@ struct PlayerScreen: View {
         (currentLineup?.channels.count ?? 0) > 1 && makePlayback != nil
     }
 
+    @ViewBuilder
     var body: some View {
+        switch PlaybackEngine.choose(for: item.url) {
+        case .vlc:
+            VLCPlayerScreen(item: item, onProgress: onProgress)
+        case .system:
+            systemBody
+        }
+    }
+
+    private var systemBody: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 

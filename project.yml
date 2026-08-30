@@ -9,6 +9,14 @@ options:
   generateEmptyDirectories: true
   xcodeVersion: "26.0"
 
+packages:
+  # Plays the containers AVPlayer can't: MKV, AVI, raw MPEG-TS, rtmp/rtsp.
+  # If SPM can't resolve this, the module may be published as `MobileVLCKit`
+  # for a given version — adjust `from:` / the import in VLCPlayback.swift.
+  VLCKit:
+    url: https://code.videolan.org/videolan/VLCKit.git
+    from: "3.6.0"
+
 settings:
   base:
     SWIFT_VERSION: "5.0"
@@ -28,6 +36,8 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+    dependencies:
+      - package: VLCKit
     info:
       path: Sources/App/Info.plist
       properties:
