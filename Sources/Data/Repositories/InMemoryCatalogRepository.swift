@@ -197,6 +197,20 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func epgIndex() -> [String: [EPGEvent]] { epgByChannel }
 
     public func snapshot() -> Catalog { catalog }
+
+    /// Seeds for the background TMDB enrichment sweep — most recently added
+    /// first, since that's what the user browses before anything else.
+    public func artworkSeeds(movieLimit: Int, seriesLimit: Int) -> [ArtworkSeed] {
+        let movies = catalog.movies
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(movieLimit)
+            .map { ArtworkSeed(id: $0.id, title: $0.title, year: $0.year, isSeries: false) }
+        let series = catalog.series
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(seriesLimit)
+            .map { ArtworkSeed(id: $0.id, title: $0.title, year: $0.year, isSeries: true) }
+        return Array(movies) + Array(series)
+    }
 }
 
 // MARK: - Filtering

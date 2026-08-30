@@ -65,6 +65,37 @@ struct DetailScaffold<Content: View>: View {
     }
 }
 
+/// A small "★ 7.8" pill for a TMDB rating.
+struct TMDBRatingBadge: View {
+    let rating: Double
+    var votes: Int?
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "star.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(Palette.accent)
+            Text(String(format: "%.1f", rating))
+                .font(.dsTag)
+                .foregroundStyle(Palette.textPrimary)
+            if let votes, votes >= 50 {
+                Text(Self.shortCount(votes))
+                    .font(.dsTag)
+                    .foregroundStyle(Palette.textTertiary)
+            }
+        }
+        .padding(.horizontal, Metrics.space2)
+        .padding(.vertical, Metrics.space1)
+        .background(Palette.surface, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.hairline))
+        .accessibilityLabel("Rated \(String(format: "%.1f", rating)) out of 10 on The Movie Database")
+    }
+
+    private static func shortCount(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.0fk", Double(n) / 1000) : "\(n)"
+    }
+}
+
 /// A labelled row of language chips ("English audio", "Swedish subtitles").
 struct LanguageSummary: View {
     let audio: [Language]

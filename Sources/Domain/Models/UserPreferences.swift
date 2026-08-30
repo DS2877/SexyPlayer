@@ -6,6 +6,7 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
     case continueWatching
     case liveNow
     case tonight
+    case topRated
     case recentlyAdded
     case inYourLanguages
     case withYourSubtitles
@@ -19,6 +20,7 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
         case .continueWatching:  return "Continue Watching"
         case .liveNow:           return "Live Now"
         case .tonight:           return "Tonight"
+        case .topRated:          return "Top Rated"
         case .recentlyAdded:     return "Recently Added"
         case .inYourLanguages:   return "In Your Languages"
         case .withYourSubtitles: return "With Your Subtitles"
@@ -32,6 +34,7 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
         case .continueWatching:  return "Pick up where you left off"
         case .liveNow:           return "What's on across your channels"
         case .tonight:           return "Upcoming programmes this evening"
+        case .topRated:          return "The highest-rated films and shows in your library"
         case .recentlyAdded:     return "The newest additions to your library"
         case .inYourLanguages:   return "Content in the languages you chose"
         case .withYourSubtitles: return "Titles subtitled in your language"

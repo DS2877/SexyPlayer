@@ -10,7 +10,35 @@ public struct EnrichedMetadata: Codable, Sendable, Equatable {
     public let rating: Double?       // 0…10
     public let fetchedAt: Date
 
+    // Second-pass detail fields (from /movie/{id} or /tv/{id}). Optional so old
+    // cache files still decode.
+    public var tagline: String?
+    public var genres: [String]?
+    public var cast: [String]?
+    public var runtime: Int?          // minutes
+    public var voteCount: Int?
+    public var detailsFetchedAt: Date?
+
     public var matched: Bool { tmdbID > 0 }
+    public var hasDetails: Bool { detailsFetchedAt != nil }
+
+    public init(tmdbID: Int, posterURL: URL?, backdropURL: URL?, overview: String?,
+                rating: Double?, fetchedAt: Date,
+                tagline: String? = nil, genres: [String]? = nil, cast: [String]? = nil,
+                runtime: Int? = nil, voteCount: Int? = nil, detailsFetchedAt: Date? = nil) {
+        self.tmdbID = tmdbID
+        self.posterURL = posterURL
+        self.backdropURL = backdropURL
+        self.overview = overview
+        self.rating = rating
+        self.fetchedAt = fetchedAt
+        self.tagline = tagline
+        self.genres = genres
+        self.cast = cast
+        self.runtime = runtime
+        self.voteCount = voteCount
+        self.detailsFetchedAt = detailsFetchedAt
+    }
 }
 
 /// Enriches the catalog from TMDB in the background: deduped, rate-limited,
@@ -20,10 +48,12 @@ public actor MetadataService {
 
     private var byID: [String: EnrichedMetadata] = [:]
     private var inFlight: [String: Task<EnrichedMetadata?, Never>] = [:]
+    private var detailsInFlight: [String: Task<EnrichedMetadata?, Never>] = [:]
     private var client: TMDBClient?
     private var lastRequestAt = Date.distantPast
     private var dirty = false
     private var saveTask: Task<Void, Never>?
+    private var sweepTask: Task<Void, Never>?
 
     /// ~8 requests/sec — comfortably inside TMDB's limits.
     private let minInterval: TimeInterval = 0.13
@@ -71,13 +101,62 @@ public actor MetadataService {
         return result
     }
 
+    /// Full record including cast/genres/runtime/tagline. Does the base search
+    /// first if needed, then a second `/movie/{id}` call. For detail screens.
+    public func details(for id: CatalogID, title: String, year: Int?, isSeries: Bool) async -> EnrichedMetadata? {
+        let key = id.rawValue
+
+        // Cached with details already? Done.
+        if let existing = byID[key], existing.matched, existing.hasDetails { return existing }
+        guard client != nil else { return byID[key]?.matched == true ? byID[key] : nil }
+
+        if let running = detailsInFlight[key] { return await running.value }
+
+        let task = Task<EnrichedMetadata?, Never> { [weak self] in
+            guard let self else { return nil }
+            let base = await self.metadata(for: id, title: title, year: year, isSeries: isSeries)
+            guard let base, base.matched else { return base }
+            return await self.fetchDetails(key: key, base: base, isSeries: isSeries)
+        }
+        detailsInFlight[key] = task
+        let result = await task.value
+        detailsInFlight[key] = nil
+        return result
+    }
+
+    /// Crawl the library filling in artwork without waiting for the user to
+    /// scroll. Cheap entries first; already-cached ones skip instantly.
+    /// `onBatch` fires periodically so the UI can refresh as data lands.
+    public func warmUp(_ items: [ArtworkSeed], onBatch: @escaping @Sendable () -> Void = {}) {
+        guard client != nil, sweepTask == nil else { return }
+        sweepTask = Task { [weak self] in
+            var sinceRefresh = 0
+            for item in items {
+                if Task.isCancelled { break }
+                _ = await self?.metadata(for: item.id, title: item.title,
+                                         year: item.year, isSeries: item.isSeries)
+                sinceRefresh += 1
+                if sinceRefresh >= 120 {
+                    sinceRefresh = 0
+                    onBatch()
+                }
+            }
+            onBatch()
+            await self?.endSweep()
+        }
+    }
+
+    private func endSweep() { sweepTask = nil }
+
+    public func cancelWarmUp() {
+        sweepTask?.cancel()
+        sweepTask = nil
+    }
+
     private func fetch(key: String, title: String, year: Int?, isSeries: Bool) async -> EnrichedMetadata? {
         guard let client else { return nil }
 
-        // Space requests out.
-        let wait = minInterval - Date().timeIntervalSince(lastRequestAt)
-        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-        lastRequestAt = Date()
+        await throttle()
 
         let match: TMDBClient.Match?
         do {
@@ -101,6 +180,37 @@ public actor MetadataService {
         return record.matched ? record : nil
     }
 
+    private func fetchDetails(key: String, base: EnrichedMetadata, isSeries: Bool) async -> EnrichedMetadata? {
+        guard let client else { return base }
+
+        await throttle()
+
+        let details: TMDBClient.Details?
+        do {
+            details = try await client.details(tmdbID: base.tmdbID, isSeries: isSeries)
+        } catch {
+            return base
+        }
+
+        var updated = base
+        updated.tagline = details?.tagline
+        updated.genres = details?.genres
+        updated.cast = details?.cast
+        updated.runtime = details?.runtime
+        updated.voteCount = details?.voteCount
+        updated.detailsFetchedAt = Date()
+
+        byID[key] = updated
+        scheduleSave()
+        return updated
+    }
+
+    private func throttle() async {
+        let wait = minInterval - Date().timeIntervalSince(lastRequestAt)
+        if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+        lastRequestAt = Date()
+    }
+
     private func scheduleSave() {
         dirty = true
         guard saveTask == nil else { return }
@@ -119,8 +229,34 @@ public actor MetadataService {
         }
     }
 
+    /// All known TMDB ratings, keyed by `CatalogID.rawValue`. For the Home
+    /// "Top Rated" row — cheap, reads the in-memory map.
+    public func ratingsSnapshot() -> [String: Double] {
+        var out: [String: Double] = [:]
+        for (key, value) in byID where value.matched {
+            if let rating = value.rating { out[key] = rating }
+        }
+        return out
+    }
+
     public func clear() {
         byID.removeAll()
+        cancelWarmUp()
         try? FileManager.default.removeItem(at: fileURL)
+    }
+}
+
+/// Lightweight, `Sendable` seed for the background enrichment sweep.
+public struct ArtworkSeed: Sendable, Equatable {
+    public let id: CatalogID
+    public let title: String
+    public let year: Int?
+    public let isSeries: Bool
+
+    public init(id: CatalogID, title: String, year: Int?, isSeries: Bool) {
+        self.id = id
+        self.title = title
+        self.year = year
+        self.isSeries = isSeries
     }
 }

@@ -17,6 +17,16 @@ public struct TMDBClient: Sendable {
         public let year: Int?
     }
 
+    /// Second-call payload: the richer fields that only `/movie/{id}` or
+    /// `/tv/{id}` return (with `append_to_response=credits`).
+    public struct Details: Sendable, Equatable {
+        public let tagline: String?
+        public let genres: [String]
+        public let runtime: Int?        // minutes
+        public let cast: [String]       // top-billed, in order
+        public let voteCount: Int?
+    }
+
     private let apiKey: String
     private let session: URLSession
     private let base = URL(string: "https://api.themoviedb.org/3/")!
@@ -74,6 +84,42 @@ public struct TMDBClient: Sendable {
         )
     }
 
+    /// Fetches cast, genres, runtime and tagline for a known TMDB id.
+    public func details(tmdbID: Int, isSeries: Bool) async throws -> Details? {
+        let path = (isSeries ? "tv/" : "movie/") + String(tmdbID)
+        var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        var query = [URLQueryItem(name: "append_to_response", value: "credits")]
+        if !isBearerToken {
+            query.append(URLQueryItem(name: "api_key", value: apiKey))
+        }
+        components.queryItems = query
+        guard let url = components.url else { return nil }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        if isBearerToken {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            throw TMDBError.badResponse(status: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+
+        let decoded = try JSONDecoder().decode(DetailResponse.self, from: data)
+        let runtime = decoded.runtime ?? decoded.episode_run_time?.first
+        return Details(
+            tagline: decoded.tagline?.isEmpty == false ? decoded.tagline : nil,
+            genres: decoded.genres?.compactMap(\.name) ?? [],
+            runtime: (runtime ?? 0) > 0 ? runtime : nil,
+            cast: (decoded.credits?.cast ?? [])
+                .sorted { ($0.order ?? 999) < ($1.order ?? 999) }
+                .prefix(12)
+                .compactMap { $0.name?.isEmpty == false ? $0.name : nil },
+            voteCount: decoded.vote_count
+        )
+    }
+
     // MARK: - Matching
 
     private static func pick(_ results: [Result], title: String, year: Int?) -> Result? {
@@ -102,6 +148,21 @@ public struct TMDBClient: Sendable {
     // MARK: - DTOs
 
     private struct SearchResponse: Decodable { let results: [Result] }
+
+    private struct DetailResponse: Decodable {
+        struct NamedID: Decodable { let name: String? }
+        struct Credits: Decodable {
+            struct Member: Decodable { let name: String?; let order: Int? }
+            let cast: [Member]?
+        }
+        let tagline: String?
+        let runtime: Int?
+        let episode_run_time: [Int]?
+        let genres: [NamedID]?
+        let credits: Credits?
+        let vote_count: Int?
+    }
+
     private struct Result: Decodable {
         let id: Int
         let title: String?

@@ -26,16 +26,7 @@ public struct ArtworkView: View {
         ZStack {
             GeneratedArtwork(seed: title)
             if let url {
-                AsyncImage(url: url, transaction: .init(animation: .easeOut(duration: 0.25))) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure, .empty:
-                        fallback
-                    @unknown default:
-                        fallback
-                    }
-                }
+                CachedImage(url: url) { fallback }
             } else {
                 fallback
             }

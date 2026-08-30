@@ -49,6 +49,9 @@ public final class AppEnvironment {
     public private(set) var catalogComplete = false
     /// Bumps every time the background load finishes — views observe it to refresh.
     public private(set) var catalogRevision = 0
+    /// Bumps as the background TMDB sweep lands batches of ratings/artwork.
+    /// Only Home observes this (for the "Top Rated" row).
+    public private(set) var metadataRevision = 0
 
     public var activeProvider: ProviderDescriptor? {
         providers.activeConfiguration?.descriptor
@@ -163,6 +166,7 @@ public final class AppEnvironment {
                 self.catalogComplete = true
                 self.catalogRevision += 1
                 AppLog.app.info("Cache fully loaded — \(vod.movies.count) mv · \(vod.series.count) sr · \(events.count) EPG.")
+                self.startMetadataWarmUp()
             }
 
             if chans.age > staleAfter {
@@ -195,6 +199,7 @@ public final class AppEnvironment {
             // The app is already usable; persist so the next launch is instant.
             // Awaited (not fire-and-forget) so it isn't killed if the user leaves.
             await cache.save(catalog, providerID: providerID)
+            startMetadataWarmUp()
         } catch {
             let providerError = ProviderError.from(error)
             loadState = .failed(providerError)
@@ -257,6 +262,19 @@ public final class AppEnvironment {
         }
     }
 
+    /// Kick off a background TMDB sweep so posters and ratings fill in without
+    /// the user having to scroll. Rate-limited inside `MetadataService`.
+    private func startMetadataWarmUp() {
+        Task { [weak self] in
+            guard let self else { return }
+            guard await self.metadata.isEnabled else { return }
+            let seeds = await self.repository.artworkSeeds(movieLimit: 600, seriesLimit: 250)
+            await self.metadata.warmUp(seeds) {
+                Task { @MainActor [weak self] in self?.metadataRevision += 1 }
+            }
+        }
+    }
+
     private func markPhase(_ phase: ImportPhase) {
         let order = ImportPhase.allCases
         guard let idx = order.firstIndex(of: phase) else { return }
@@ -269,6 +287,7 @@ public final class AppEnvironment {
         refreshTask = nil
         backgroundLoadTask?.cancel()
         backgroundLoadTask = nil
+        await metadata.cancelWarmUp()
         providers.setActive(config.id)
         loadState = .idle
         hasLoadedOnce = false

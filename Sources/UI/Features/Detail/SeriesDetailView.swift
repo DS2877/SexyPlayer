@@ -9,6 +9,7 @@ struct SeriesDetailView: View {
     @State private var loadingEpisodes = false
     @State private var selectedSeason: Int?
     @State private var playback: PlaybackItem?
+    @State private var enriched: EnrichedMetadata?
 
     var body: some View {
         Group {
@@ -33,6 +34,11 @@ struct SeriesDetailView: View {
             // Jump to the season of an in-progress episode, else the first.
             selectedSeason = resumeEpisode(in: series)?.seasonNumber
                 ?? series?.seasons.first?.number
+            if let series {
+                enriched = await env.metadata.details(
+                    for: series.id, title: series.title, year: series.year, isSeries: true
+                )
+            }
         }
         .fullScreenCover(item: $playback) { item in
             PlayerScreen(
@@ -82,15 +88,30 @@ struct SeriesDetailView: View {
     private func loaded(_ series: Series) -> some View {
         let season = series.seasons.first { $0.number == selectedSeason } ?? series.seasons.first
 
-        DetailScaffold(title: series.title, backdropURL: series.backdropURL ?? series.posterURL) {
+        let backdrop = series.backdropURL ?? enriched?.backdropURL ?? series.posterURL ?? enriched?.posterURL
+        let synopsis = series.synopsis ?? enriched?.overview
+        let cast = enriched?.cast ?? []
+
+        DetailScaffold(title: series.title, backdropURL: backdrop) {
             Text(series.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
-            MetadataLine([
-                series.year.map(String.init),
-                series.genres.first?.displayName,
-                "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")",
-                series.quality > .unknown ? series.quality.shortLabel : nil,
-            ])
+            HStack(spacing: Metrics.space2) {
+                if let rating = enriched?.rating {
+                    TMDBRatingBadge(rating: rating, votes: enriched?.voteCount)
+                }
+                MetadataLine([
+                    series.year.map(String.init),
+                    series.genres.first?.displayName ?? enriched?.genres?.first,
+                    "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")",
+                    series.quality > .unknown ? series.quality.shortLabel : nil,
+                ])
+            }
+
+            if let tagline = enriched?.tagline {
+                Text(tagline)
+                    .font(.dsBody.italic())
+                    .foregroundStyle(Palette.textTertiary)
+            }
 
             HStack(spacing: Metrics.space2) {
                 if let resume = resumeEpisode(in: series) {
@@ -113,9 +134,13 @@ struct SeriesDetailView: View {
 
             LanguageSummary(audio: series.audioLanguages, subtitles: series.subtitleLanguages)
 
-            if let synopsis = series.synopsis {
+            if let synopsis {
                 Text(synopsis).font(.dsBody).foregroundStyle(Palette.textSecondary)
                     .frame(maxWidth: 1100, alignment: .leading)
+            }
+
+            if !cast.isEmpty {
+                creditRow("Cast", cast)
             }
 
             if series.seasons.count > 1 {
@@ -139,6 +164,15 @@ struct SeriesDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func creditRow(_ label: String, _ names: [String]) -> some View {
+        HStack(alignment: .top, spacing: Metrics.space2) {
+            Text(label).font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                .frame(width: 140, alignment: .leading)
+            Text(names.joined(separator: ", "))
+                .font(.dsCaption).foregroundStyle(Palette.textSecondary)
         }
     }
 

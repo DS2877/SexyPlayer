@@ -11,13 +11,16 @@ public final class HomeViewModel {
     private let repository: any CatalogRepository
     private let watchProgress: WatchProgressStore
     private let preferences: PreferencesStore
+    private let metadata: MetadataService
 
     public init(repository: any CatalogRepository,
                 watchProgress: WatchProgressStore,
-                preferences: PreferencesStore) {
+                preferences: PreferencesStore,
+                metadata: MetadataService) {
         self.repository = repository
         self.watchProgress = watchProgress
         self.preferences = preferences
+        self.metadata = metadata
     }
 
     public func rebuild(now: Date = .now) async {
@@ -31,9 +34,11 @@ public final class HomeViewModel {
         let epg = await repository.epgIndex()
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
+        let ratings = await metadata.ratingsSnapshot()
 
         content = await Task.detached(priority: .userInitiated) {
-            Self.makeContent(catalog: catalog, epg: epg, progress: progress, prefs: prefs, now: now)
+            Self.makeContent(catalog: catalog, epg: epg, progress: progress,
+                             prefs: prefs, ratings: ratings, now: now)
         }.value
     }
 
@@ -41,7 +46,7 @@ public final class HomeViewModel {
 
     nonisolated static func makeContent(
         catalog: Catalog, epg: EPGIndex, progress: [WatchProgress],
-        prefs: UserPreferences, now: Date
+        prefs: UserPreferences, ratings: [String: Double], now: Date
     ) -> HomeContent {
         let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
@@ -85,6 +90,25 @@ public final class HomeViewModel {
             add(.withYourSubtitles, "With \(sub.displayName) Subtitles", cards)
         }
 
+        // Top Rated — TMDB ratings, best first. Shown whenever we have enough
+        // rated titles, regardless of the saved row toggles (it's new).
+        let ratedMovies = catalog.movies.compactMap { m in
+            ratings[m.id.rawValue].map { (card: card(for: m), score: $0) }
+        }
+        let ratedSeries = catalog.series.compactMap { s in
+            ratings[s.id.rawValue].map { (card: card(for: s), score: $0) }
+        }
+        let ratedCards = ratedMovies + ratedSeries
+        let topRated = ratedCards
+            .filter { $0.score >= 7.0 }
+            .sorted { $0.score > $1.score }
+            .prefix(24)
+            .map(\.card)
+        if topRated.count >= 5 {
+            rows.append(HomeRow(id: HomeRowKind.topRated.rawValue, title: "Top Rated",
+                                subtitle: "Highest rated in your library", cards: Array(topRated)))
+        }
+
         add(.movies, "Movies", Array(moviesByRecency.prefix(30)).map { card(for: $0) })
         add(.series, "Series", Array(catalog.series.prefix(30)).map { card(for: $0) })
 
@@ -92,6 +116,15 @@ public final class HomeViewModel {
         rows.sort { lhs, rhs in
             (prefs.homeRows.firstIndex { $0.rawValue == lhs.id } ?? 99)
                 < (prefs.homeRows.firstIndex { $0.rawValue == rhs.id } ?? 99)
+        }
+
+        // Float "Top Rated" up just below Continue Watching (it has no saved
+        // position to sort by).
+        if let idx = rows.firstIndex(where: { $0.id == HomeRowKind.topRated.rawValue }) {
+            let row = rows.remove(at: idx)
+            let insertAt = rows.firstIndex { $0.id == HomeRowKind.continueWatching.rawValue }
+                .map { $0 + 1 } ?? 0
+            rows.insert(row, at: Swift.min(insertAt, rows.count))
         }
 
         let hero = moviesByRecency.first.map { movie in

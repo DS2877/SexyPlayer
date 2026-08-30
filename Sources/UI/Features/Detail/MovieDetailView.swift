@@ -7,6 +7,7 @@ struct MovieDetailView: View {
     @State private var movie: Movie?
     @State private var notFound = false
     @State private var playback: PlaybackItem?
+    @State private var enriched: EnrichedMetadata?
 
     var body: some View {
         Group {
@@ -23,6 +24,10 @@ struct MovieDetailView: View {
         .task(id: movieID) {
             movie = await env.repository.movie(id: movieID)
             notFound = movie == nil
+            guard let movie else { return }
+            enriched = await env.metadata.details(
+                for: movie.id, title: movie.title, year: movie.year, isSeries: false
+            )
         }
         .fullScreenCover(item: $playback) { item in
             PlayerScreen(
@@ -38,16 +43,32 @@ struct MovieDetailView: View {
     @ViewBuilder
     private func loaded(_ movie: Movie) -> some View {
         let progress = env.watchProgress.progress(for: movie.id)
+        let backdrop = movie.backdropURL ?? enriched?.backdropURL ?? movie.posterURL ?? enriched?.posterURL
+        let runtime = movie.durationMinutes ?? enriched?.runtime
+        let genre = movie.genres.first?.displayName ?? enriched?.genres?.first
+        let synopsis = movie.synopsis ?? enriched?.overview
+        let cast = movie.cast.isEmpty ? (enriched?.cast ?? []) : movie.cast
 
-        DetailScaffold(title: movie.title, backdropURL: movie.backdropURL ?? movie.posterURL) {
+        DetailScaffold(title: movie.title, backdropURL: backdrop) {
             Text(movie.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
-            MetadataLine([
-                movie.year.map(String.init),
-                movie.genres.first?.displayName,
-                movie.durationMinutes.map { "\($0 / 60)h \($0 % 60)m" },
-                movie.quality > .unknown ? movie.quality.shortLabel : nil,
-            ])
+            HStack(spacing: Metrics.space2) {
+                if let rating = enriched?.rating {
+                    TMDBRatingBadge(rating: rating, votes: enriched?.voteCount)
+                }
+                MetadataLine([
+                    movie.year.map(String.init),
+                    genre,
+                    runtime.map { "\($0 / 60)h \($0 % 60)m" },
+                    movie.quality > .unknown ? movie.quality.shortLabel : nil,
+                ])
+            }
+
+            if let tagline = enriched?.tagline {
+                Text(tagline)
+                    .font(.dsBody.italic())
+                    .foregroundStyle(Palette.textTertiary)
+            }
 
             HStack(spacing: Metrics.space2) {
                 Button {
@@ -77,7 +98,7 @@ struct MovieDetailView: View {
 
             LanguageSummary(audio: movie.audioLanguages, subtitles: movie.subtitleLanguages)
 
-            if let synopsis = movie.synopsis {
+            if let synopsis {
                 Text(synopsis)
                     .font(.dsBody)
                     .foregroundStyle(Palette.textSecondary)
@@ -87,8 +108,8 @@ struct MovieDetailView: View {
             if !movie.directors.isEmpty {
                 creditRow("Director", movie.directors)
             }
-            if !movie.cast.isEmpty {
-                creditRow("Cast", movie.cast)
+            if !cast.isEmpty {
+                creditRow("Cast", cast)
             }
         }
     }

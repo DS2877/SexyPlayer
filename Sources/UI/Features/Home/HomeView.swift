@@ -31,7 +31,8 @@ struct HomeView: View {
             let model = model ?? HomeViewModel(
                 repository: environment.repository,
                 watchProgress: environment.watchProgress,
-                preferences: environment.preferences
+                preferences: environment.preferences,
+                metadata: environment.metadata
             )
             self.model = model
             await model.rebuild()
@@ -48,6 +49,9 @@ struct HomeView: View {
             Task { await model?.rebuild() }
         }
         .onChange(of: environment.catalogRevision) { _, _ in
+            Task { await model?.rebuild() }
+        }
+        .onChange(of: environment.metadataRevision) { _, _ in
             Task { await model?.rebuild() }
         }
     }
