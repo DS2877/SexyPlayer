@@ -16,6 +16,14 @@ struct VLCPlayerScreen: View {
     @State private var showTracks = false
     @State private var hideWorkItem: DispatchWorkItem?
 
+    // Scrubbing: presses accumulate into a pending target shown on the bar and
+    // committed a beat after the last press, so seeking an MKV over the network
+    // buffers once instead of on every tap.
+    @State private var pendingSeek: Double?
+    @State private var seekCommitWork: DispatchWorkItem?
+    @State private var lastSeekPress = Date.distantPast
+    @State private var seekStreak = 0
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -44,8 +52,8 @@ struct VLCPlayerScreen: View {
         .onPlayPauseCommand { model?.togglePlayPause(); flashControls() }
         .onMoveCommand { direction in
             switch direction {
-            case .left:  model?.seek(by: -10); flashControls()
-            case .right: model?.seek(by: 10); flashControls()
+            case .left:  scrub(by: -1)
+            case .right: scrub(by: 1)
             case .up:    if hasTracks { showTracks = true }
             default:     break
             }
@@ -67,12 +75,35 @@ struct VLCPlayerScreen: View {
         }
         .onDisappear {
             hideWorkItem?.cancel()
+            seekCommitWork?.cancel()
             model?.teardown()
         }
     }
 
     private var hasTracks: Bool {
         (model?.subtitleTracks.count ?? 0) > 1 || (model?.audioTracks.count ?? 0) > 1
+    }
+
+    /// Accumulate a seek. Quick repeated presses grow the step (10s → 30s → 60s).
+    private func scrub(by sign: Double) {
+        guard let model, model.duration > 0 else { return }
+        let now = Date()
+        seekStreak = now.timeIntervalSince(lastSeekPress) < 0.7 ? seekStreak + 1 : 0
+        lastSeekPress = now
+
+        let step: Double = seekStreak >= 6 ? 60 : (seekStreak >= 3 ? 30 : 10)
+        let base = pendingSeek ?? model.position
+        pendingSeek = min(max(0, base + sign * step), model.duration)
+
+        flashControls()
+        seekCommitWork?.cancel()
+        let work = DispatchWorkItem {
+            if let target = pendingSeek { model.seek(to: target) }
+            pendingSeek = nil
+            seekStreak = 0
+        }
+        seekCommitWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55, execute: work)
     }
 
     private func flashControls() {
@@ -94,9 +125,18 @@ struct VLCPlayerScreen: View {
                 }
 
                 if model.duration > 0 {
-                    ProgressView(value: model.position, total: model.duration).tint(Palette.accent)
+                    let shown = pendingSeek ?? model.position
+                    ProgressView(value: shown, total: model.duration)
+                        .tint(pendingSeek == nil ? Palette.accent : .white)
                     HStack {
-                        Text(timecode(model.position)).font(.dsCaption).foregroundStyle(.white.opacity(0.8))
+                        Text(timecode(shown))
+                            .font(.dsCaption)
+                            .foregroundStyle(pendingSeek == nil ? .white.opacity(0.8) : .white)
+                        if let pendingSeek {
+                            let delta = pendingSeek - model.position
+                            Text("\(delta >= 0 ? "+" : "−")\(timecode(abs(delta)))")
+                                .font(.dsCaption).foregroundStyle(Palette.accent)
+                        }
                         Spacer()
                         Text(timecode(model.duration)).font(.dsCaption).foregroundStyle(.white.opacity(0.5))
                     }
@@ -105,8 +145,8 @@ struct VLCPlayerScreen: View {
                 }
 
                 Text(hasTracks
-                     ? "‹ ›  seek 10s      ▮▮  play/pause      ▲  audio & subtitles      Menu  exit"
-                     : "‹ ›  seek 10s      ▮▮  play/pause      Menu  exit")
+                     ? "‹ ›  scrub      ▮▮  play/pause      ▲  audio & subtitles      Menu  exit"
+                     : "‹ ›  scrub      ▮▮  play/pause      Menu  exit")
                     .font(.dsCaption).foregroundStyle(.white.opacity(0.45))
                     .padding(.top, Metrics.space1)
             }

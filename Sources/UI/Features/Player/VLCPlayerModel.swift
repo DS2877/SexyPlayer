@@ -84,6 +84,13 @@ public final class VLCPlayerModel {
         player.position = Float(min(1, max(0, fraction)))
     }
 
+    /// Absolute seek to a wall-clock offset in seconds.
+    public func seek(to seconds: Double) {
+        guard duration > 0 else { return }
+        player.position = Float(min(1, max(0, seconds / duration)))
+        position = min(max(0, seconds), duration)
+    }
+
     // MARK: - Tracks
 
     public func selectSubtitle(_ id: Int) {

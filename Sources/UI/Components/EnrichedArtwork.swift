@@ -27,17 +27,20 @@ struct EnrichedArtwork: View {
     var style: ArtworkView.Style = .poster
     /// Called once a real image (provider or TMDB) is available.
     var onResolvedImage: (() -> Void)? = nil
+    /// Called with the TMDB rating (0…10) when one is found.
+    var onResolvedRating: ((Double) -> Void)? = nil
 
     @State private var fetchedURL: URL?
 
     var body: some View {
         ArtworkView(url: providerURL ?? fetchedURL, title: ref.title, aspect: aspect, style: style)
             .task(id: ref) {
-                if providerURL != nil { onResolvedImage?(); return }
-                guard fetchedURL == nil else { return }
+                if providerURL != nil { onResolvedImage?() }
                 let meta = await env.metadata.metadata(
                     for: ref.id, title: ref.title, year: ref.year, isSeries: ref.isSeries
                 )
+                if let rating = meta?.rating { onResolvedRating?(rating) }
+                guard providerURL == nil, fetchedURL == nil else { return }
                 let url = style == .backdrop ? (meta?.backdropURL ?? meta?.posterURL) : meta?.posterURL
                 if let url {
                     withAnimation(.easeIn(duration: 0.3)) { fetchedURL = url }

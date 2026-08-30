@@ -31,6 +31,7 @@ public struct PosterCard: View {
     }
 
     @State private var showsRealImage = false
+    @State private var rating: Double?
 
     private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
 
@@ -45,6 +46,20 @@ public struct PosterCard: View {
                 ZStack(alignment: .topTrailing) {
                     artwork
                         .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
+                        .overlay(alignment: .bottomLeading) {
+                            if let rating, (progress ?? 0) == 0 {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "star.fill").font(.system(size: 11))
+                                        .foregroundStyle(Palette.accent)
+                                    Text(String(format: "%.1f", rating))
+                                        .font(.dsTag)
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 7).padding(.vertical, 3)
+                                .background(.ultraThinMaterial, in: Capsule())
+                                .padding(8)
+                            }
+                        }
                         .overlay(alignment: .bottom) {
                             if (progress ?? 0) > 0 {
                                 ZStack(alignment: .bottomLeading) {
@@ -104,7 +119,8 @@ public struct PosterCard: View {
     private var artwork: some View {
         if let ref {
             EnrichedArtwork(ref: ref, providerURL: artworkURL, aspect: 2.0 / 3.0, style: .poster,
-                            onResolvedImage: { showsRealImage = true })
+                            onResolvedImage: { showsRealImage = true },
+                            onResolvedRating: { rating = $0 })
         } else {
             ArtworkView(url: artworkURL, title: title, aspect: 2.0 / 3.0)
         }
