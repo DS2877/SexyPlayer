@@ -79,15 +79,15 @@ public final class VLCPlayerModel {
     // MARK: - Delegate callbacks (hopped to MainActor)
 
     fileprivate func stateChanged() {
+        // `isPlaying` is an unambiguous Bool — prefer it over matching the state
+        // enum, whose case names shift between VLCKit builds.
+        if player.isPlaying {
+            markPlaying()
+            return
+        }
         switch player.state {
-        case .playing:
-            loadTimeout?.cancel()
-            state = .playing
-            seekToResumeIfNeeded()
         case .paused:
-            state = .paused
-        case .buffering, .opening:
-            if state != .playing { state = .loading }
+            if state == .playing { state = .paused }
         case .error:
             fail(.streamUnavailable)
         case .stopped, .ended:
@@ -101,7 +101,16 @@ public final class VLCPlayerModel {
         position = Double(player.time.intValue) / 1000
         let length = player.media?.length.intValue ?? 0
         if length > 0 { duration = Double(length) / 1000 }
+        // The surest sign playback works: the clock is advancing.
+        if position > 0 { markPlaying() }
         reportProgress()
+    }
+
+    private func markPlaying() {
+        loadTimeout?.cancel()
+        guard state != .playing else { return }
+        state = .playing
+        seekToResumeIfNeeded()
     }
 
     // MARK: - Helpers
@@ -109,9 +118,13 @@ public final class VLCPlayerModel {
     private func startLoadTimeout() {
         loadTimeout?.cancel()
         loadTimeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(30))
+            try? await Task.sleep(for: .seconds(45))
             guard !Task.isCancelled, let self, self.state == .loading else { return }
-            self.fail(.streamUnavailable)
+            if self.player.isPlaying || self.position > 0 {
+                self.markPlaying()          // playing fine, we just missed the signal
+            } else {
+                self.fail(.streamUnavailable)
+            }
         }
     }
 
