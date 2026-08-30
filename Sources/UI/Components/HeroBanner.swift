@@ -27,44 +27,52 @@ public struct HeroBanner: View {
 
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
-            ArtworkView(url: artworkURL, title: title, aspect: 16.0 / 6.0)
-                .frame(height: 620)
+            ArtworkView(url: artworkURL, title: title, aspect: 16.0 / 7.0, style: .backdrop)
+                .frame(height: 560)
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .overlay(
                     LinearGradient(
-                        colors: [Palette.canvas.opacity(0.0), Palette.canvas.opacity(0.6), Palette.canvas],
+                        colors: [Palette.canvas.opacity(0.1), Palette.canvas.opacity(0.5),
+                                 Palette.canvas.opacity(0.95), Palette.canvas],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
                 .overlay(
                     LinearGradient(
-                        colors: [Palette.canvas.opacity(0.75), .clear],
+                        colors: [Palette.canvas.opacity(0.9), Palette.canvas.opacity(0.3), .clear],
                         startPoint: .leading, endPoint: .trailing
                     )
                 )
 
             VStack(alignment: .leading, spacing: Metrics.space2) {
-                Text(title).font(.dsHero).lineLimit(2)
-                Text(tagline)
-                    .font(.dsBody)
-                    .foregroundStyle(Palette.textSecondary)
-                    .lineLimit(2)
-                    .frame(maxWidth: 900, alignment: .leading)
                 if !metadata.isEmpty {
-                    MetadataLine(metadata.map { $0 as String? })
+                    Text(metadata.joined(separator: "   ·   "))
+                        .font(.dsTag)
+                        .foregroundStyle(Palette.accent)
+                        .textCase(.uppercase)
+                        .tracking(1.5)
+                }
+                Text(title).font(.dsHero).lineLimit(2)
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                if !tagline.isEmpty {
+                    Text(tagline)
+                        .font(.dsBody)
+                        .foregroundStyle(Palette.textSecondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: 820, alignment: .leading)
                 }
                 Button(action: primaryAction) {
-                    Label(primaryActionTitle, systemImage: "play.fill")
+                    Label(primaryActionTitle, systemImage: "info.circle")
                         .font(.dsCardTitle)
                         .padding(.horizontal, Metrics.space3)
                         .padding(.vertical, Metrics.space1)
                 }
                 .buttonStyle(.borderedProminent)
-                .padding(.top, Metrics.space1)
+                .padding(.top, Metrics.space2)
             }
             .padding(.horizontal, Metrics.screenMargin)
-            .padding(.bottom, Metrics.space4)
+            .padding(.bottom, Metrics.space5)
         }
     }
 }

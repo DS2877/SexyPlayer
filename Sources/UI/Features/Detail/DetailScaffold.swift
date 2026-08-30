@@ -7,33 +7,36 @@ struct DetailScaffold<Content: View>: View {
     let backdropURL: URL?
     @ViewBuilder let content: () -> Content
 
+    private let backdropHeight: CGFloat = 620
+
     var body: some View {
         ScrollView {
             ZStack(alignment: .topLeading) {
-                ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0)
-                    .frame(height: 720)
+                ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0, style: .backdrop)
+                    .frame(height: backdropHeight)
                     .frame(maxWidth: .infinity)
                     .clipped()
                     .overlay(
                         LinearGradient(
-                            colors: [.clear, Palette.canvas.opacity(0.7), Palette.canvas],
+                            colors: [Palette.canvas.opacity(0.15), Palette.canvas.opacity(0.55),
+                                     Palette.canvas.opacity(0.92), Palette.canvas],
                             startPoint: .top, endPoint: .bottom
                         )
                     )
                     .overlay(
                         LinearGradient(
-                            colors: [Palette.canvas.opacity(0.85), .clear],
+                            colors: [Palette.canvas.opacity(0.9), Palette.canvas.opacity(0.35), .clear],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )
 
                 VStack(alignment: .leading, spacing: Metrics.space3) {
-                    Spacer().frame(height: 380)
+                    Spacer().frame(height: backdropHeight * 0.52)
                     content()
                 }
                 .padding(.horizontal, Metrics.screenMargin)
                 .padding(.bottom, Metrics.space7)
-                .frame(maxWidth: 1400, alignment: .leading)
+                .frame(maxWidth: 1320, alignment: .leading)
             }
         }
         .background(Palette.canvas.ignoresSafeArea())

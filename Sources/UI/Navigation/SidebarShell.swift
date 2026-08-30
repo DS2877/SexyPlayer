@@ -141,7 +141,7 @@ private struct SidebarButtonBody: View {
         configuration.label
             .padding(.horizontal, Metrics.space2)
             .padding(.vertical, Metrics.space1 + 4)
-            .foregroundStyle(isSelected || isFocused ? Palette.textPrimary : Palette.textSecondary)
+            .foregroundStyle(textColor)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
             )
@@ -150,8 +150,14 @@ private struct SidebarButtonBody: View {
             .animation(Metrics.focusAnimation, value: isFocused)
     }
 
+    private var textColor: Color {
+        if isFocused { return Palette.canvas }              // dark text on the gold highlight
+        if isSelected { return Palette.textPrimary }
+        return Palette.textSecondary
+    }
+
     private var fill: Color {
-        if isFocused { return Palette.accent.opacity(0.9) }
+        if isFocused { return Palette.accent }
         if isSelected { return Palette.accentSoft }
         return .clear
     }

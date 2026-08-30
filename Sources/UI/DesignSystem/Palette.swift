@@ -14,18 +14,28 @@ public enum Palette {
     public static let textSecondary = Color(red: 0.639, green: 0.659, blue: 0.706)
     public static let textTertiary = Color(red: 0.427, green: 0.443, blue: 0.486)
 
-    /// Single accent — also mirrored in Assets/AccentColor.
-    public static let accent = Color(red: 0.310, green: 0.404, blue: 0.949)          // #4F67F2
-    public static let accentSoft = accent.opacity(0.16)
+    /// Single accent — warm gold, tied to the beige/charcoal brand mark.
+    /// Also mirrored in Assets/AccentColor.
+    public static let accent = Color(red: 0.859, green: 0.671, blue: 0.325)           // #DBAB53
+    public static let accentSoft = accent.opacity(0.15)
 
     public static let liveDot = Color(red: 0.918, green: 0.263, blue: 0.337)
     public static let hairline = Color.white.opacity(0.08)
 
-    /// Deterministic accent gradient for placeholder artwork, keyed off a string.
+    /// Deterministic placeholder artwork — a small set of restrained, cinematic
+    /// dark gradients so a grid of missing-poster cards reads as one palette
+    /// rather than a bag of colours.
+    private static let placeholderPairs: [(top: Color, bottom: Color)] = [
+        (Color(red: 0.16, green: 0.15, blue: 0.13), Color(red: 0.07, green: 0.065, blue: 0.055)),  // warm charcoal
+        (Color(red: 0.13, green: 0.15, blue: 0.17), Color(red: 0.06, green: 0.07, blue: 0.085)),   // slate
+        (Color(red: 0.15, green: 0.145, blue: 0.17), Color(red: 0.07, green: 0.065, blue: 0.09)),  // plum-grey
+        (Color(red: 0.13, green: 0.16, blue: 0.15), Color(red: 0.06, green: 0.08, blue: 0.075)),   // deep pine
+        (Color(red: 0.17, green: 0.15, blue: 0.14), Color(red: 0.08, green: 0.065, blue: 0.06)),   // umber
+    ]
+
     public static func placeholderGradient(for seed: String) -> LinearGradient {
-        let hue = Double(StableHash.hash(seed) % 360) / 360.0
-        let base = Color(hue: hue, saturation: 0.42, brightness: 0.38)
-        let dark = Color(hue: hue, saturation: 0.55, brightness: 0.16)
-        return LinearGradient(colors: [base, dark], startPoint: .topLeading, endPoint: .bottomTrailing)
+        let pair = placeholderPairs[Int(StableHash.hash(seed) % UInt64(placeholderPairs.count))]
+        return LinearGradient(colors: [pair.top, pair.bottom],
+                              startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }

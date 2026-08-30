@@ -77,7 +77,7 @@ struct HomeView: View {
                         HeroBanner(
                             title: hero.title,
                             tagline: hero.subtitle ?? "",
-                            metadata: [],
+                            metadata: hero.eyebrow.map { [$0] } ?? [],
                             artworkURL: hero.artworkURL,
                             primaryActionTitle: "More Info",
                             primaryAction: { navigate(hero) }

@@ -83,10 +83,12 @@ struct VODBrowseView: View {
 
     private func header(_ model: VODBrowseViewModel) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(kind.title).font(.dsHero)
-                Text(model.isLoading && model.cards.isEmpty ? "" : "\(model.total)")
-                    .font(.dsSectionHeader).foregroundStyle(Palette.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
+                Text(kind.title).font(.dsTitle)
+                if !(model.isLoading && model.cards.isEmpty) {
+                    Text("\(model.total)")
+                        .font(.dsCardTitle).foregroundStyle(Palette.textTertiary)
+                }
                 Spacer()
                 Button {
                     showFilters = true

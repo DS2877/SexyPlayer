@@ -153,9 +153,9 @@ struct LiveTVBrowseView: View {
 
     private func header(_ model: LiveTVBrowseViewModel) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Live TV").font(.dsHero)
-                Text("\(model.total)").font(.dsSectionHeader).foregroundStyle(Palette.textTertiary)
+            HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
+                Text("Live TV").font(.dsTitle)
+                Text("\(model.total)").font(.dsCardTitle).foregroundStyle(Palette.textTertiary)
             }
             if model.categories.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {

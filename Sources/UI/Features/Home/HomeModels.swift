@@ -11,8 +11,10 @@ public struct HomeCard: Identifiable, Sendable {
     public let artworkURL: URL?
     public let badge: String?
     public let progress: Double?
+    /// Small uppercase line above the title (hero only): "2024 · Sci-Fi · 4K".
+    public let eyebrow: String?
 
-    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, badge: String? = nil, progress: Double? = nil) {
+    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -20,6 +22,7 @@ public struct HomeCard: Identifiable, Sendable {
         self.artworkURL = artworkURL
         self.badge = badge
         self.progress = progress
+        self.eyebrow = eyebrow
     }
 }
 

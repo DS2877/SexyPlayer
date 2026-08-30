@@ -91,8 +91,9 @@ public final class HomeViewModel {
             .map { movie in
                 HomeCard(id: movie.id, kind: .movie,
                          title: movie.title,
-                         subtitle: movie.synopsis ?? Self.metadataSubtitle(for: movie),
-                         artworkURL: movie.backdropURL ?? movie.posterURL)
+                         subtitle: movie.synopsis,
+                         artworkURL: movie.backdropURL ?? movie.posterURL,
+                         eyebrow: Self.metadataSubtitle(for: movie))
             }
 
         content = HomeContent(
