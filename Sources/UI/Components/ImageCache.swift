@@ -115,11 +115,16 @@ private extension FileManager {
 /// Drop-in replacement for `AsyncImage` backed by `ImageCache`. Shows `fallback`
 /// while loading and if the load fails.
 struct CachedImage<Fallback: View>: View {
-    let url: URL?
-    @ViewBuilder var fallback: () -> Fallback
+    private let url: URL?
+    private let fallback: () -> Fallback
 
     @State private var image: UIImage?
     @State private var didFail = false
+
+    init(url: URL?, @ViewBuilder fallback: @escaping () -> Fallback) {
+        self.url = url
+        self.fallback = fallback
+    }
 
     var body: some View {
         ZStack {
