@@ -31,6 +31,8 @@ public final class PlayerModel {
     @ObservationIgnored private var endObserver: NSObjectProtocol?
     @ObservationIgnored private var hasSeekedToResume = false
     @ObservationIgnored private var loadTimeout: Task<Void, Never>?
+    /// Live streams hiccup; reconnect silently a couple of times before giving up.
+    @ObservationIgnored private var autoRetries = 0
 
     /// Called ~every 10s and on teardown with the current position. No-op for live.
     @ObservationIgnored
@@ -133,6 +135,7 @@ public final class PlayerModel {
         activeItem = newItem
         hasSeekedToResume = false
         hasAppliedLanguages = false
+        autoRetries = 0
         state = .loading
         player.replaceCurrentItem(with: AVPlayerItem(url: newItem.url))
 
@@ -170,6 +173,7 @@ public final class PlayerModel {
         switch status {
         case .readyToPlay:
             loadTimeout?.cancel()
+            autoRetries = 0
             seekToResumeIfNeeded()
             applyLanguagePreferencesIfNeeded()
             state = .playing
@@ -223,6 +227,12 @@ public final class PlayerModel {
     }
 
     private func fail(with error: Error?) {
+        if activeItem.isLive, autoRetries < 2 {
+            autoRetries += 1
+            AppLog.player.notice("Live stream interrupted — reconnecting (attempt \(self.autoRetries)).")
+            retry()
+            return
+        }
         let providerError: ProviderError = error.map(ProviderError.from) ?? .streamUnavailable
         state = .failed(providerError)
         AppLog.player.error("Playback failed for \(self.activeItem.id.rawValue, privacy: .public): \(String(describing: providerError))")
