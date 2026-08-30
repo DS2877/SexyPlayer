@@ -7,36 +7,16 @@ struct DetailScaffold<Content: View>: View {
     let backdropURL: URL?
     @ViewBuilder let content: () -> Content
 
-    private let backdropHeight: CGFloat = 680
+    private var hasBackdrop: Bool { backdropURL != nil }
+    private var backdropHeight: CGFloat { hasBackdrop ? 680 : 300 }
 
     var body: some View {
         ScrollView {
             ZStack(alignment: .topLeading) {
-                ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0, style: .backdrop)
-                    .frame(height: backdropHeight)
-                    .frame(maxWidth: .infinity)
-                    .clipped()
-                    .overlay(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: Palette.canvas.opacity(0.2), location: 0.4),
-                                .init(color: Palette.canvas.opacity(0.7), location: 0.72),
-                                .init(color: Palette.canvas.opacity(0.97), location: 0.92),
-                                .init(color: Palette.canvas, location: 1),
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
-                    .overlay(
-                        LinearGradient(
-                            colors: [Palette.canvas.opacity(0.85), Palette.canvas.opacity(0.3), .clear],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
+                backdrop
 
                 VStack(alignment: .leading, spacing: Metrics.space3) {
-                    Spacer().frame(height: backdropHeight * 0.52)
+                    Spacer().frame(height: hasBackdrop ? backdropHeight * 0.52 : Metrics.space7)
                     content()
                 }
                 .padding(.horizontal, Metrics.screenMargin)
@@ -46,6 +26,42 @@ struct DetailScaffold<Content: View>: View {
         }
         .background(Palette.canvas.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if hasBackdrop {
+            ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0, style: .backdrop)
+                .frame(height: backdropHeight)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: Palette.canvas.opacity(0.2), location: 0.4),
+                            .init(color: Palette.canvas.opacity(0.7), location: 0.72),
+                            .init(color: Palette.canvas.opacity(0.97), location: 0.92),
+                            .init(color: Palette.canvas, location: 1),
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .overlay(
+                    LinearGradient(
+                        colors: [Palette.canvas.opacity(0.85), Palette.canvas.opacity(0.3), .clear],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
+        } else {
+            // No artwork: a restrained top glow, not a full smudge of colour.
+            RadialGradient(
+                colors: [Palette.accent.opacity(0.09), .clear],
+                center: UnitPoint(x: 0.28, y: -0.1), startRadius: 0, endRadius: 620
+            )
+            .frame(height: backdropHeight)
+            .frame(maxWidth: .infinity)
+        }
     }
 }
 

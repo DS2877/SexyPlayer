@@ -109,27 +109,17 @@ public struct HeroBanner: View {
     // MARK: - Feature layout (no artwork)
 
     private var featureHero: some View {
-        HStack(alignment: .center, spacing: Metrics.space6) {
-            copy
-                .frame(maxWidth: 900, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            ArtworkView(url: nil, title: title, aspect: 2.0 / 3.0, style: .poster)
-                .frame(width: 300, height: 450)
-                .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                .shadow(color: .black.opacity(0.55), radius: 40, y: 24)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space4)
-        .frame(height: 500)
-        .frame(maxWidth: .infinity)
-        .background(
-            RadialGradient(
-                colors: [Palette.accent.opacity(0.08), .clear],
-                center: UnitPoint(x: 0.25, y: 0.5), startRadius: 0, endRadius: 760
+        copy
+            .frame(maxWidth: 980, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Metrics.screenMargin)
+            .frame(height: 360, alignment: .center)
+            .frame(maxWidth: .infinity)
+            .background(
+                RadialGradient(
+                    colors: [Palette.accent.opacity(0.07), .clear],
+                    center: UnitPoint(x: 0.2, y: 0.55), startRadius: 0, endRadius: 720
+                )
             )
-        )
     }
 }

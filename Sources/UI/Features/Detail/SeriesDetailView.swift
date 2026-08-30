@@ -162,12 +162,12 @@ struct SeriesDetailView: View {
         } label: {
             HStack(spacing: Metrics.space3) {
                 ZStack {
-                    ArtworkView(url: episode.stillURL, title: episode.title, aspect: 16.0 / 9.0)
-                        .frame(width: 320, height: 180)
+                    ArtworkView(url: episode.stillURL, title: episode.title, aspect: 16.0 / 9.0, style: .backdrop)
+                        .frame(width: 260, height: 146)
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
                     Image(systemName: "play.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .font(.system(size: 40))
+                        .foregroundStyle(.white.opacity(0.92))
                         .shadow(radius: 8)
                 }
 
@@ -185,13 +185,12 @@ struct SeriesDetailView: View {
                     if let progress, progress.isResumable {
                         ProgressView(value: progress.fraction)
                             .tint(Palette.accent)
-                            .frame(width: 320)
+                            .frame(maxWidth: 320)
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(Metrics.space2)
         }
-        .buttonStyle(.card)
+        .buttonStyle(RowButtonStyle())
     }
 }

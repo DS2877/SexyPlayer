@@ -18,12 +18,8 @@ struct GeneratedArtwork: View {
             colors: Self.colors(baseHue: baseHue, hash: hash)
         )
         .overlay(
-            LinearGradient(colors: [.white.opacity(0.06), .clear, .black.opacity(0.4)],
+            LinearGradient(colors: [.white.opacity(0.05), .clear, .black.opacity(0.22)],
                            startPoint: .top, endPoint: .bottom)
-        )
-        .overlay(
-            RadialGradient(colors: [.clear, .black.opacity(0.28)],
-                           center: .center, startRadius: 30, endRadius: 460)
         )
     }
 
@@ -39,13 +35,14 @@ struct GeneratedArtwork: View {
 
     private static func points(_ hash: UInt64) -> [SIMD2<Float>] {
         let r = stream(hash ^ 0xA5A5_A5A5_A5A5_A5A5)
-        func f(_ v: Double) -> Float { Float(v) }
-        let cx = f(0.5 + (r() - 0.5) * 0.42)
-        let cy = f(0.5 + (r() - 0.5) * 0.42)
+        // Edges stay pinned to the frame so the fill never visibly warps; only
+        // the centre control point drifts, which just shifts the colour flow.
+        let cx = Float(0.5 + (r() - 0.5) * 0.22)
+        let cy = Float(0.5 + (r() - 0.5) * 0.22)
         return [
-            SIMD2<Float>(0, 0),            SIMD2<Float>(0.5, f(r() * 0.18)),     SIMD2<Float>(1, 0),
-            SIMD2<Float>(f(r() * 0.18), 0.5), SIMD2<Float>(cx, cy),              SIMD2<Float>(1 - f(r() * 0.18), 0.5),
-            SIMD2<Float>(0, 1),            SIMD2<Float>(0.5, 1 - f(r() * 0.18)), SIMD2<Float>(1, 1),
+            SIMD2<Float>(0, 0), SIMD2<Float>(0.5, 0),   SIMD2<Float>(1, 0),
+            SIMD2<Float>(0, 0.5), SIMD2<Float>(cx, cy), SIMD2<Float>(1, 0.5),
+            SIMD2<Float>(0, 1), SIMD2<Float>(0.5, 1),   SIMD2<Float>(1, 1),
         ]
     }
 
@@ -60,17 +57,17 @@ struct GeneratedArtwork: View {
         }
         // One warmer accent cell, roughly complementary, keeps posters distinct.
         let accentHue = wrap(baseHue + 0.42 + (r() - 0.5) * 0.1)
-        let s = 0.22 + r() * 0.1
+        let s = 0.20 + r() * 0.08
         return [
-            c(hueShift: -0.02, sat: s, bri: 0.09),
-            c(hueShift:  0.03, sat: s + 0.06, bri: 0.15),
-            c(hueShift: -0.03, sat: s, bri: 0.08),
-            c(hueShift:  0.04, sat: s + 0.04, bri: 0.13),
-            Color(hue: accentHue, saturation: s + 0.08, brightness: 0.19),
-            c(hueShift: -0.04, sat: s, bri: 0.11),
-            c(hueShift: -0.02, sat: s - 0.04, bri: 0.07),
+            c(hueShift: -0.02, sat: s, bri: 0.105),
+            c(hueShift:  0.03, sat: s + 0.05, bri: 0.135),
+            c(hueShift: -0.03, sat: s, bri: 0.10),
+            c(hueShift:  0.04, sat: s + 0.03, bri: 0.125),
+            Color(hue: accentHue, saturation: s + 0.07, brightness: 0.155),
+            c(hueShift: -0.04, sat: s, bri: 0.115),
+            c(hueShift: -0.02, sat: s - 0.03, bri: 0.095),
             c(hueShift:  0.02, sat: s + 0.02, bri: 0.12),
-            c(hueShift:  0.05, sat: s, bri: 0.09),
+            c(hueShift:  0.05, sat: s, bri: 0.105),
         ]
     }
 }
