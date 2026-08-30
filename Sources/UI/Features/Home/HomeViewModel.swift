@@ -106,34 +106,17 @@ public final class HomeViewModel {
     // MARK: - Continue Watching
 
     private func continueWatchingCards(catalog: Catalog) -> [HomeCard] {
-        let moviesByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        var episodeToSeries: [CatalogID: Series] = [:]
-        for series in catalog.series {
-            for season in series.seasons {
-                for episode in season.episodes { episodeToSeries[episode.id] = series }
+        UpNext.resumePoints(catalog: catalog, progress: watchProgress.allEntries(), limit: 12)
+            .map { point in
+                HomeCard(
+                    id: point.containerID,
+                    kind: point.isSeries ? .series : .movie,
+                    title: point.primaryTitle,
+                    subtitle: point.secondaryText,
+                    artworkURL: point.artworkURL,
+                    progress: point.fraction > 0 ? point.fraction : nil
+                )
             }
-        }
-
-        return watchProgress.continueWatching(limit: 12).compactMap { progress -> HomeCard? in
-            switch progress.kind {
-            case .movie:
-                guard let movie = moviesByID[progress.itemID] else { return nil }
-                return HomeCard(id: movie.id, kind: .movie,
-                                title: movie.title,
-                                subtitle: Self.metadataSubtitle(for: movie),
-                                artworkURL: movie.posterURL,
-                                progress: progress.fraction)
-            case .series:
-                guard let series = episodeToSeries[progress.itemID] else { return nil }
-                return HomeCard(id: series.id, kind: .series,
-                                title: series.title,
-                                subtitle: "Resume watching",
-                                artworkURL: series.posterURL,
-                                progress: progress.fraction)
-            case .liveChannel:
-                return nil
-            }
-        }
     }
 
     // MARK: - Builders
