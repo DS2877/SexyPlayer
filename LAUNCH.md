@@ -19,15 +19,18 @@ Status legend: ✅ done · 🔨 in progress · ⬜ not started · 👤 needs you
 
 | | Item | Notes |
 |---|---|---|
-| 🔨 | Onboarding never locks the user out | Non-blocking status pill + 12s "Enter the app" escape on the import checklist. **Verify on device.** |
+| ✅ | Onboarding never locks the user out | Non-blocking status pill + 12s "Enter the app" escape; verified in Simulator. |
 | 👤 | **Real Xtream account, end to end** | Auth → library loads → movies play → series episodes load on demand → live TV → search → guide. Report everything rough. |
-| ✅ | Catalog persists between launches | JSON disk cache, stale-while-revalidate. Big libraries no longer re-import every launch. |
+| ✅ | Catalog persists between launches | JSON disk cache, stale-while-revalidate. Cache version bumps force a re-import when normalization changes. |
 | ✅ | Player refuses unplayable streams cleanly | MPEG-TS / MKV / rtmp etc. get a plain message, not a spinner. 25s load timeout. |
-| ⬜ | Confirm playback with the user's actual streams | VOD should be fine; live may be MPEG-TS. If most live channels are `.ts`, decide on a VLCKit fallback engine (bigger dependency). |
-| 🔨 | Sidebar navigation | Custom left sidebar. **Verify focus moves cleanly** sidebar ↔ content and you can always get back to Settings. |
-| ⬜ | Empty / error states audited on every screen | Home, Search, Guide, Favorites, Browse, Detail, Player. |
-| ⬜ | VoiceOver labels pass | Cards, buttons, the player. Accessibility is a review checkpoint and a quality bar. |
-| ⬜ | Large-library performance check | 20k+ items: scrolling, filter response, memory. The in-memory store should hold; if not, move the catalog to SQLite/GRDB (seam is ready). |
+| ✅ | Live stream resilience | Xtream live URLs request `.m3u8` (HLS) not `.ts`; player silently reconnects a live stream up to twice on a blip. |
+| ✅ | Preferred audio/subtitle language | Player auto-selects the user's Personalize language choices from the stream's tracks. |
+| ⬜ | Confirm playback with the user's actual streams | VOD `.mkv` will still refuse. If the provider only serves `.ts` live with no HLS, a VLCKit fallback engine is the (bigger) answer. |
+| ✅ | Sidebar navigation | Custom left sidebar; verified in Simulator. Re-check focus on device. |
+| 🔨 | Empty / error states | Every screen has an EmptyStateView/ErrorStateView branch. Spot-check on device. |
+| ✅ | VoiceOver labels pass | Cards, icon buttons, screen headers labelled; artwork hidden. Full sweep on device with VO on. |
+| ⬜ | Large-library performance check | 20k+ items: scrolling, filter response, memory. Needs a real large library. |
+| ✅ | **Install on your Apple TV** | See `INSTALL-ON-APPLE-TV.md` — free Apple ID (7-day) or paid. |
 
 ## 2 · Feature completeness vs the plan
 
@@ -40,10 +43,13 @@ Status legend: ✅ done · 🔨 in progress · ⬜ not started · 👤 needs you
 | ✅ | Movie / Series / Channel detail + resume + favourites | |
 | ✅ | Native AVKit player, resume, subtitle/audio tracks | |
 | ✅ | Natural-language Search (on-device parser) | interpreted filter chips, removable |
-| ⬜ | **Claude-backed** query parser | Needs a decision: ship a tiny backend proxy for the API key, or a user-pasted key in Settings for now. On-device parser covers most queries already. |
+| ✅ | **Claude-backed** query parser | Opt-in, bring-your-own-key (Settings → AI Search). Only query + library vocab sent. Falls back on-device on any error. |
 | ✅ | Personalize (languages, subtitles, adult filter, Home rows) | onboarding + Settings |
-| ⬜ | Autoplay next episode | preference exists (`autoPlayNextEpisode`), not wired into the player yet |
-| ⬜ | "Set a reminder" for upcoming programmes | Tonight/Guide — `UNUserNotificationCenter`, tvOS supports local notifications |
+| ✅ | Autoplay next episode | wired in `SeriesDetailView` — finished episode → next plays if the pref is on |
+| ✅ | Watch History + Up Next | dedicated History screen; Continue Watching advances to the next episode |
+| ✅ | Parental PIN | gates the adult-content toggle; salted hash in Keychain |
+| ✅ | Live channel zapping | transport-bar Prev/Channels/Next + in-player channel guide |
+| ⬜ | "Set a reminder" for upcoming programmes | Deferred — tvOS local notifications are badge-only; low payoff. |
 | ⬜ | Top Shelf extension | `TVTopShelfContentProvider` — Continue Watching on the tvOS home screen. Nice-to-have. |
 | ⬜ | Metadata enrichment (TMDB etc.) | Architecturally seamed, not built. Improves "something like X" and artwork. Not required for v1. |
 
