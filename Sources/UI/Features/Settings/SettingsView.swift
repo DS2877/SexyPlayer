@@ -42,13 +42,12 @@ struct SettingsView: View {
             } label: {
                 HStack {
                     Label("Edit your preferences", systemImage: "slider.horizontal.3")
+                        .font(.dsBody)
                     Spacer()
                     Text(preferenceSummary).font(.dsCaption).foregroundStyle(Palette.textTertiary)
                 }
-                .padding(Metrics.space2)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RowButtonStyle())
         }
     }
 

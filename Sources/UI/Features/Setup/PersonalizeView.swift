@@ -241,11 +241,8 @@ private struct OptionRow: View {
                 Spacer(minLength: Metrics.space2)
                 StatePill(isOn: isOn)
             }
-            .padding(.horizontal, Metrics.space3)
-            .frame(minHeight: 96)
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.card)
+        .buttonStyle(RowButtonStyle())
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "On" : "Off")
         .accessibilityAddTraits(.isButton)

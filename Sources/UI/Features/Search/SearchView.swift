@@ -111,15 +111,13 @@ struct SearchView: View {
                     model.query = example
                     Task { await model.search(vocabulary: env.vocabulary) }
                 } label: {
-                    HStack {
+                    HStack(spacing: Metrics.space2) {
                         Image(systemName: "sparkle").foregroundStyle(Palette.accent)
-                        Text(example).font(.dsBody)
+                        Text(example).font(.dsBody).foregroundStyle(Palette.textPrimary)
                         Spacer()
                     }
-                    .padding(Metrics.space2)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(RowButtonStyle())
                 .accessibilityLabel("Search: \(example)")
             }
         }
