@@ -75,7 +75,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         preferredSubtitleLanguage: Language? = nil,
         hideAdultContent: Bool = true,
         homeRows: [HomeRowKind] = HomeRowKind.defaultEnabled,
-        defaultSort: BrowseSort = .titleAscending,
+        defaultSort: BrowseSort = .recentlyAdded,
         autoPlayNextEpisode: Bool = true,
         aiAssistedSearch: Bool = false,
         hasOnboarded: Bool = false

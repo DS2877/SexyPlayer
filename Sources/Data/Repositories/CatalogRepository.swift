@@ -53,12 +53,14 @@ public protocol CatalogRepository: Sendable {
 /// `SearchIntent`, which is the *parsed* form of a natural-language query —
 /// though a `SearchIntent` maps cleanly onto a `CatalogFilter`).
 public enum BrowseSort: String, CaseIterable, Sendable, Codable {
+    case recentlyAdded
     case titleAscending
     case newest
     case oldest
 
     public var label: String {
         switch self {
+        case .recentlyAdded:  return "Recently Added"
         case .titleAscending: return "A–Z"
         case .newest:         return "Newest"
         case .oldest:         return "Oldest"

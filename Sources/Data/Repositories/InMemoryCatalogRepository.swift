@@ -97,14 +97,14 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func movies(filter: CatalogFilter, page: Int, pageSize: Int) -> [Movie] {
         catalog.movies
             .filter { filter.matches(movie: $0) }
-            .sorted { Self.order($0.title, $0.year, $1.title, $1.year, filter.sort) }
+            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
             .page(page, size: pageSize)
     }
 
     public func series(filter: CatalogFilter, page: Int, pageSize: Int) -> [Series] {
         catalog.series
             .filter { filter.matches(series: $0) }
-            .sorted { Self.order($0.title, $0.year, $1.title, $1.year, filter.sort) }
+            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
             .page(page, size: pageSize)
     }
 
@@ -123,8 +123,14 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func availableAudioLanguages() -> [Language] { facetAudio }
     public func availableSubtitleLanguages() -> [Language] { facetSubtitles }
 
-    private static func order(_ lt: String, _ ly: Int?, _ rt: String, _ ry: Int?, _ sort: BrowseSort) -> Bool {
+    private static func order(_ lt: String, _ ly: Int?, _ la: Date?,
+                              _ rt: String, _ ry: Int?, _ ra: Date?,
+                              _ sort: BrowseSort) -> Bool {
         switch sort {
+        case .recentlyAdded:
+            let l = la ?? .distantPast, r = ra ?? .distantPast
+            if l != r { return l > r }
+            return lt.localizedCompare(rt) == .orderedAscending
         case .titleAscending:
             return lt.localizedCompare(rt) == .orderedAscending
         case .newest:

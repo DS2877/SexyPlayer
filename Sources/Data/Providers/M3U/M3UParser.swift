@@ -50,17 +50,19 @@ public enum M3UParser {
         var vod: [RawVODItem] = []
         var episodes: [RawSeriesEpisode] = []
 
-        for entry in entries {
+        for (index, entry) in entries.enumerated() {
             let group = entry.attributes["group-title"]
             switch classify(entry) {
             case .channel:
+                let number = Int(entry.attributes["tvg-chno"] ?? "") ?? (index + 1)
                 channels.append(RawChannel(
                     providerKey: entry.attributes["tvg-id"].nonEmpty ?? entry.url,
                     displayName: entry.name,
                     groupTitle: group,
                     logo: entry.attributes["tvg-logo"].nonEmpty,
                     tvgID: entry.attributes["tvg-id"].nonEmpty,
-                    streamURL: entry.url
+                    streamURL: entry.url,
+                    channelNumber: number
                 ))
             case .movie:
                 vod.append(RawVODItem(

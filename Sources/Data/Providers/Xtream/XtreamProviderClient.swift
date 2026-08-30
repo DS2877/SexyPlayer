@@ -38,7 +38,7 @@ public struct XtreamProviderClient: ProviderClient {
         let vod = try await vodRaw;     progress.reached(.movies)
         let series = try await seriesRaw; progress.reached(.series)
 
-        let channels: [RawChannel] = live.compactMap { s in
+        let channels: [RawChannel] = live.enumerated().compactMap { index, s in
             guard let id = s.stream_id, let name = s.name else { return nil }
             return RawChannel(
                 providerKey: String(id),
@@ -46,7 +46,8 @@ public struct XtreamProviderClient: ProviderClient {
                 groupTitle: liveCategories[s.category_id ?? ""],
                 logo: s.stream_icon,
                 tvgID: s.epg_channel_id,
-                streamURL: api.liveStreamURL(id: id).absoluteString
+                streamURL: api.liveStreamURL(id: id).absoluteString,
+                channelNumber: s.num ?? (index + 1)
             )
         }
 
@@ -63,7 +64,8 @@ public struct XtreamProviderClient: ProviderClient {
                 releaseDate: v.releaseDate ?? v.added,
                 durationSecs: v.episode_run_time.map { $0 * 60 },
                 cast: v.cast,
-                director: v.director
+                director: v.director,
+                addedAt: Self.unixDate(v.added)
             )
         }
 
@@ -78,7 +80,8 @@ public struct XtreamProviderClient: ProviderClient {
                 cast: s.cast,
                 director: s.director,
                 releaseDate: s.releaseDate,
-                groupTitle: seriesCategories[s.category_id ?? ""]
+                groupTitle: seriesCategories[s.category_id ?? ""],
+                addedAt: Self.unixDate(s.last_modified)
             )
         }
 
@@ -129,6 +132,13 @@ public struct XtreamProviderClient: ProviderClient {
     }
 
     // MARK: - Helpers
+
+    /// Xtream `added` / `last_modified` are unix-second strings.
+    static func unixDate(_ string: String?) -> Date? {
+        guard let string, let seconds = TimeInterval(string.trimmingCharacters(in: .whitespaces)), seconds > 0
+        else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
 
     private func verifyAuth() async throws {
         let auth = try await http.decode(XtreamDTO.AuthResponse.self, from: api.authURL)

@@ -25,6 +25,9 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
 
     public let streamURL: URL
 
+    /// When the provider added this to the library — for "Recently Added".
+    public let addedAt: Date?
+
     /// Best-effort adult-category flag (see `AdultContentDetector`).
     public var isAdult: Bool
 
@@ -44,6 +47,7 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
         cast: [String] = [],
         directors: [String] = [],
         streamURL: URL,
+        addedAt: Date? = nil,
         isAdult: Bool = false
     ) {
         self.id = id
@@ -61,6 +65,7 @@ public struct Movie: Identifiable, Hashable, Codable, Sendable {
         self.cast = cast
         self.directors = directors
         self.streamURL = streamURL
+        self.addedAt = addedAt
         self.isAdult = isAdult
     }
 }

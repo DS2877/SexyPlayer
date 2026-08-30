@@ -21,7 +21,7 @@ public actor CatalogCache {
 
     /// Bump whenever normalization or the model shape changes, so stale caches
     /// are discarded and the catalog is re-imported once.
-    private static let currentVersion = 2
+    private static let currentVersion = 3   // + Movie/Series.addedAt, Channel numbers
     private let directory: URL
 
     public init() {

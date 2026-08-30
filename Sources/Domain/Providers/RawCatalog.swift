@@ -41,8 +41,9 @@ public struct RawSeriesShell: Sendable {
     public let director: String?
     public let releaseDate: String?
     public let groupTitle: String?
+    public let addedAt: Date?
 
-    public init(providerKey: String, name: String, cover: String? = nil, plot: String? = nil, genreText: String? = nil, cast: String? = nil, director: String? = nil, releaseDate: String? = nil, groupTitle: String? = nil) {
+    public init(providerKey: String, name: String, cover: String? = nil, plot: String? = nil, genreText: String? = nil, cast: String? = nil, director: String? = nil, releaseDate: String? = nil, groupTitle: String? = nil, addedAt: Date? = nil) {
         self.providerKey = providerKey
         self.name = name
         self.cover = cover
@@ -52,6 +53,7 @@ public struct RawSeriesShell: Sendable {
         self.director = director
         self.releaseDate = releaseDate
         self.groupTitle = groupTitle
+        self.addedAt = addedAt
     }
 }
 
@@ -64,14 +66,17 @@ public struct RawChannel: Sendable {
     public let logo: String?
     public let tvgID: String?
     public let streamURL: String
+    /// The provider's channel number / list position, for "sort by number".
+    public let channelNumber: Int?
 
-    public init(providerKey: String, displayName: String, groupTitle: String?, logo: String?, tvgID: String?, streamURL: String) {
+    public init(providerKey: String, displayName: String, groupTitle: String?, logo: String?, tvgID: String?, streamURL: String, channelNumber: Int? = nil) {
         self.providerKey = providerKey
         self.displayName = displayName
         self.groupTitle = groupTitle
         self.logo = logo
         self.tvgID = tvgID
         self.streamURL = streamURL
+        self.channelNumber = channelNumber
     }
 }
 
@@ -88,8 +93,9 @@ public struct RawVODItem: Sendable {
     public let durationSecs: Int?
     public let cast: String?
     public let director: String?
+    public let addedAt: Date?
 
-    public init(providerKey: String, name: String, groupTitle: String?, logo: String?, streamURL: String, plot: String? = nil, genreText: String? = nil, releaseDate: String? = nil, durationSecs: Int? = nil, cast: String? = nil, director: String? = nil) {
+    public init(providerKey: String, name: String, groupTitle: String?, logo: String?, streamURL: String, plot: String? = nil, genreText: String? = nil, releaseDate: String? = nil, durationSecs: Int? = nil, cast: String? = nil, director: String? = nil, addedAt: Date? = nil) {
         self.providerKey = providerKey
         self.name = name
         self.groupTitle = groupTitle
@@ -101,6 +107,7 @@ public struct RawVODItem: Sendable {
         self.durationSecs = durationSecs
         self.cast = cast
         self.director = director
+        self.addedAt = addedAt
     }
 }
 
