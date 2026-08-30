@@ -52,10 +52,8 @@ public struct ChannelCard: View {
                 }
                 .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardHeight)
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                        .strokeBorder(.white.opacity(0.06))
-                )
+                .shadow(color: .black.opacity(isFocused ? 0.5 : 0),
+                        radius: isFocused ? 24 : 0, y: isFocused ? 14 : 0)
 
                 Text(name)
                     .font(.dsCardTitle)

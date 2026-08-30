@@ -15,7 +15,7 @@ struct ChannelDetailView: View {
         Group {
             if let channel {
                 DetailScaffold(title: channel.name, backdropURL: channel.logoURL) {
-                    Text(channel.name).font(.dsHero)
+                    Text(channel.name).font(.dsHero).tracking(Metrics.heroTracking)
                     MetadataLine([
                         channel.category,
                         channel.quality > .unknown ? channel.quality.shortLabel : nil,

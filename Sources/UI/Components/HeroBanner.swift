@@ -28,19 +28,24 @@ public struct HeroBanner: View {
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
             ArtworkView(url: artworkURL, title: title, aspect: 16.0 / 7.0, style: .backdrop)
-                .frame(height: 560)
+                .frame(height: 640)
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .overlay(
                     LinearGradient(
-                        colors: [Palette.canvas.opacity(0.1), Palette.canvas.opacity(0.5),
-                                 Palette.canvas.opacity(0.95), Palette.canvas],
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: Palette.canvas.opacity(0.15), location: 0.35),
+                            .init(color: Palette.canvas.opacity(0.65), location: 0.68),
+                            .init(color: Palette.canvas.opacity(0.97), location: 0.9),
+                            .init(color: Palette.canvas, location: 1),
+                        ],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
                 .overlay(
                     LinearGradient(
-                        colors: [Palette.canvas.opacity(0.9), Palette.canvas.opacity(0.3), .clear],
+                        colors: [Palette.canvas.opacity(0.85), Palette.canvas.opacity(0.25), .clear],
                         startPoint: .leading, endPoint: .trailing
                     )
                 )
@@ -50,12 +55,13 @@ public struct HeroBanner: View {
                     if !metadata.isEmpty {
                         Text(metadata.joined(separator: "   ·   "))
                             .font(.dsTag)
-                            .foregroundStyle(Palette.accent)
+                            .foregroundStyle(Palette.textSecondary)
                             .textCase(.uppercase)
-                            .tracking(1.5)
+                            .tracking(Metrics.eyebrowTracking)
                     }
                     Text(title).font(.dsHero).lineLimit(2)
-                        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                        .tracking(Metrics.heroTracking)
+                        .shadow(color: .black.opacity(0.45), radius: 16, y: 6)
                     if !tagline.isEmpty {
                         Text(tagline)
                             .font(.dsBody)

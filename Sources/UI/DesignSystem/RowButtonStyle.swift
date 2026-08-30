@@ -18,7 +18,7 @@ private struct RowButtonBody: View {
     var body: some View {
         configuration.label
             .padding(.horizontal, Metrics.space3)
-            .padding(.vertical, Metrics.space2)
+            .padding(.vertical, Metrics.space2 + 2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
@@ -26,10 +26,11 @@ private struct RowButtonBody: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                    .strokeBorder(isFocused ? Palette.accent : Palette.hairline,
-                                  lineWidth: isFocused ? 2 : 1)
+                    .strokeBorder(.white.opacity(isFocused ? 0.16 : 0.0), lineWidth: 1)
             )
-            .scaleEffect(isFocused ? 1.015 : 1)
+            .shadow(color: .black.opacity(isFocused ? 0.4 : 0.0),
+                    radius: isFocused ? 24 : 0, y: isFocused ? 14 : 0)
+            .scaleEffect(isFocused ? 1.02 : 1)
             .animation(Metrics.focusAnimation, value: isFocused)
     }
 }

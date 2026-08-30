@@ -8,6 +8,7 @@ public struct AppThemeBackground: ViewModifier {
             .background(Palette.canvas.ignoresSafeArea())
             .foregroundStyle(Palette.textPrimary)
             .tint(Palette.accent)
+            .buttonBorderShape(.capsule)
     }
 }
 
@@ -32,10 +33,9 @@ public struct SurfaceCard<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                    .strokeBorder(isFocused ? Palette.accent.opacity(0.9) : Palette.hairline,
-                                  lineWidth: isFocused ? 3 : 1)
+                    .strokeBorder(.white.opacity(isFocused ? 0.14 : 0.0), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(isFocused ? 0.55 : 0.0),
-                    radius: isFocused ? 30 : 0, x: 0, y: isFocused ? 18 : 0)
+            .shadow(color: .black.opacity(isFocused ? 0.5 : 0.0),
+                    radius: isFocused ? 34 : 0, x: 0, y: isFocused ? 20 : 0)
     }
 }

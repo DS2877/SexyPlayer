@@ -8,6 +8,7 @@ struct SexyPlayerApp: App {
         WindowGroup {
             RootView()
                 .environment(environment)
+                .buttonBorderShape(.capsule)          // pill-shaped CTAs, app-wide
                 .task {
                     await environment.applyPreferences()
                     await environment.bootstrap()

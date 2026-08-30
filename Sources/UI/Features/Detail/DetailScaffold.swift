@@ -7,7 +7,7 @@ struct DetailScaffold<Content: View>: View {
     let backdropURL: URL?
     @ViewBuilder let content: () -> Content
 
-    private let backdropHeight: CGFloat = 620
+    private let backdropHeight: CGFloat = 680
 
     var body: some View {
         ScrollView {
@@ -18,14 +18,19 @@ struct DetailScaffold<Content: View>: View {
                     .clipped()
                     .overlay(
                         LinearGradient(
-                            colors: [Palette.canvas.opacity(0.15), Palette.canvas.opacity(0.55),
-                                     Palette.canvas.opacity(0.92), Palette.canvas],
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: Palette.canvas.opacity(0.2), location: 0.4),
+                                .init(color: Palette.canvas.opacity(0.7), location: 0.72),
+                                .init(color: Palette.canvas.opacity(0.97), location: 0.92),
+                                .init(color: Palette.canvas, location: 1),
+                            ],
                             startPoint: .top, endPoint: .bottom
                         )
                     )
                     .overlay(
                         LinearGradient(
-                            colors: [Palette.canvas.opacity(0.9), Palette.canvas.opacity(0.35), .clear],
+                            colors: [Palette.canvas.opacity(0.85), Palette.canvas.opacity(0.3), .clear],
                             startPoint: .leading, endPoint: .trailing
                         )
                     )

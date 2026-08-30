@@ -79,7 +79,7 @@ struct SeriesDetailView: View {
         let season = series.seasons.first { $0.number == selectedSeason } ?? series.seasons.first
 
         DetailScaffold(title: series.title, backdropURL: series.backdropURL ?? series.posterURL) {
-            Text(series.title).font(.dsHero).lineLimit(2)
+            Text(series.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
             MetadataLine([
                 series.year.map(String.init),

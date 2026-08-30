@@ -166,10 +166,6 @@ private struct HistoryRowView: View {
                 ArtworkView(url: row.art, title: row.title, aspect: 16.0 / 9.0)
                     .frame(width: 240, height: 135)
                     .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                            .strokeBorder(.white.opacity(0.06))
-                    )
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.title)

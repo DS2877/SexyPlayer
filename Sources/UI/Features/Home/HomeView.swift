@@ -53,7 +53,7 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
                 RoundedRectangle(cornerRadius: 0).fill(Palette.surface)
-                    .frame(height: 620).opacity(0.6)
+                    .frame(height: 640).opacity(0.6)
                 SkeletonShelf()
                 SkeletonShelf()
                 SkeletonShelf()

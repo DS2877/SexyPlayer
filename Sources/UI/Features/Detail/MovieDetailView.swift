@@ -36,7 +36,7 @@ struct MovieDetailView: View {
         let progress = env.watchProgress.progress(for: movie.id)
 
         DetailScaffold(title: movie.title, backdropURL: movie.backdropURL ?? movie.posterURL) {
-            Text(movie.title).font(.dsHero).lineLimit(2)
+            Text(movie.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
             MetadataLine([
                 movie.year.map(String.init),

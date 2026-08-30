@@ -14,12 +14,13 @@ public enum Metrics {
     public static let space6: CGFloat = 64
     public static let space7: CGFloat = 96
 
-    public static let screenMargin: CGFloat = 80
-    public static let shelfSpacing: CGFloat = 56
-    public static let cardSpacing: CGFloat = 32
+    public static let screenMargin: CGFloat = 90
+    /// Vertical gap between Home shelves — deliberately generous, Apple TV+ style.
+    public static let shelfSpacing: CGFloat = 68
+    public static let cardSpacing: CGFloat = 36
 
-    public static let cornerRadius: CGFloat = 12
-    public static let cardCornerRadius: CGFloat = 10
+    public static let cornerRadius: CGFloat = 14
+    public static let cardCornerRadius: CGFloat = 12
 
     // Poster cards (2:3)
     public static let posterWidth: CGFloat = 240
@@ -29,16 +30,21 @@ public enum Metrics {
     public static let wideCardWidth: CGFloat = 360
     public static var wideCardHeight: CGFloat { wideCardWidth * 9 / 16 }
 
-    public static let focusScale: CGFloat = 1.08
-    public static let focusAnimation: Animation = .spring(response: 0.32, dampingFraction: 0.72)
+    public static let focusScale: CGFloat = 1.10
+    public static let focusAnimation: Animation = .spring(response: 0.34, dampingFraction: 0.74)
+
+    /// Tracking for the big display title — SF Pro reads better drawn tight.
+    public static let heroTracking: CGFloat = -0.5
+    /// Tracking for uppercase eyebrow / tag text.
+    public static let eyebrowTracking: CGFloat = 1.6
 }
 
 public extension Font {
-    static let dsHero = Font.system(size: 64, weight: .bold, design: .default)
-    static let dsTitle = Font.system(size: 42, weight: .semibold)
-    static let dsSectionHeader = Font.system(size: 30, weight: .semibold)
-    static let dsCardTitle = Font.system(size: 24, weight: .medium)
+    static let dsHero = Font.system(size: 66, weight: .bold, design: .default)
+    static let dsTitle = Font.system(size: 40, weight: .semibold)
+    static let dsSectionHeader = Font.system(size: 27, weight: .semibold)
+    static let dsCardTitle = Font.system(size: 23, weight: .medium)
     static let dsBody = Font.system(size: 24, weight: .regular)
-    static let dsCaption = Font.system(size: 20, weight: .regular)
-    static let dsTag = Font.system(size: 18, weight: .semibold)
+    static let dsCaption = Font.system(size: 19, weight: .regular)
+    static let dsTag = Font.system(size: 16, weight: .semibold)
 }

@@ -33,7 +33,7 @@ public struct Shelf<Item: Identifiable, Card: View>: View {
                         }
                     }
                     .padding(.horizontal, Metrics.screenMargin)
-                    .padding(.vertical, Metrics.space3)   // room for focus lift
+                    .padding(.vertical, Metrics.space4)   // room for the focus lift + its shadow
                 }
             }
             .focusSection()

@@ -38,19 +38,23 @@ public struct PosterCard: View {
                         .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
                         .overlay(alignment: .bottom) {
                             if (progress ?? 0) > 0 {
-                                ZStack(alignment: .leading) {
-                                    Rectangle().fill(.black.opacity(0.35))
-                                    Rectangle().fill(Palette.accent)
-                                        .frame(width: Metrics.posterWidth * clampedProgress)
+                                ZStack(alignment: .bottomLeading) {
+                                    LinearGradient(colors: [.clear, .black.opacity(0.55)],
+                                                   startPoint: .center, endPoint: .bottom)
+                                    ZStack(alignment: .leading) {
+                                        Capsule().fill(.white.opacity(0.25))
+                                        Capsule().fill(Palette.accent)
+                                            .frame(width: Swift.max(4, (Metrics.posterWidth - 24) * clampedProgress))
+                                    }
+                                    .frame(height: 4)
+                                    .padding(.horizontal, 12)
+                                    .padding(.bottom, 12)
                                 }
-                                .frame(height: 5)
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                                .strokeBorder(.white.opacity(0.06))
-                        )
+                        .shadow(color: .black.opacity(isFocused ? 0.55 : 0),
+                                radius: isFocused ? 28 : 0, y: isFocused ? 16 : 0)
 
                     if let badge {
                         Text(badge)
