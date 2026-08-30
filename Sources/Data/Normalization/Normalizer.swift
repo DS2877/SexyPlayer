@@ -16,6 +16,32 @@ public struct Normalizer: Sendable {
         )
     }
 
+    /// Same result as `normalize`, but the per-item work (the slow part — regex
+    /// title/language/genre detection over tens of thousands of rows) runs
+    /// across all cores. `progress` fires as each section completes.
+    public func normalizeConcurrently(
+        _ raw: RawCatalog,
+        progress: @Sendable (ImportPhase) -> Void = { _ in }
+    ) async -> Catalog {
+        let pid = raw.providerID
+        let normalizer = self
+
+        async let channels = raw.channels.concurrentMap { normalizer.normalizeChannel($0, providerID: pid) }
+        async let movies = raw.vod.concurrentMap { normalizer.normalizeMovie($0, providerID: pid) }
+        async let shells = raw.seriesShells.concurrentMap { normalizer.normalizeShell($0, providerID: pid) }
+        async let epg = raw.epg.concurrentMap { normalizer.normalizeEPG($0) }
+
+        let c = await channels;  progress(.channels)
+        let m = await movies;    progress(.movies)
+        // Episode-name reconstruction (M3U) is inherently sequential grouping.
+        let reconstructed = normalizeSeries(raw.seriesEpisodes, providerID: pid)
+        let s = reconstructed + (await shells)
+        progress(.series)
+        let e = await epg;       progress(.guide)
+
+        return Catalog(channels: c, movies: m, series: s, epg: e)
+    }
+
     /// Normalize an on-demand batch of episodes for one already-known series.
     public func seasons(
         forEpisodes rawEpisodes: [RawSeriesEpisode],

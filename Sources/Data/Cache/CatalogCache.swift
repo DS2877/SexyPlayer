@@ -21,8 +21,15 @@ public actor CatalogCache {
 
     /// Bump whenever normalization or the model shape changes, so stale caches
     /// are discarded and the catalog is re-imported once.
-    private static let currentVersion = 3   // + Movie/Series.addedAt, Channel numbers
+    private static let currentVersion = 4   // binary plist; + addedAt, channel numbers
     private let directory: URL
+
+    // Binary property list encodes/decodes a big catalog ~2× faster than JSON
+    // and is more compact — matters at 40k+ items.
+    private static let encoder: PropertyListEncoder = {
+        let e = PropertyListEncoder(); e.outputFormat = .binary; return e
+    }()
+    private static let decoder = PropertyListDecoder()
 
     public init() {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory,
@@ -37,7 +44,7 @@ public actor CatalogCache {
     private func fileURL(for providerID: String) -> URL {
         let safe = providerID.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: ":", with: "_")
-        return directory.appendingPathComponent("\(safe).json")
+        return directory.appendingPathComponent("\(safe).plist")
     }
 
     public func load(providerID: String) -> Entry? {
@@ -45,7 +52,7 @@ public actor CatalogCache {
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {
             let start = Date()
-            let envelope = try JSONDecoder().decode(Envelope.self, from: data)
+            let envelope = try Self.decoder.decode(Envelope.self, from: data)
             guard envelope.version == Self.currentVersion else {
                 try? FileManager.default.removeItem(at: url)
                 return nil
@@ -70,11 +77,12 @@ public actor CatalogCache {
         trimmed.epg = catalog.epg.filter { $0.stop > lower && $0.start < upper }
 
         let envelope = Envelope(version: Self.currentVersion, savedAt: Date(), catalog: trimmed)
-        guard let data = try? JSONEncoder().encode(envelope) else { return }
+        let start = Date()
+        guard let data = try? Self.encoder.encode(envelope) else { return }
         let url = fileURL(for: providerID)
         do {
             try data.write(to: url, options: .atomic)
-            AppLog.app.info("Catalog cached (\(data.count / 1024) KB) for provider.")
+            AppLog.app.info("Catalog cached in \(Int(Date().timeIntervalSince(start) * 1000)) ms (\(data.count / 1024) KB).")
         } catch {
             AppLog.app.notice("Could not write catalog cache.")
         }

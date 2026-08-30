@@ -155,11 +155,9 @@ public final class AppEnvironment {
             hasLoadedOnce = true
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
             AppLog.app.info("Catalog ready in \(elapsed)s — \(RuntimeStats.catalogSummary(catalog)).")
-            // Persist in the background — a large catalog can take seconds to encode.
-            let toCache = catalog
-            Task.detached(priority: .utility) { [cache] in
-                await cache.save(toCache, providerID: providerID)
-            }
+            // The app is already usable; persist so the next launch is instant.
+            // Awaited (not fire-and-forget) so it isn't killed if the user leaves.
+            await cache.save(catalog, providerID: providerID)
         } catch {
             let providerError = ProviderError.from(error)
             loadState = .failed(providerError)
@@ -180,21 +178,23 @@ public final class AppEnvironment {
     private static let epgWindowFuture: TimeInterval = 14 * 24 * 3600
 
     private func importCatalog(client: any ProviderClient, reporter: ImportProgressReporter) async throws -> Catalog {
-        let raw = try await client.fetchRawCatalog(progress: reporter)
-        let normalizer = self.normalizer
-        let (past, future) = (Self.epgWindowPast, Self.epgWindowFuture)
-        return await Task.detached(priority: .userInitiated) {
-            var catalog = normalizer.normalize(raw)
-            let now = Date()
-            let lower = now.addingTimeInterval(-past)
-            let upper = now.addingTimeInterval(future)
-            let before = catalog.epg.count
-            catalog.epg = catalog.epg.filter { $0.stop > lower && $0.start < upper }
-            if before != catalog.epg.count {
-                AppLog.app.info("Trimmed EPG to window: \(catalog.epg.count) of \(before) events kept.")
-            }
-            return catalog
-        }.value
+        var raw = try await client.fetchRawCatalog(progress: reporter)
+
+        // Drop EPG outside the window *before* normalizing — no point spending
+        // time on events we'll never show.
+        let now = Date()
+        let lower = now.addingTimeInterval(-Self.epgWindowPast)
+        let upper = now.addingTimeInterval(Self.epgWindowFuture)
+        let epgBefore = raw.epg.count
+        raw.epg = raw.epg.filter { $0.stop > lower && $0.start < upper }
+        if epgBefore != raw.epg.count {
+            AppLog.app.info("Trimmed EPG before normalize: \(raw.epg.count) of \(epgBefore) events kept.")
+        }
+
+        let normStart = Date()
+        let catalog = await normalizer.normalizeConcurrently(raw) { phase in reporter.reached(phase) }
+        AppLog.app.info("Normalized in \(String(format: "%.1f", Date().timeIntervalSince(normStart)))s.")
+        return catalog
     }
 
     private func startBackgroundRefresh(client: any ProviderClient, providerID: String) {
