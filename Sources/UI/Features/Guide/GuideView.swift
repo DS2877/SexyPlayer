@@ -79,7 +79,7 @@ struct GuideView: View {
             )
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Metrics.space4, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                     Section {
                         ForEach(model.rows) { row in
                             channelRow(row, now: model.now)
@@ -103,15 +103,17 @@ struct GuideView: View {
     }
 
     private func channelRow(_ row: GuideChannelRow, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: Metrics.space1) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(row.name)
-                .font(.dsCardTitle)
-                .foregroundStyle(Palette.textPrimary)
+                .font(.dsTag)
+                .foregroundStyle(Palette.textSecondary)
+                .textCase(.uppercase)
+                .tracking(Metrics.eyebrowTracking)
                 .padding(.horizontal, Metrics.screenMargin)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Metrics.space1) {
-                    ForEach(row.events.prefix(12)) { event in
+                    ForEach(row.events.prefix(14)) { event in
                         Button {
                             path.append(.channel(row.id))
                         } label: {
@@ -143,8 +145,8 @@ private struct ProgrammeCell: View {
                 if live { LiveBadge() }
             }
             Text(event.title)
-                .font(.dsBody)
-                .foregroundStyle(Palette.textPrimary)
+                .font(.dsCardTitle)
+                .foregroundStyle(live ? Palette.textPrimary : Palette.textSecondary)
                 .lineLimit(2)
             Spacer(minLength: 0)
             if live {
@@ -152,11 +154,11 @@ private struct ProgrammeCell: View {
             }
         }
         .padding(Metrics.space2)
-        .frame(width: 300, height: 150, alignment: .leading)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
+        .frame(width: 248, height: 118, alignment: .leading)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: Metrics.cardCornerRadius)
-                .strokeBorder(live ? Palette.accent.opacity(0.6) : Palette.hairline)
+            RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
+                .strokeBorder(live ? Palette.accent.opacity(0.55) : .clear, lineWidth: 1.5)
         )
     }
 }

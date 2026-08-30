@@ -31,11 +31,11 @@ public enum Palette {
     /// dark gradients so a grid of missing-poster cards reads as one palette
     /// rather than a bag of colours.
     private static let placeholderPairs: [(top: Color, bottom: Color)] = [
-        (Color(red: 0.16, green: 0.15, blue: 0.13), Color(red: 0.07, green: 0.065, blue: 0.055)),  // warm charcoal
-        (Color(red: 0.13, green: 0.15, blue: 0.17), Color(red: 0.06, green: 0.07, blue: 0.085)),   // slate
-        (Color(red: 0.15, green: 0.145, blue: 0.17), Color(red: 0.07, green: 0.065, blue: 0.09)),  // plum-grey
-        (Color(red: 0.13, green: 0.16, blue: 0.15), Color(red: 0.06, green: 0.08, blue: 0.075)),   // deep pine
-        (Color(red: 0.17, green: 0.15, blue: 0.14), Color(red: 0.08, green: 0.065, blue: 0.06)),   // umber
+        (Color(red: 0.22, green: 0.20, blue: 0.17), Color(red: 0.09, green: 0.082, blue: 0.070)),  // warm charcoal
+        (Color(red: 0.17, green: 0.20, blue: 0.24), Color(red: 0.072, green: 0.085, blue: 0.105)), // slate blue
+        (Color(red: 0.21, green: 0.18, blue: 0.24), Color(red: 0.088, green: 0.076, blue: 0.108)), // plum
+        (Color(red: 0.16, green: 0.21, blue: 0.19), Color(red: 0.070, green: 0.094, blue: 0.086)), // deep pine
+        (Color(red: 0.24, green: 0.19, blue: 0.16), Color(red: 0.10, green: 0.078, blue: 0.066)),  // umber
     ]
 
     public static func placeholderGradient(for seed: String) -> LinearGradient {

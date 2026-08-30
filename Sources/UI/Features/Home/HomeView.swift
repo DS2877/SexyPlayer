@@ -144,12 +144,13 @@ struct TonightRail: View {
                 LazyHStack(spacing: Metrics.space2) {
                     ForEach(items) { item in
                         NavigationLink(value: AppRoute.channel(item.channelID)) {
-                            VStack(alignment: .leading, spacing: Metrics.space1) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: Metrics.space1) {
                                     Text(item.time)
-                                        .font(.dsCardTitle)
+                                        .font(.dsTag)
                                         .foregroundStyle(Palette.accent)
                                     if item.isLiveNow { LiveBadge() }
+                                    Spacer(minLength: 0)
                                 }
                                 Text(item.programTitle)
                                     .font(.dsCardTitle)
@@ -158,10 +159,11 @@ struct TonightRail: View {
                                 Spacer(minLength: 0)
                                 Text(item.channelName)
                                     .font(.dsCaption)
-                                    .foregroundStyle(Palette.textSecondary)
+                                    .foregroundStyle(Palette.textTertiary)
+                                    .lineLimit(1)
                             }
                             .padding(Metrics.space2)
-                            .frame(width: 320, height: 200, alignment: .leading)
+                            .frame(width: 256, height: 150, alignment: .leading)
                         }
                         .buttonStyle(.card)
                     }

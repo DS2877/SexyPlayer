@@ -51,9 +51,11 @@ public struct ArtworkView: View {
             RadialGradient(colors: [.white.opacity(0.05), .clear], center: .center, startRadius: 0, endRadius: 600)
         case .poster:
             ZStack {
+                LinearGradient(colors: [.white.opacity(0.05), .clear],
+                               startPoint: .top, endPoint: .center)
                 Text(initials)
-                    .font(.system(size: 44, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.28))
+                    .font(.system(size: 40, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.16))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

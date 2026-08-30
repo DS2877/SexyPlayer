@@ -8,7 +8,6 @@ public struct AppThemeBackground: ViewModifier {
             .background(Palette.canvas.ignoresSafeArea())
             .foregroundStyle(Palette.textPrimary)
             .tint(Palette.accent)
-            .buttonBorderShape(.capsule)
     }
 }
 

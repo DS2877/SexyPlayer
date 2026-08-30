@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Full-bleed cinematic banner at the top of Home.
+/// Full-bleed cinematic banner at the top of Home. Falls back to a tighter,
+/// deliberately-composed panel when the provider gives us no backdrop.
 public struct HeroBanner: View {
     let title: String
     let tagline: String
@@ -25,30 +26,12 @@ public struct HeroBanner: View {
         self.primaryAction = primaryAction
     }
 
+    private var hasArtwork: Bool { artworkURL != nil }
+    private var height: CGFloat { hasArtwork ? 620 : 440 }
+
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
-            ArtworkView(url: artworkURL, title: title, aspect: 16.0 / 7.0, style: .backdrop)
-                .frame(height: 640)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .overlay(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: Palette.canvas.opacity(0.15), location: 0.35),
-                            .init(color: Palette.canvas.opacity(0.65), location: 0.68),
-                            .init(color: Palette.canvas.opacity(0.97), location: 0.9),
-                            .init(color: Palette.canvas, location: 1),
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    LinearGradient(
-                        colors: [Palette.canvas.opacity(0.85), Palette.canvas.opacity(0.25), .clear],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
+            backdrop
 
             VStack(alignment: .leading, spacing: Metrics.space2) {
                 Group {
@@ -59,9 +42,11 @@ public struct HeroBanner: View {
                             .textCase(.uppercase)
                             .tracking(Metrics.eyebrowTracking)
                     }
-                    Text(title).font(.dsHero).lineLimit(2)
+                    Text(title)
+                        .font(.dsHero)
+                        .lineLimit(2)
                         .tracking(Metrics.heroTracking)
-                        .shadow(color: .black.opacity(0.45), radius: 16, y: 6)
+                        .shadow(color: .black.opacity(0.5), radius: 18, y: 6)
                     if !tagline.isEmpty {
                         Text(tagline)
                             .font(.dsBody)
@@ -85,5 +70,55 @@ public struct HeroBanner: View {
             .padding(.horizontal, Metrics.screenMargin)
             .padding(.bottom, Metrics.space5)
         }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if hasArtwork {
+            ArtworkView(url: artworkURL, title: title, aspect: 16.0 / 7.0, style: .backdrop)
+                .frame(height: height)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(bottomScrim)
+                .overlay(leadingScrim)
+        } else {
+            // No backdrop: a quiet vignette panel so the hero reads as designed,
+            // not as empty space.
+            ZStack {
+                Palette.canvas
+                RadialGradient(
+                    colors: [Palette.accent.opacity(0.10), .clear],
+                    center: UnitPoint(x: 0.22, y: 0.9),
+                    startRadius: 0, endRadius: 720
+                )
+                LinearGradient(
+                    colors: [.white.opacity(0.04), .clear],
+                    startPoint: .top, endPoint: .center
+                )
+            }
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .overlay(bottomScrim)
+        }
+    }
+
+    private var bottomScrim: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: Palette.canvas.opacity(0.15), location: 0.35),
+                .init(color: Palette.canvas.opacity(0.7), location: 0.72),
+                .init(color: Palette.canvas.opacity(0.97), location: 0.92),
+                .init(color: Palette.canvas, location: 1),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
+    private var leadingScrim: some View {
+        LinearGradient(
+            colors: [Palette.canvas.opacity(0.8), Palette.canvas.opacity(0.2), .clear],
+            startPoint: .leading, endPoint: .trailing
+        )
     }
 }

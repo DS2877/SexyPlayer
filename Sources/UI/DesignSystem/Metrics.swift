@@ -27,7 +27,7 @@ public enum Metrics {
     public static var posterHeight: CGFloat { posterWidth * 3 / 2 }
 
     // Channel / 16:9 cards
-    public static let wideCardWidth: CGFloat = 360
+    public static let wideCardWidth: CGFloat = 300
     public static var wideCardHeight: CGFloat { wideCardWidth * 9 / 16 }
 
     public static let focusScale: CGFloat = 1.10

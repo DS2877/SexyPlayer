@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A 16:9 card for a live channel, showing the logo/name plus the current
-/// programme when EPG data is available.
+/// A 16:9 card for a live channel — logo (or a quiet monogram), the channel
+/// name, and the current programme when EPG data is available.
 public struct ChannelCard: View {
     let name: String
     let logoURL: URL?
@@ -36,45 +36,49 @@ public struct ChannelCard: View {
             VStack(alignment: .leading, spacing: Metrics.space1) {
                 ZStack {
                     Palette.placeholderGradient(for: name)
+
                     if let logoURL {
                         AsyncImage(url: logoURL) { $0.resizable().scaledToFit().padding(Metrics.space3) }
-                            placeholder: { channelInitials }
+                            placeholder: { monogram }
                     } else {
-                        channelInitials
+                        monogram
                     }
-                    VStack {
-                        HStack {
+
+                    if quality > .unknown {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                QualityBadge(quality: quality).padding(Metrics.space1)
+                            }
                             Spacer()
-                            QualityBadge(quality: quality).padding(Metrics.space1)
                         }
-                        Spacer()
                     }
                 }
                 .frame(width: Metrics.wideCardWidth, height: Metrics.wideCardHeight)
+                .overlay(alignment: .bottom) {
+                    if let nowProgress {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(.white.opacity(0.18))
+                                Rectangle().fill(Palette.accent)
+                                    .frame(width: geo.size.width * Swift.min(1, Swift.max(0, nowProgress)))
+                            }
+                        }
+                        .frame(height: 3)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
                 .shadow(color: .black.opacity(isFocused ? 0.5 : 0),
-                        radius: isFocused ? 24 : 0, y: isFocused ? 14 : 0)
+                        radius: isFocused ? 26 : 0, y: isFocused ? 16 : 0)
 
                 Text(name)
                     .font(.dsCardTitle)
                     .foregroundStyle(isFocused ? Palette.textPrimary : Palette.textSecondary)
                     .lineLimit(1)
-                    .padding(.top, 2)
+                    .padding(.top, 4)
 
-                if let nowTitle {
-                    HStack(spacing: 6) {
-                        Circle().fill(Palette.liveDot).frame(width: 8, height: 8)
-                        Text(nowTitle).font(.dsCaption).foregroundStyle(Palette.textSecondary).lineLimit(1)
-                    }
-                    if let nowProgress {
-                        ProgressView(value: Swift.min(1, Swift.max(0, nowProgress)))
-                            .tint(Palette.accent)
-                            .frame(width: Metrics.wideCardWidth)
-                    }
-                } else {
-                    Text("No guide data")
-                        .font(.dsCaption).foregroundStyle(Palette.textTertiary)
-                }
+                metadataLine
+                    .frame(height: 22, alignment: .leading)
             }
             .frame(width: Metrics.wideCardWidth, alignment: .leading)
         }
@@ -82,9 +86,26 @@ public struct ChannelCard: View {
         .accessibilityLabel(Text(nowTitle.map { "\(name), now playing \($0)" } ?? name))
     }
 
-    private var channelInitials: some View {
-        Text(name.split(separator: " ").compactMap(\.first).prefix(3).map(String.init).joined())
-            .font(.system(size: 40, weight: .bold))
-            .foregroundStyle(.white.opacity(0.9))
+    @ViewBuilder
+    private var metadataLine: some View {
+        if let nowTitle {
+            HStack(spacing: 7) {
+                Circle().fill(Palette.liveDot).frame(width: 7, height: 7)
+                Text(nowTitle)
+                    .font(.dsCaption)
+                    .foregroundStyle(Palette.textTertiary)
+                    .lineLimit(1)
+            }
+        } else {
+            Text("Live")
+                .font(.dsCaption)
+                .foregroundStyle(Palette.textTertiary)
+        }
+    }
+
+    private var monogram: some View {
+        Text(name.split(separator: " ").compactMap(\.first).prefix(2).map(String.init).joined().uppercased())
+            .font(.system(size: 26, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.32))
     }
 }

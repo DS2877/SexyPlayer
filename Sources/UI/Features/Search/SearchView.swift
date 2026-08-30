@@ -71,15 +71,26 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: Metrics.space3) {
             Text("Search").font(.dsTitle).accessibilityAddTraits(.isHeader)
 
-            TextField("What do you want to watch?", text: Binding(
-                get: { model.query },
-                set: { model.query = $0 }
-            ))
-            .textFieldStyle(.plain)
-            .font(.dsTitle)
-            .padding(Metrics.space2)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cornerRadius))
-            .onSubmit { Task { await model.search(vocabulary: env.vocabulary) } }
+            HStack(spacing: Metrics.space2) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(Palette.textTertiary)
+                TextField("What do you want to watch?", text: Binding(
+                    get: { model.query },
+                    set: { model.query = $0 }
+                ))
+                .textFieldStyle(.plain)
+                .font(.dsCardTitle)
+                .onSubmit { Task { await model.search(vocabulary: env.vocabulary) } }
+            }
+            .padding(.horizontal, Metrics.space3)
+            .padding(.vertical, Metrics.space2 + 4)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .strokeBorder(.white.opacity(0.06))
+            )
+            .frame(maxWidth: 1100)
 
             if !model.chips.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {

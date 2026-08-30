@@ -9,7 +9,7 @@ struct VODBrowseView: View {
     @State private var path: [AppRoute] = []
 
     private let columns = Array(repeating: GridItem(.fixed(Metrics.posterWidth), spacing: Metrics.cardSpacing),
-                                count: 6)
+                                count: 5)
 
     var body: some View {
         NavigationStack(path: $path) {
