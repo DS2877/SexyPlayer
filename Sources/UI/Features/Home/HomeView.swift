@@ -16,7 +16,7 @@ struct HomeView: View {
                         Task { await environment.bootstrap(forceReload: true) }
                     })
                 case .ready:
-                    if let model {
+                    if let model, !(model.content.rows.isEmpty && !environment.catalogComplete) {
                         readyView(model: model)
                     } else {
                         loadingView
@@ -45,6 +45,9 @@ struct HomeView: View {
             if !refreshing { Task { await model?.rebuild() } }
         }
         .onChange(of: environment.preferences.preferences) { _, _ in
+            Task { await model?.rebuild() }
+        }
+        .onChange(of: environment.catalogRevision) { _, _ in
             Task { await model?.rebuild() }
         }
     }

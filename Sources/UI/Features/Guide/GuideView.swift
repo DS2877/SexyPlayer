@@ -79,6 +79,9 @@ struct GuideView: View {
                 await vm.load()
             }
         }
+        .onChange(of: env.catalogRevision) { _, _ in
+            Task { await model?.load() }
+        }
     }
 
     @ViewBuilder
@@ -86,7 +89,7 @@ struct GuideView: View {
         if model.isLoading {
             ProgressView().controlSize(.large).tint(Palette.accent)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.rows.isEmpty, env.loadState.isImporting {
+        } else if model.rows.isEmpty, env.loadState.isImporting || !env.catalogComplete {
             LibraryLoadingPlaceholder()
         } else if model.rows.isEmpty {
             EmptyStateView(

@@ -28,6 +28,7 @@ public final class AppEnvironment {
     private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
     private var refreshTask: Task<Void, Never>?
+    private var backgroundLoadTask: Task<Void, Never>?
 
     /// How old a cached catalog can be before we silently refresh it on launch.
     private let staleAfter: TimeInterval = 60 * 60 * 6
@@ -43,6 +44,11 @@ public final class AppEnvironment {
     public private(set) var reachedPhases: Set<ImportPhase> = []
     /// True once a catalog has loaded at least once this session.
     public private(set) var hasLoadedOnce = false
+    /// False while the EPG (and, on a cold start, the full VOD set) is still
+    /// loading in the background after the app became interactive.
+    public private(set) var catalogComplete = false
+    /// Bumps every time the background load finishes — views observe it to refresh.
+    public private(set) var catalogRevision = 0
 
     public var activeProvider: ProviderDescriptor? {
         providers.activeConfiguration?.descriptor
@@ -129,16 +135,37 @@ public final class AppEnvironment {
         provider = client
         let providerID = config.id
 
-        // Fast path: a cached catalog.
-        if !forceReload, let entry = await cache.load(providerID: providerID), !entry.catalog.isEmpty {
-            let cached = entry.catalog
-            await repository.load(cached)
+        // Fast path: cached catalog, loaded in phases. Channels first → the app
+        // is interactive in well under a second; movies/series and then the EPG
+        // stream in behind it.
+        if !forceReload, let chans = await cache.loadChannels(providerID: providerID), !chans.channels.isEmpty {
+            catalogComplete = false
+            backgroundLoadTask?.cancel()
+            await repository.loadChannelsOnly(chans.channels)
             await applyPreferences()
-            vocabulary = await Task.detached { SearchVocabulary.from(catalog: cached) }.value
             loadState = .ready
             hasLoadedOnce = true
-            AppLog.app.info("Loaded catalog from cache (\(Int(entry.age))s old) — \(RuntimeStats.catalogSummary(entry.catalog)).")
-            if entry.age > staleAfter {
+            AppLog.app.info("Cache channels loaded (\(Int(chans.age))s old) — \(chans.channels.count) channels.")
+
+            backgroundLoadTask = Task { [weak self] in
+                guard let self else { return }
+                let vod = await self.cache.loadVOD(providerID: providerID)
+                guard !Task.isCancelled else { return }
+                await self.repository.mergeVOD(movies: vod.movies, series: vod.series)
+                self.vocabulary = await Task.detached {
+                    SearchVocabulary.from(catalog: Catalog(movies: vod.movies, series: vod.series))
+                }.value
+                self.catalogRevision += 1
+
+                let events = await self.cache.loadEPG(providerID: providerID)
+                guard !Task.isCancelled else { return }
+                await self.repository.mergeEPG(events)
+                self.catalogComplete = true
+                self.catalogRevision += 1
+                AppLog.app.info("Cache fully loaded — \(vod.movies.count) mv · \(vod.series.count) sr · \(events.count) EPG.")
+            }
+
+            if chans.age > staleAfter {
                 startBackgroundRefresh(client: client, providerID: providerID)
             }
             return
@@ -146,6 +173,7 @@ public final class AppEnvironment {
 
         // Slow path: full import with the progress checklist.
         reachedPhases = []
+        catalogComplete = false
         loadState = .loading
         let reporter = ImportProgressReporter { [weak self] phase in
             Task { @MainActor in self?.markPhase(phase) }
@@ -160,6 +188,8 @@ public final class AppEnvironment {
             vocabulary = await Task.detached { SearchVocabulary.from(catalog: forVocab) }.value
             loadState = .ready                           // app is usable now
             hasLoadedOnce = true
+            catalogComplete = true
+            catalogRevision += 1
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
             AppLog.app.info("Catalog ready in \(elapsed)s — \(RuntimeStats.catalogSummary(catalog)).")
             // The app is already usable; persist so the next launch is instant.
@@ -237,9 +267,12 @@ public final class AppEnvironment {
     public func activate(_ config: ProviderConfiguration) async {
         refreshTask?.cancel()
         refreshTask = nil
+        backgroundLoadTask?.cancel()
+        backgroundLoadTask = nil
         providers.setActive(config.id)
         loadState = .idle
         hasLoadedOnce = false
+        catalogComplete = false
         reachedPhases = []
         await repository.load(Catalog())
         await bootstrap(forceReload: false)

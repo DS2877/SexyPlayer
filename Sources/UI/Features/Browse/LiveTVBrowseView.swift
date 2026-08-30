@@ -111,6 +111,9 @@ struct LiveTVBrowseView: View {
                 await vm.start()
             }
         }
+        .onChange(of: env.catalogRevision) { _, _ in
+            Task { await model?.reload() }
+        }
     }
 
     @ViewBuilder

@@ -35,6 +35,9 @@ struct VODBrowseView: View {
         .onChange(of: path.isEmpty) { _, atRoot in
             if atRoot { Task { await model?.start() } }
         }
+        .onChange(of: env.catalogRevision) { _, _ in
+            Task { await model?.start() }
+        }
     }
 
     @ViewBuilder
@@ -42,7 +45,7 @@ struct VODBrowseView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    if model.cards.isEmpty && !model.isLoading && env.loadState.isImporting {
+                    if model.cards.isEmpty && !model.isLoading && (env.loadState.isImporting || !env.catalogComplete) {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
                     } else if model.cards.isEmpty && !model.isLoading {
                         EmptyStateView(

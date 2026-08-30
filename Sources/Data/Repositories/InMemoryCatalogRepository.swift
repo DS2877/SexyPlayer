@@ -37,6 +37,30 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         rebuildVisible()
     }
 
+    /// Phase 1 of a cached start: channels only → the app is interactive.
+    public func loadChannelsOnly(_ channels: [Channel]) {
+        self.source = Catalog(channels: channels)
+        self.ready = true
+        rebuildVisible()
+    }
+
+    /// Phase 2: movies + series stream in from the cache.
+    public func mergeVOD(movies: [Movie], series: [Series]) {
+        source.movies = movies
+        source.series = series
+        rebuildVisible()
+    }
+
+    /// Phase 3: EPG. Only re-indexes the guide, not the whole catalog.
+    public func mergeEPG(_ events: [EPGEvent]) {
+        source.epg = events
+        catalog.epg = events
+        var index: [String: [EPGEvent]] = [:]
+        for event in events { index[event.channelEPGID, default: []].append(event) }
+        for key in index.keys { index[key]?.sort { $0.start < $1.start } }
+        epgByChannel = index
+    }
+
     public func setHideAdult(_ hide: Bool) {
         guard hide != hideAdult else { return }
         hideAdult = hide
