@@ -115,7 +115,7 @@ public final class AppEnvironment {
             vocabulary = SearchVocabulary.from(catalog: entry.catalog)
             loadState = .ready
             hasLoadedOnce = true
-            AppLog.app.info("Loaded catalog from cache (\(Int(entry.age))s old).")
+            AppLog.app.info("Loaded catalog from cache (\(Int(entry.age))s old) — \(RuntimeStats.catalogSummary(entry.catalog)).")
             if entry.age > staleAfter {
                 startBackgroundRefresh(client: client, providerID: providerID)
             }
@@ -129,6 +129,7 @@ public final class AppEnvironment {
             Task { @MainActor in self?.markPhase(phase) }
         }
         do {
+            let importStart = Date()
             let catalog = try await importCatalog(client: client, reporter: reporter)
             markPhase(.finalizing)                       // normalize done; now indexing
             await repository.load(catalog)
@@ -136,7 +137,8 @@ public final class AppEnvironment {
             vocabulary = SearchVocabulary.from(catalog: catalog)
             loadState = .ready                           // app is usable now
             hasLoadedOnce = true
-            AppLog.app.info("Catalog ready: \(catalog.channels.count) channels, \(catalog.movies.count) movies, \(catalog.series.count) series.")
+            let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
+            AppLog.app.info("Catalog ready in \(elapsed)s — \(RuntimeStats.catalogSummary(catalog)).")
             // Persist in the background — a large catalog can take seconds to encode.
             let toCache = catalog
             Task.detached(priority: .utility) { [cache] in
@@ -156,10 +158,27 @@ public final class AppEnvironment {
         await refreshTask?.value
     }
 
+    /// EPG kept in memory: enough for "now", tonight, and a week-ahead guide.
+    /// A real provider's full XMLTV can be millions of events — never hold it all.
+    private static let epgWindowPast: TimeInterval = 6 * 3600
+    private static let epgWindowFuture: TimeInterval = 14 * 24 * 3600
+
     private func importCatalog(client: any ProviderClient, reporter: ImportProgressReporter) async throws -> Catalog {
         let raw = try await client.fetchRawCatalog(progress: reporter)
         let normalizer = self.normalizer
-        return await Task.detached(priority: .userInitiated) { normalizer.normalize(raw) }.value
+        let (past, future) = (Self.epgWindowPast, Self.epgWindowFuture)
+        return await Task.detached(priority: .userInitiated) {
+            var catalog = normalizer.normalize(raw)
+            let now = Date()
+            let lower = now.addingTimeInterval(-past)
+            let upper = now.addingTimeInterval(future)
+            let before = catalog.epg.count
+            catalog.epg = catalog.epg.filter { $0.stop > lower && $0.start < upper }
+            if before != catalog.epg.count {
+                AppLog.app.info("Trimmed EPG to window: \(catalog.epg.count) of \(before) events kept.")
+            }
+            return catalog
+        }.value
     }
 
     private func startBackgroundRefresh(client: any ProviderClient, providerID: String) {

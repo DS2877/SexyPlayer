@@ -23,11 +23,12 @@ final class GuideViewModel {
         isLoading = true
         defer { isLoading = false }
         let catalog = await repository.snapshot()
+        let epg = await repository.epgIndex()
         let window = DateInterval(start: now.addingTimeInterval(-3600),
                                   end: now.addingTimeInterval(8 * 3600))
         rows = catalog.channels.compactMap { channel -> GuideChannelRow? in
             guard let epgID = channel.epgID else { return nil }
-            let events = catalog.events(forEPGID: epgID, in: window)
+            let events = epg.events(forChannel: epgID, in: window)
             guard !events.isEmpty else { return nil }
             return GuideChannelRow(id: channel.id, name: channel.name,
                                    logoURL: channel.logoURL, events: events)

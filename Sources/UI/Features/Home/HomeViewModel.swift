@@ -26,12 +26,14 @@ public final class HomeViewModel {
 
         let catalog = await repository.snapshot()
         guard !catalog.isEmpty else { content = .empty; return }
+        let epg = await repository.epgIndex()
 
         let prefs = preferences.preferences
         let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
 
-        let tonight = prefs.isRowEnabled(.tonight) ? Self.buildTonight(from: catalog, now: now) : []
+        let tonight = prefs.isRowEnabled(.tonight)
+            ? Self.buildTonight(channels: catalog.channels, epg: epg, now: now) : []
 
         func add(_ kind: HomeRowKind, _ title: String, _ cards: [HomeCard], subtitle: String? = nil) {
             guard enabled.contains(kind) else { return }
@@ -41,7 +43,7 @@ public final class HomeViewModel {
         add(.continueWatching, "Continue Watching", continueWatchingCards(catalog: catalog))
 
         let liveCards = catalog.channels.prefix(16).map { channel -> HomeCard in
-            let currentEvent = catalog.nowPlaying(forEPGID: channel.epgID ?? "", at: now)
+            let currentEvent = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
             return HomeCard(
                 id: channel.id, kind: .channel,
                 title: channel.name,
@@ -121,7 +123,7 @@ public final class HomeViewModel {
 
     // MARK: - Builders
 
-    static func buildTonight(from catalog: Catalog, now: Date) -> [TonightItem] {
+    static func buildTonight(channels: [Channel], epg: EPGIndex, now: Date) -> [TonightItem] {
         let cal = Calendar(identifier: .gregorian)
         let endWindow = cal.date(bySettingHour: 23, minute: 59, second: 0, of: now) ?? now
         let window = DateInterval(start: now, end: max(now, endWindow))
@@ -130,9 +132,9 @@ public final class HomeViewModel {
         formatter.dateFormat = "HH:mm"
 
         var items: [TonightItem] = []
-        for channel in catalog.channels {
+        for channel in channels {
             guard let epgID = channel.epgID else { continue }
-            let events = catalog.events(forEPGID: epgID, in: window).prefix(3)
+            let events = epg.events(forChannel: epgID, in: window).prefix(3)
             for event in events {
                 items.append(TonightItem(
                     id: event.id,

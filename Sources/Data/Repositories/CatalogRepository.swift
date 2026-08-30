@@ -40,6 +40,10 @@ public protocol CatalogRepository: Sendable {
     func epgEvents(forEPGID epgID: String, in window: DateInterval) async -> [EPGEvent]
     func nowPlaying(forEPGID epgID: String, at date: Date) async -> EPGEvent?
 
+    /// The whole EPG grouped by channel (each list sorted by start). Cheap to
+    /// return — callers window it locally instead of scanning the flat array.
+    func epgIndex() async -> [String: [EPGEvent]]
+
     /// Full snapshot — used by the search engine in M0. In M1 the search engine
     /// queries the FTS index instead.
     func snapshot() async -> Catalog

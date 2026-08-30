@@ -13,10 +13,22 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     private var ready: Bool
     private var hideAdult = false
 
+    // Indexes rebuilt whenever `catalog` changes — keep large-library queries
+    // off the O(n) path.
+    private var epgByChannel: [String: [EPGEvent]] = [:]   // each list sorted by start
+    private var movieByID: [CatalogID: Movie] = [:]
+    private var seriesByID: [CatalogID: Series] = [:]
+    private var channelByID: [CatalogID: Channel] = [:]
+    private var facetGenres: [Genre] = []
+    private var facetAudio: [Language] = []
+    private var facetSubtitles: [Language] = []
+    private var facetCategories: [String] = ["All"]
+
     public init(catalog: Catalog = Catalog(), ready: Bool = false) {
         self.source = catalog
         self.catalog = catalog
         self.ready = ready
+        rebuildVisible()
     }
 
     public func load(_ catalog: Catalog) {
@@ -32,13 +44,34 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     }
 
     private func rebuildVisible() {
-        guard hideAdult else { catalog = source; return }
-        catalog = Catalog(
-            channels: source.channels.filter { !$0.isAdult },
-            movies: source.movies.filter { !$0.isAdult },
-            series: source.series.filter { !$0.isAdult },
-            epg: source.epg
-        )
+        if hideAdult {
+            catalog = Catalog(
+                channels: source.channels.filter { !$0.isAdult },
+                movies: source.movies.filter { !$0.isAdult },
+                series: source.series.filter { !$0.isAdult },
+                epg: source.epg
+            )
+        } else {
+            catalog = source
+        }
+        rebuildIndexes()
+    }
+
+    private func rebuildIndexes() {
+        movieByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        seriesByID = Dictionary(catalog.series.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        channelByID = Dictionary(catalog.channels.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+
+        var epg: [String: [EPGEvent]] = [:]
+        for event in catalog.epg { epg[event.channelEPGID, default: []].append(event) }
+        for key in epg.keys { epg[key]?.sort { $0.start < $1.start } }
+        epgByChannel = epg
+
+        let genres = Set(catalog.movies.flatMap(\.genres)) .union(catalog.series.flatMap(\.genres))
+        facetGenres = Genre.allCases.filter(genres.contains)
+        facetAudio = Array(Set(catalog.movies.flatMap(\.audioLanguages)).union(catalog.series.flatMap(\.audioLanguages))).sorted()
+        facetSubtitles = Array(Set(catalog.movies.flatMap(\.subtitleLanguages)).union(catalog.series.flatMap(\.subtitleLanguages))).sorted()
+        facetCategories = ["All"] + Set(catalog.channels.map(\.category)).sorted()
     }
 
     public func isReady() -> Bool { ready }
@@ -57,10 +90,7 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         return list.page(page, size: pageSize)
     }
 
-    public func allChannelCategories() -> [String] {
-        let cats = Set(catalog.channels.map(\.category)).sorted()
-        return ["All"] + cats
-    }
+    public func allChannelCategories() -> [String] { facetCategories }
 
     // MARK: - Movies / Series
 
@@ -89,16 +119,9 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         return catalog.channels.reduce(0) { $1.category == category ? $0 + 1 : $0 }
     }
 
-    public func availableGenres() -> [Genre] {
-        let set = Set(catalog.movies.flatMap(\.genres) + catalog.series.flatMap(\.genres))
-        return Genre.allCases.filter(set.contains)
-    }
-    public func availableAudioLanguages() -> [Language] {
-        Array(Set(catalog.movies.flatMap(\.audioLanguages) + catalog.series.flatMap(\.audioLanguages))).sorted()
-    }
-    public func availableSubtitleLanguages() -> [Language] {
-        Array(Set(catalog.movies.flatMap(\.subtitleLanguages) + catalog.series.flatMap(\.subtitleLanguages))).sorted()
-    }
+    public func availableGenres() -> [Genre] { facetGenres }
+    public func availableAudioLanguages() -> [Language] { facetAudio }
+    public func availableSubtitleLanguages() -> [Language] { facetSubtitles }
 
     private static func order(_ lt: String, _ ly: Int?, _ rt: String, _ ry: Int?, _ sort: BrowseSort) -> Bool {
         switch sort {
@@ -113,13 +136,16 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         }
     }
 
-    public func movie(id: CatalogID) -> Movie? { catalog.movies.first { $0.id == id } }
-    public func series(id: CatalogID) -> Series? { catalog.series.first { $0.id == id } }
-    public func channel(id: CatalogID) -> Channel? { catalog.channels.first { $0.id == id } }
+    public func movie(id: CatalogID) -> Movie? { movieByID[id] }
+    public func series(id: CatalogID) -> Series? { seriesByID[id] }
+    public func channel(id: CatalogID) -> Channel? { channelByID[id] }
 
     public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) {
         if let i = source.series.firstIndex(where: { $0.id == id }) { source.series[i].seasons = seasons }
-        if let j = catalog.series.firstIndex(where: { $0.id == id }) { catalog.series[j].seasons = seasons }
+        if let j = catalog.series.firstIndex(where: { $0.id == id }) {
+            catalog.series[j].seasons = seasons
+            seriesByID[id] = catalog.series[j]
+        }
     }
 
     public func recentlyAdded(limit: Int) -> [SearchResult.Item] {
@@ -128,15 +154,17 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         return Array((movies + series).prefix(limit))
     }
 
-    // MARK: - EPG
+    // MARK: - EPG (indexed — each channel's events are pre-sorted by start)
 
     public func epgEvents(forEPGID epgID: String, in window: DateInterval) -> [EPGEvent] {
-        catalog.events(forEPGID: epgID, in: window)
+        epgByChannel.events(forChannel: epgID, in: window)
     }
 
     public func nowPlaying(forEPGID epgID: String, at date: Date) -> EPGEvent? {
-        catalog.nowPlaying(forEPGID: epgID, at: date)
+        epgByChannel.nowPlaying(forChannel: epgID, at: date)
     }
+
+    public func epgIndex() -> [String: [EPGEvent]] { epgByChannel }
 
     public func snapshot() -> Catalog { catalog }
 }

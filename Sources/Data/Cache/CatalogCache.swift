@@ -44,11 +44,14 @@ public actor CatalogCache {
         let url = fileURL(for: providerID)
         guard let data = try? Data(contentsOf: url) else { return nil }
         do {
+            let start = Date()
             let envelope = try JSONDecoder().decode(Envelope.self, from: data)
             guard envelope.version == Self.currentVersion else {
                 try? FileManager.default.removeItem(at: url)
                 return nil
             }
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            AppLog.app.info("Catalog cache decoded in \(ms) ms (\(data.count / 1024) KB).")
             return Entry(catalog: envelope.catalog, savedAt: envelope.savedAt)
         } catch {
             AppLog.app.notice("Catalog cache unreadable, discarding.")
