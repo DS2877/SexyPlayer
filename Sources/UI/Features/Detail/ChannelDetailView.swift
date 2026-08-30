@@ -62,7 +62,9 @@ struct ChannelDetailView: View {
                 nowText: { channel in
                     guard let epgID = channel.epgID else { return nil }
                     return await env.repository.nowPlaying(forEPGID: epgID, at: .now)?.title
-                }
+                },
+                preferredAudio: env.preferences.preferences.preferredAudioLanguages,
+                preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
             ) { id, kind, position, duration in
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }

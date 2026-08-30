@@ -35,7 +35,11 @@ struct SeriesDetailView: View {
                 ?? series?.seasons.first?.number
         }
         .fullScreenCover(item: $playback) { item in
-            PlayerScreen(item: item) { id, kind, position, duration in
+            PlayerScreen(
+                item: item,
+                preferredAudio: env.preferences.preferences.preferredAudioLanguages,
+                preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
+            ) { id, kind, position, duration in
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }
         }

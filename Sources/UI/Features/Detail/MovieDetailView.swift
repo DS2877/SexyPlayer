@@ -25,7 +25,11 @@ struct MovieDetailView: View {
             notFound = movie == nil
         }
         .fullScreenCover(item: $playback) { item in
-            PlayerScreen(item: item) { id, kind, position, duration in
+            PlayerScreen(
+                item: item,
+                preferredAudio: env.preferences.preferences.preferredAudioLanguages,
+                preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
+            ) { id, kind, position, duration in
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }
         }

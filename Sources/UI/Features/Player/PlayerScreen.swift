@@ -13,6 +13,9 @@ struct PlayerScreen: View {
     var makePlayback: (@MainActor (Channel) async -> PlaybackItem?)? = nil
     /// "Now playing" text for the channel banner, if EPG is available.
     var nowText: (@MainActor (Channel) async -> String?)? = nil
+    /// The viewer's language preferences, applied to the stream's tracks.
+    var preferredAudio: [Language] = []
+    var preferredSubtitle: Language? = nil
     let onProgress: @MainActor (CatalogID, ContentKind, Double, Double) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -85,7 +88,9 @@ struct PlayerScreen: View {
         .onAppear {
             currentLineup = lineup
             if model == nil {
-                let m = PlayerModel(item: item) { played, position, duration in
+                let m = PlayerModel(item: item,
+                                    preferredAudio: preferredAudio,
+                                    preferredSubtitle: preferredSubtitle) { played, position, duration in
                     onProgress(played.id, played.kind, position, duration)
                 }
                 m.onFinished = { dismiss() }

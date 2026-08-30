@@ -40,12 +40,22 @@ public final class PlayerModel {
     /// "up next" take over.
     @ObservationIgnored public var onFinished: (@MainActor () -> Void)?
 
+    /// The user's preferred spoken / subtitle languages, applied once the item
+    /// is ready. Empty / nil means "leave the stream's default".
+    @ObservationIgnored private let preferredAudio: [Language]
+    @ObservationIgnored private let preferredSubtitle: Language?
+    @ObservationIgnored private var hasAppliedLanguages = false
+
     public init(
         item: PlaybackItem,
+        preferredAudio: [Language] = [],
+        preferredSubtitle: Language? = nil,
         onProgress: @escaping @MainActor (PlaybackItem, Double, Double) -> Void
     ) {
         self.item = item
         self.activeItem = item
+        self.preferredAudio = preferredAudio
+        self.preferredSubtitle = preferredSubtitle
         self.onProgress = onProgress
         self.player = AVPlayer(url: item.url)
         self.player.automaticallyWaitsToMinimizeStalling = true
@@ -122,6 +132,7 @@ public final class PlayerModel {
         removeObservers()
         activeItem = newItem
         hasSeekedToResume = false
+        hasAppliedLanguages = false
         state = .loading
         player.replaceCurrentItem(with: AVPlayerItem(url: newItem.url))
 
@@ -160,6 +171,7 @@ public final class PlayerModel {
         case .readyToPlay:
             loadTimeout?.cancel()
             seekToResumeIfNeeded()
+            applyLanguagePreferencesIfNeeded()
             state = .playing
             player.play()
         case .failed:
@@ -168,6 +180,38 @@ public final class PlayerModel {
             break
         @unknown default:
             break
+        }
+    }
+
+    /// Match the user's preferred audio / subtitle language against the stream's
+    /// media selection groups. Best-effort — silently leaves defaults if a
+    /// language isn't offered.
+    private func applyLanguagePreferencesIfNeeded() {
+        guard !hasAppliedLanguages else { return }
+        hasAppliedLanguages = true
+        guard !preferredAudio.isEmpty || preferredSubtitle != nil else { return }
+        guard let asset = player.currentItem?.asset else { return }
+        let wantAudio = preferredAudio.map(\.code)
+        let wantSubtitle = preferredSubtitle?.code
+
+        Task { @MainActor [weak self] in
+            if !wantAudio.isEmpty,
+               let group = try? await asset.loadMediaSelectionGroup(for: .audible),
+               let match = Self.option(in: group, matching: wantAudio) {
+                self?.player.currentItem?.select(match, in: group)
+            }
+            if let wantSubtitle,
+               let group = try? await asset.loadMediaSelectionGroup(for: .legible),
+               let match = Self.option(in: group, matching: [wantSubtitle]) {
+                self?.player.currentItem?.select(match, in: group)
+            }
+        }
+    }
+
+    private static func option(in group: AVMediaSelectionGroup, matching codes: [String]) -> AVMediaSelectionOption? {
+        group.options.first { option in
+            guard let identifier = option.locale?.language.languageCode?.identifier.lowercased() else { return false }
+            return codes.contains(identifier)
         }
     }
 
