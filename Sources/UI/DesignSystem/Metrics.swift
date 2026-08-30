@@ -16,14 +16,14 @@ public enum Metrics {
 
     public static let screenMargin: CGFloat = 90
     /// Vertical gap between Home shelves — deliberately generous, Apple TV+ style.
-    public static let shelfSpacing: CGFloat = 68
-    public static let cardSpacing: CGFloat = 36
+    public static let shelfSpacing: CGFloat = 64
+    public static let cardSpacing: CGFloat = 28
 
     public static let cornerRadius: CGFloat = 14
-    public static let cardCornerRadius: CGFloat = 12
+    public static let cardCornerRadius: CGFloat = 10
 
     // Poster cards (2:3)
-    public static let posterWidth: CGFloat = 240
+    public static let posterWidth: CGFloat = 258
     public static var posterHeight: CGFloat { posterWidth * 3 / 2 }
 
     // Channel / 16:9 cards

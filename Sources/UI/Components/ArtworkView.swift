@@ -51,18 +51,13 @@ public struct ArtworkView: View {
             RadialGradient(colors: [.white.opacity(0.05), .clear], center: .center, startRadius: 0, endRadius: 600)
         case .poster:
             ZStack {
-                LinearGradient(colors: [.white.opacity(0.05), .clear],
+                LinearGradient(colors: [.white.opacity(0.06), .clear],
                                startPoint: .top, endPoint: .center)
-                Text(initials)
-                    .font(.system(size: 40, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.16))
+                Image(systemName: "film")
+                    .font(.system(size: 34, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.12))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private var initials: String {
-        let words = title.split(separator: " ").prefix(2)
-        return words.compactMap { $0.first }.map(String.init).joined().uppercased()
     }
 }

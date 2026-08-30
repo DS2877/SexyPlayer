@@ -27,7 +27,7 @@ public struct HeroBanner: View {
     }
 
     private var hasArtwork: Bool { artworkURL != nil }
-    private var height: CGFloat { hasArtwork ? 620 : 440 }
+    private var height: CGFloat { hasArtwork ? 620 : 396 }
 
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -59,12 +59,9 @@ public struct HeroBanner: View {
 
                 Button(action: primaryAction) {
                     Label(primaryActionTitle, systemImage: "info.circle")
-                        .font(.dsCardTitle)
-                        .padding(.horizontal, Metrics.space3)
-                        .padding(.vertical, Metrics.space1)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, Metrics.space2)
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.top, Metrics.space3)
                 .accessibilityLabel("\(primaryActionTitle), \(title)")
             }
             .padding(.horizontal, Metrics.screenMargin)

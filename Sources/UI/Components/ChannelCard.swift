@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A 16:9 card for a live channel — logo (or a quiet monogram), the channel
-/// name, and the current programme when EPG data is available.
+/// A 16:9 live-channel card with its name + current programme beneath. Only the
+/// artwork is the focusable `.card`; the caption sits outside it.
 public struct ChannelCard: View {
     let name: String
     let logoURL: URL?
@@ -10,8 +10,6 @@ public struct ChannelCard: View {
     let quality: VideoQuality
     let nowProgress: Double?
     let action: () -> Void
-
-    @Environment(\.isFocused) private var isFocused
 
     public init(
         name: String,
@@ -32,8 +30,8 @@ public struct ChannelCard: View {
     }
 
     public var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: Metrics.space1) {
+        VStack(alignment: .leading, spacing: Metrics.space1 + 2) {
+            Button(action: action) {
                 ZStack {
                     Palette.placeholderGradient(for: name)
 
@@ -68,22 +66,22 @@ public struct ChannelCard: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                .shadow(color: .black.opacity(isFocused ? 0.5 : 0),
-                        radius: isFocused ? 26 : 0, y: isFocused ? 16 : 0)
+            }
+            .buttonStyle(.card)
 
+            VStack(alignment: .leading, spacing: 3) {
                 Text(name)
                     .font(.dsCardTitle)
-                    .foregroundStyle(isFocused ? Palette.textPrimary : Palette.textSecondary)
+                    .foregroundStyle(Palette.textPrimary)
                     .lineLimit(1)
-                    .padding(.top, 4)
-
                 metadataLine
-                    .frame(height: 22, alignment: .leading)
             }
-            .frame(width: Metrics.wideCardWidth, alignment: .leading)
+            .padding(.horizontal, 2)
         }
-        .buttonStyle(.card)
+        .frame(width: Metrics.wideCardWidth, alignment: .leading)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(nowTitle.map { "\(name), now playing \($0)" } ?? name))
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
@@ -93,7 +91,7 @@ public struct ChannelCard: View {
                 Circle().fill(Palette.liveDot).frame(width: 7, height: 7)
                 Text(nowTitle)
                     .font(.dsCaption)
-                    .foregroundStyle(Palette.textTertiary)
+                    .foregroundStyle(Palette.textSecondary)
                     .lineLimit(1)
             }
         } else {
@@ -106,6 +104,6 @@ public struct ChannelCard: View {
     private var monogram: some View {
         Text(name.split(separator: " ").compactMap(\.first).prefix(2).map(String.init).joined().uppercased())
             .font(.system(size: 26, weight: .semibold, design: .rounded))
-            .foregroundStyle(.white.opacity(0.32))
+            .foregroundStyle(.white.opacity(0.30))
     }
 }

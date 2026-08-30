@@ -94,11 +94,8 @@ struct SeriesDetailView: View {
                         playback = env.playback(forEpisode: resume, seriesTitle: series.title)
                     } label: {
                         Label("Resume \(resume.code)", systemImage: "play.fill")
-                            .font(.dsCardTitle)
-                            .padding(.horizontal, Metrics.space3)
-                            .padding(.vertical, Metrics.space1)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                 }
 
                 Button {
@@ -106,11 +103,8 @@ struct SeriesDetailView: View {
                 } label: {
                     Label(env.favorites.isFavorite(series.id) ? "In Favorites" : "Add to Favorites",
                           systemImage: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
-                        .font(.dsCaption)
-                        .padding(.horizontal, Metrics.space2)
-                        .padding(.vertical, Metrics.space1)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
             }
 
             LanguageSummary(audio: series.audioLanguages, subtitles: series.subtitleLanguages)

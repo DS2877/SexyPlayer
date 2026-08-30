@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// A 2:3 poster card for movies and series. Uses the tvOS `.card` button style
-/// for the native focus parallax, with our colour + metadata treatment.
+/// A 2:3 poster with its caption beneath. Only the artwork is the focusable
+/// `.card` — the title and metadata sit outside it, the way the Apple TV app
+/// lays out a poster shelf, so nothing gets clipped by the card's corners.
 public struct PosterCard: View {
     let title: String
     let subtitle: String?
@@ -9,8 +10,6 @@ public struct PosterCard: View {
     let badge: String?
     let progress: Double?
     let action: () -> Void
-
-    @Environment(\.isFocused) private var isFocused
 
     public init(
         title: String,
@@ -31,18 +30,18 @@ public struct PosterCard: View {
     private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
 
     public var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: Metrics.space1) {
-                ZStack(alignment: .topLeading) {
+        VStack(alignment: .leading, spacing: Metrics.space1 + 2) {
+            Button(action: action) {
+                ZStack(alignment: .topTrailing) {
                     ArtworkView(url: artworkURL, title: title, aspect: 2.0 / 3.0)
                         .frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
                         .overlay(alignment: .bottom) {
                             if (progress ?? 0) > 0 {
                                 ZStack(alignment: .bottomLeading) {
-                                    LinearGradient(colors: [.clear, .black.opacity(0.55)],
+                                    LinearGradient(colors: [.clear, .black.opacity(0.6)],
                                                    startPoint: .center, endPoint: .bottom)
                                     ZStack(alignment: .leading) {
-                                        Capsule().fill(.white.opacity(0.25))
+                                        Capsule().fill(.white.opacity(0.28))
                                         Capsule().fill(Palette.accent)
                                             .frame(width: Swift.max(4, (Metrics.posterWidth - 24) * clampedProgress))
                                     }
@@ -53,8 +52,6 @@ public struct PosterCard: View {
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                        .shadow(color: .black.opacity(isFocused ? 0.55 : 0),
-                                radius: isFocused ? 28 : 0, y: isFocused ? 16 : 0)
 
                     if let badge {
                         Text(badge)
@@ -64,24 +61,26 @@ public struct PosterCard: View {
                             .padding(Metrics.space1)
                     }
                 }
-                .frame(width: Metrics.posterWidth)
+            }
+            .buttonStyle(.card)
 
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.dsCardTitle)
-                    .foregroundStyle(isFocused ? Palette.textPrimary : Palette.textSecondary)
+                    .foregroundStyle(Palette.textPrimary)
                     .lineLimit(1)
-                    .padding(.top, 2)
-
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.dsCaption)
-                        .foregroundStyle(Palette.textTertiary)
+                        .foregroundStyle(Palette.textSecondary)
                         .lineLimit(1)
                 }
             }
-            .frame(width: Metrics.posterWidth, alignment: .leading)
+            .padding(.horizontal, 2)
         }
-        .buttonStyle(.card)
+        .frame(width: Metrics.posterWidth, alignment: .leading)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(subtitle.map { "\(title), \($0)" } ?? title))
+        .accessibilityAddTraits(.isButton)
     }
 }

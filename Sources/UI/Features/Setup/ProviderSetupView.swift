@@ -124,9 +124,9 @@ struct ProviderSetupView: View {
             LabeledField("Name (optional)", text: $nickname, prompt: "My Provider")
 
             HStack(spacing: Metrics.space2) {
-                Button("Back") { step = .choose }.buttonStyle(.bordered)
+                Button("Back") { step = .choose }.buttonStyle(SecondaryButtonStyle())
                 Button("Connect") { Task { await activate(.xtream) } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(host.isEmpty || username.isEmpty || password.isEmpty)
             }
         }
@@ -142,9 +142,9 @@ struct ProviderSetupView: View {
             LabeledField("Name (optional)", text: $nickname, prompt: "My Playlist")
 
             HStack(spacing: Metrics.space2) {
-                Button("Back") { step = .choose }.buttonStyle(.bordered)
+                Button("Back") { step = .choose }.buttonStyle(SecondaryButtonStyle())
                 Button("Connect") { Task { await activate(.m3u) } }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(playlistURL.isEmpty)
             }
         }
@@ -279,8 +279,7 @@ struct LibraryLoadingView: View {
             if showStartButton, isReady || canEscape {
                 VStack(alignment: .leading, spacing: Metrics.space1) {
                     Button(isReady ? "Start Watching" : "Enter the app", action: onStart)
-                        .buttonStyle(.borderedProminent)
-                        .font(.dsCardTitle)
+                        .buttonStyle(PrimaryButtonStyle())
                         .focused($startFocused)
                     if !isReady {
                         Text("Your library is still loading — it'll keep filling in while you browse.")

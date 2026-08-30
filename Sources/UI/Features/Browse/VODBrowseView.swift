@@ -96,7 +96,7 @@ struct VODBrowseView: View {
                     Label(model.filter.isNarrowed ? "Filters · \(model.filter.activeChips.count)" : "Filters",
                           systemImage: "line.3.horizontal.decrease")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
             }
 
             if !model.availableGenres.isEmpty {

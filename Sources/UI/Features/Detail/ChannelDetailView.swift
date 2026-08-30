@@ -35,11 +35,8 @@ struct ChannelDetailView: View {
                         Task { playback = await env.playback(forChannel: channel.id) }
                     } label: {
                         Label("Watch Live", systemImage: "play.fill")
-                            .font(.dsCardTitle)
-                            .padding(.horizontal, Metrics.space3)
-                            .padding(.vertical, Metrics.space1)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
 
                     LanguageSummary(audio: channel.audioLanguages, subtitles: channel.subtitleLanguages)
                 }

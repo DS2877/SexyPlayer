@@ -29,7 +29,7 @@ public struct EmptyStateView: View {
                 .frame(maxWidth: 720)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .padding(.top, Metrics.space2)
             }
         }

@@ -162,8 +162,7 @@ struct PersonalizeView: View {
         HStack(spacing: Metrics.space2) {
             if mode == .settings {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.bordered)
-                    .font(.dsCardTitle)
+                    .buttonStyle(SecondaryButtonStyle())
             }
             Button {
                 var next = working
@@ -174,13 +173,10 @@ struct PersonalizeView: View {
                 if mode == .settings { dismiss() }
             } label: {
                 Text(mode == .onboarding ? "Finish setup" : "Save changes")
-                    .font(.dsCardTitle)
-                    .padding(.horizontal, Metrics.space4)
-                    .padding(.vertical, Metrics.space1)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
         }
-        .padding(.top, Metrics.space3)
+        .padding(.top, Metrics.space4)
     }
 
     // MARK: - Mutation helpers

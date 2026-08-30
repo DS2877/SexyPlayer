@@ -49,22 +49,16 @@ struct MovieDetailView: View {
                 Button {
                     Task { playback = await env.playback(forMovie: movie.id) }
                 } label: {
-                    Label(progress?.isResumable == true ? "Resume" : "Play",
-                          systemImage: "play.fill")
-                        .font(.dsCardTitle)
-                        .padding(.horizontal, Metrics.space3)
-                        .padding(.vertical, Metrics.space1)
+                    Label(progress?.isResumable == true ? "Resume" : "Play", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
 
                 Button {
                     env.favorites.toggle(id: movie.id, kind: .movie)
                 } label: {
                     Image(systemName: env.favorites.isFavorite(movie.id) ? "heart.fill" : "heart")
-                        .font(.dsCardTitle)
-                        .padding(Metrics.space1)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
                 .accessibilityLabel(env.favorites.isFavorite(movie.id) ? "Remove from Favorites" : "Add to Favorites")
             }
 
