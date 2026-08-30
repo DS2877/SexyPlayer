@@ -5,8 +5,7 @@ import VLCKitSPM
 
 /// Playback via libVLC for the containers `AVPlayer` can't open (MKV, AVI, raw
 /// MPEG-TS, rtmp/rtsp). Mirrors `PlayerModel`'s surface so `PlayerScreen` can
-/// route to either. Deliberately small for v1 — video, play/pause, seek,
-/// resume, progress. Track selection comes in a follow-up.
+/// route to either.
 @MainActor
 @Observable
 public final class VLCPlayerModel {
@@ -18,14 +17,26 @@ public final class VLCPlayerModel {
         case failed(ProviderError)
     }
 
+    public struct Track: Identifiable, Equatable, Sendable {
+        public let id: Int          // VLC's own index; -1 = "Off" for subtitles
+        public let name: String
+    }
+
     public private(set) var state: State = .loading
     public private(set) var position: Double = 0      // seconds
     public private(set) var duration: Double = 0      // seconds, 0 when unknown / live
+    public private(set) var subtitleTracks: [Track] = []
+    public private(set) var audioTracks: [Track] = []
+    public private(set) var currentSubtitleID: Int = -1
+    public private(set) var currentAudioID: Int = 0
 
     @ObservationIgnored public let item: PlaybackItem
     @ObservationIgnored private let player = VLCMediaPlayer()
     @ObservationIgnored private lazy var coordinator = Coordinator(owner: self)
+    @ObservationIgnored private let preferredAudio: [Language]
+    @ObservationIgnored private let preferredSubtitle: Language?
     @ObservationIgnored private var hasSeekedToResume = false
+    @ObservationIgnored private var hasAppliedPreferredTracks = false
     @ObservationIgnored private var started = false
     @ObservationIgnored private var loadTimeout: Task<Void, Never>?
 
@@ -35,9 +46,13 @@ public final class VLCPlayerModel {
 
     public init(
         item: PlaybackItem,
+        preferredAudio: [Language] = [],
+        preferredSubtitle: Language? = nil,
         onProgress: @escaping @MainActor (PlaybackItem, Double, Double) -> Void
     ) {
         self.item = item
+        self.preferredAudio = preferredAudio
+        self.preferredSubtitle = preferredSubtitle
         self.onProgress = onProgress
     }
 
@@ -69,6 +84,49 @@ public final class VLCPlayerModel {
         player.position = Float(min(1, max(0, fraction)))
     }
 
+    // MARK: - Tracks
+
+    public func selectSubtitle(_ id: Int) {
+        player.currentVideoSubTitleIndex = Int32(id)
+        currentSubtitleID = id
+    }
+
+    public func selectAudio(_ id: Int) {
+        player.currentAudioTrackIndex = Int32(id)
+        currentAudioID = id
+    }
+
+    private func refreshTracks() {
+        subtitleTracks = zipTracks(player.videoSubTitlesIndexes, player.videoSubTitlesNames)
+        audioTracks = zipTracks(player.audioTrackIndexes, player.audioTrackNames)
+        currentSubtitleID = Int(player.currentVideoSubTitleIndex)
+        currentAudioID = Int(player.currentAudioTrackIndex)
+    }
+
+    private func zipTracks(_ indexes: [Any]?, _ names: [Any]?) -> [Track] {
+        guard let indexes = indexes as? [NSNumber], let names = names as? [String],
+              indexes.count == names.count else { return [] }
+        return zip(indexes, names).map { Track(id: $0.intValue, name: $1) }
+    }
+
+    private func applyPreferredTracksIfNeeded() {
+        guard !hasAppliedPreferredTracks, !subtitleTracks.isEmpty || !audioTracks.isEmpty else { return }
+        hasAppliedPreferredTracks = true
+
+        if let subtitle = preferredSubtitle, let match = matching(subtitleTracks, subtitle) {
+            selectSubtitle(match.id)
+        }
+        if let audio = preferredAudio.first, let match = matching(audioTracks, audio) {
+            selectAudio(match.id)
+        }
+    }
+
+    private func matching(_ tracks: [Track], _ language: Language) -> Track? {
+        let needle = language.displayName.lowercased()
+        let code = language.code.lowercased()
+        return tracks.first { $0.name.lowercased().contains(needle) || $0.name.lowercased().contains(code) }
+    }
+
     public func teardown() {
         reportProgress()
         loadTimeout?.cancel()
@@ -79,6 +137,7 @@ public final class VLCPlayerModel {
     // MARK: - Delegate callbacks (hopped to MainActor)
 
     fileprivate func stateChanged() {
+        refreshTracks()
         // `isPlaying` is an unambiguous Bool — prefer it over matching the state
         // enum, whose case names shift between VLCKit builds.
         if player.isPlaying {
@@ -101,13 +160,16 @@ public final class VLCPlayerModel {
         position = Double(player.time.intValue) / 1000
         let length = player.media?.length.intValue ?? 0
         if length > 0 { duration = Double(length) / 1000 }
-        // The surest sign playback works: the clock is advancing.
-        if position > 0 { markPlaying() }
+        if position > 0 {
+            markPlaying()                       // clock advancing = definitely playing
+            if position < 6 { refreshTracks() } // tracks appear a beat after play
+        }
         reportProgress()
     }
 
     private func markPlaying() {
         loadTimeout?.cancel()
+        applyPreferredTracksIfNeeded()
         guard state != .playing else { return }
         state = .playing
         seekToResumeIfNeeded()

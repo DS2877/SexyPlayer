@@ -32,7 +32,10 @@ struct PlayerScreen: View {
     var body: some View {
         switch PlaybackEngine.choose(for: item.url) {
         case .vlc:
-            VLCPlayerScreen(item: item, onProgress: onProgress)
+            VLCPlayerScreen(item: item,
+                            preferredAudio: preferredAudio,
+                            preferredSubtitle: preferredSubtitle,
+                            onProgress: onProgress)
         case .system:
             systemBody
         }
