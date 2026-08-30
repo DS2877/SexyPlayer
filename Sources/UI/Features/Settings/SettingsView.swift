@@ -59,6 +59,7 @@ struct SettingsView: View {
         }
         if let s = p.preferredSubtitleLanguage { parts.append("\(s.displayName) subs") }
         if p.hideAdultContent { parts.append("Adult hidden") }
+        if env.parental.isEnabled { parts.append("PIN on") }
         return parts.isEmpty ? "Not set" : parts.joined(separator: " · ")
     }
 

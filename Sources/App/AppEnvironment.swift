@@ -22,6 +22,7 @@ public final class AppEnvironment {
     public let favorites: FavoritesStore
     public let providers: ProviderStore
     public let preferences: PreferencesStore
+    public let parental: ParentalControlsStore
     private let normalizer: Normalizer
     private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
@@ -57,6 +58,7 @@ public final class AppEnvironment {
         self.favorites = FavoritesStore()
         self.providers = ProviderStore()
         self.preferences = PreferencesStore()
+        self.parental = ParentalControlsStore()
         self.normalizer = Normalizer()
     }
 

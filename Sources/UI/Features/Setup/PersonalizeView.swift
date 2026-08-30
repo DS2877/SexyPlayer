@@ -11,6 +11,12 @@ struct PersonalizeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var working = UserPreferences()
+    @State private var padRequest: PadRequest?
+
+    private enum PadRequest: Identifiable {
+        case unlockAdult, createPIN, removePIN
+        var id: String { String(describing: self) }
+    }
 
     private var audioLanguages: [Language] {
         let all = env.vocabulary.audioLanguages + env.vocabulary.subtitleLanguages
@@ -67,7 +73,15 @@ struct PersonalizeView: View {
                             OptionRow(icon: "eye.slash",
                                       title: "Hide adult categories",
                                       note: "Keeps adult-flagged channels and titles out of Home, browsing and search.",
-                                      isOn: working.hideAdultContent) { working.hideAdultContent.toggle() }
+                                      isOn: working.hideAdultContent) { toggleHideAdult() }
+                            OptionRow(icon: "lock.shield",
+                                      title: "Parental PIN",
+                                      note: env.parental.isEnabled
+                                          ? "A 4-digit PIN is required before adult content can be shown."
+                                          : "Set a 4-digit PIN so adult categories can't be switched on without it.",
+                                      isOn: env.parental.isEnabled) {
+                                padRequest = env.parental.isEnabled ? .removePIN : .createPIN
+                            }
                             OptionRow(icon: "play.rectangle.on.rectangle",
                                       title: "Autoplay next episode",
                                       note: "When an episode finishes, the next one starts automatically.",
@@ -99,6 +113,37 @@ struct PersonalizeView: View {
             }
         }
         .onAppear { working = env.preferences.preferences }
+        .fullScreenCover(item: $padRequest) { request in
+            switch request {
+            case .unlockAdult:
+                PINPadView(purpose: .enter, heading: "Show adult content",
+                           verify: { env.parental.verify($0) },
+                           onDone: { _ in working.hideAdultContent = false; padRequest = nil },
+                           onCancel: { padRequest = nil })
+            case .createPIN:
+                PINPadView(purpose: .create, heading: "Create a Parental PIN",
+                           onDone: { pin in env.parental.setPIN(pin); padRequest = nil },
+                           onCancel: { padRequest = nil })
+            case .removePIN:
+                PINPadView(purpose: .enter, heading: "Enter PIN to remove it",
+                           verify: { env.parental.verify($0) },
+                           onDone: { pin in _ = env.parental.disable(currentPIN: pin); padRequest = nil },
+                           onCancel: { padRequest = nil })
+            }
+        }
+    }
+
+    private func toggleHideAdult() {
+        if working.hideAdultContent {
+            // Turning the filter OFF reveals adult content — gated by the PIN.
+            if env.parental.isEnabled {
+                padRequest = .unlockAdult
+            } else {
+                working.hideAdultContent = false
+            }
+        } else {
+            working.hideAdultContent = true   // turning protection back on is always allowed
+        }
     }
 
     // MARK: - Header / footer
