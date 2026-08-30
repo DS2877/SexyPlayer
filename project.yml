@@ -11,11 +11,11 @@ options:
 
 packages:
   # Plays the containers AVPlayer can't: MKV, AVI, raw MPEG-TS, rtmp/rtsp.
-  # If SPM can't resolve this, the module may be published as `MobileVLCKit`
-  # for a given version — adjust `from:` / the import in VLCPlayback.swift.
-  VLCKit:
-    url: https://code.videolan.org/videolan/VLCKit.git
-    from: "3.6.0"
+  # Community SPM wrapper around the stable VLCKit 3.6.0 binary (on tvOS it
+  # re-exports TVVLCKit). VideoLAN's own SPM package only ships 4.0-alpha.
+  VLCKitSPM:
+    url: https://github.com/tylerjonesio/vlckit-spm.git
+    exactVersion: "3.6.0"
 
 settings:
   base:
@@ -37,7 +37,8 @@ targets:
       - path: Sources
       - path: Resources
     dependencies:
-      - package: VLCKit
+      - package: VLCKitSPM
+        product: VLCKitSPM
     info:
       path: Sources/App/Info.plist
       properties:

@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import UIKit
-import VLCKit
+import VLCKitSPM
 
 /// Playback via libVLC for the containers `AVPlayer` can't open (MKV, AVI, raw
 /// MPEG-TS, rtmp/rtsp). Mirrors `PlayerModel`'s surface so `PlayerScreen` can
@@ -86,20 +86,20 @@ public final class VLCPlayerModel {
             seekToResumeIfNeeded()
         case .paused:
             state = .paused
-        case .buffering, .opening, .esAdded:
+        case .buffering, .opening:
             if state != .playing { state = .loading }
         case .error:
             fail(.streamUnavailable)
         case .stopped, .ended:
             handleEnded()
-        @unknown default:
+        default:
             break
         }
     }
 
     fileprivate func timeChanged() {
-        position = Double(player.time.intValue) / 1000
-        let length = player.media?.length.intValue ?? 0
+        position = Double(player.time?.intValue ?? 0) / 1000
+        let length = player.media?.length?.intValue ?? 0
         if length > 0 { duration = Double(length) / 1000 }
         reportProgress()
     }
@@ -118,7 +118,8 @@ public final class VLCPlayerModel {
     private func seekToResumeIfNeeded() {
         guard !hasSeekedToResume, !item.isLive, let resumeAt = item.resumeAt, resumeAt > 1 else { return }
         hasSeekedToResume = true
-        player.time = VLCTime(int: Int32(resumeAt * 1000))
+        // `time` is read-only on VLCMediaPlayer; jump relative from the start.
+        player.jumpForward(Int32(resumeAt))
     }
 
     private func reportProgress() {
@@ -142,11 +143,12 @@ public final class VLCPlayerModel {
         weak var owner: VLCPlayerModel?
         init(owner: VLCPlayerModel) { self.owner = owner }
 
-        func mediaPlayerStateChanged(_ aNotification: Notification) {
-            MainActor.assumeIsolated { owner?.stateChanged() }
+        // VLCKit's delegate thread isn't contractually main — always hop.
+        func mediaPlayerStateChanged(_ aNotification: Notification!) {
+            Task { @MainActor [weak owner] in owner?.stateChanged() }
         }
-        func mediaPlayerTimeChanged(_ aNotification: Notification) {
-            MainActor.assumeIsolated { owner?.timeChanged() }
+        func mediaPlayerTimeChanged(_ aNotification: Notification!) {
+            Task { @MainActor [weak owner] in owner?.timeChanged() }
         }
     }
 }
