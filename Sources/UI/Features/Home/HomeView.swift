@@ -72,7 +72,7 @@ struct HomeView: View {
             )
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
+                VStack(alignment: .leading, spacing: 0) {
                     if let hero = model.content.hero {
                         HeroBanner(
                             title: hero.title,
@@ -82,15 +82,18 @@ struct HomeView: View {
                             primaryActionTitle: "More Info",
                             primaryAction: { navigate(hero) }
                         )
+                        .padding(.bottom, Metrics.space5)
                     }
 
-                    if !model.content.tonight.isEmpty {
-                        TonightRail(items: model.content.tonight)
-                    }
+                    LazyVStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
+                        if !model.content.tonight.isEmpty {
+                            TonightRail(items: model.content.tonight)
+                        }
 
-                    ForEach(model.content.rows) { row in
-                        Shelf(title: row.title, subtitle: row.subtitle, items: row.cards) { card in
-                            cardView(card)
+                        ForEach(model.content.rows) { row in
+                            Shelf(title: row.title, subtitle: row.subtitle, items: row.cards) { card in
+                                cardView(card)
+                            }
                         }
                     }
                 }

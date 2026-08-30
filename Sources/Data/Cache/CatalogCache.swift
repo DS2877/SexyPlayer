@@ -19,7 +19,9 @@ public actor CatalogCache {
         let catalog: Catalog
     }
 
-    private static let currentVersion = 1
+    /// Bump whenever normalization or the model shape changes, so stale caches
+    /// are discarded and the catalog is re-imported once.
+    private static let currentVersion = 2
     private let directory: URL
 
     public init() {

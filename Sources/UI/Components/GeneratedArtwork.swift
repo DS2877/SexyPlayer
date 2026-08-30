@@ -57,17 +57,17 @@ struct GeneratedArtwork: View {
         }
         // One warmer accent cell, roughly complementary, keeps posters distinct.
         let accentHue = wrap(baseHue + 0.42 + (r() - 0.5) * 0.1)
-        let s = 0.20 + r() * 0.08
+        let s = 0.24 + r() * 0.10
         return [
-            c(hueShift: -0.02, sat: s, bri: 0.105),
-            c(hueShift:  0.03, sat: s + 0.05, bri: 0.135),
-            c(hueShift: -0.03, sat: s, bri: 0.10),
-            c(hueShift:  0.04, sat: s + 0.03, bri: 0.125),
-            Color(hue: accentHue, saturation: s + 0.07, brightness: 0.155),
-            c(hueShift: -0.04, sat: s, bri: 0.115),
-            c(hueShift: -0.02, sat: s - 0.03, bri: 0.095),
-            c(hueShift:  0.02, sat: s + 0.02, bri: 0.12),
-            c(hueShift:  0.05, sat: s, bri: 0.105),
+            c(hueShift: -0.02, sat: s, bri: 0.115),
+            c(hueShift:  0.03, sat: s + 0.06, bri: 0.15),
+            c(hueShift: -0.03, sat: s, bri: 0.105),
+            c(hueShift:  0.04, sat: s + 0.04, bri: 0.14),
+            Color(hue: accentHue, saturation: s + 0.10, brightness: 0.175),
+            c(hueShift: -0.04, sat: s, bri: 0.125),
+            c(hueShift: -0.02, sat: s - 0.03, bri: 0.10),
+            c(hueShift:  0.02, sat: s + 0.03, bri: 0.13),
+            c(hueShift:  0.05, sat: s, bri: 0.115),
         ]
     }
 }

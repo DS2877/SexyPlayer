@@ -204,9 +204,18 @@ public struct Normalizer: Sendable {
         // episode title behind.
         let cleaned = TitleNormalizer.episodeRawName(raw)
         let markerPattern = CompiledPattern(#"^.*?(?:s\d{1,2}[\s\-_.]*e\d{1,4}|\d{1,2}x\d{1,4}|season[\s\-_.]*\d{1,2}[\s\-_.]*episode[\s\-_.]*\d{1,4})[\s\-_.:]*"#)
-        let remainder = markerPattern.removingMatches(in: cleaned).collapsingWhitespace()
-        return remainder.isEmpty ? "Episode \(episode)" : remainder
+        var remainder = markerPattern.removingMatches(in: cleaned).collapsingWhitespace()
+        remainder = Self.trailingTagJunk.removingMatches(in: remainder).collapsingWhitespace()
+        // Leftover language / quality codes ("SWE", "EN", "MULTI") aren't titles.
+        let looksLikeCode = remainder.count <= 5
+            && remainder == remainder.uppercased()
+            && remainder.allSatisfy { $0.isLetter }
+        return (remainder.isEmpty || looksLikeCode) ? "Episode \(episode)" : remainder
     }
+
+    private static let trailingTagJunk = CompiledPattern(
+        #"[\s\-–—]*\b(?:swe|sve|eng|en|se|sv|nor|dan|fin|ger|multi|multisub|dual|sub|subs|swesub|engsub|vo|vf|vostfr|1080p?|720p?|2160p?|hd|fhd|uhd|4k|web[\s\-]?dl|bluray)\b[\s\-–—]*$"#
+    )
 
     // MARK: - EPG
 

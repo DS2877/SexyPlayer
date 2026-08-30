@@ -113,12 +113,13 @@ public struct HeroBanner: View {
             .frame(maxWidth: 980, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Metrics.screenMargin)
-            .frame(height: 360, alignment: .center)
+            .padding(.top, Metrics.space4)
+            .padding(.bottom, Metrics.space3)
             .frame(maxWidth: .infinity)
             .background(
                 RadialGradient(
                     colors: [Palette.accent.opacity(0.07), .clear],
-                    center: UnitPoint(x: 0.2, y: 0.55), startRadius: 0, endRadius: 720
+                    center: UnitPoint(x: 0.2, y: 0.5), startRadius: 0, endRadius: 700
                 )
             )
     }
