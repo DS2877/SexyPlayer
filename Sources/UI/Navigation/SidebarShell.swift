@@ -128,32 +128,32 @@ private struct SidebarButtonStyle: ButtonStyle {
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration, isSelected: isSelected)
+        SidebarButtonBody(configuration: configuration, isSelected: isSelected)
+    }
+}
+
+private struct SidebarButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let isSelected: Bool
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        configuration.label
+            .padding(.horizontal, Metrics.space2)
+            .padding(.vertical, Metrics.space1 + 4)
+            .foregroundStyle(isSelected || isFocused ? Palette.textPrimary : Palette.textSecondary)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
+            )
+            .padding(.horizontal, Metrics.space2)
+            .scaleEffect(isFocused ? 1.03 : 1)
+            .animation(Metrics.focusAnimation, value: isFocused)
     }
 
-    private struct Body: View {
-        let configuration: SidebarButtonStyle.Configuration
-        let isSelected: Bool
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            configuration.label
-                .padding(.horizontal, Metrics.space2)
-                .padding(.vertical, Metrics.space1 + 4)
-                .foregroundStyle(isSelected || isFocused ? Palette.textPrimary : Palette.textSecondary)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
-                )
-                .padding(.horizontal, Metrics.space2)
-                .scaleEffect(isFocused ? 1.03 : 1)
-                .animation(Metrics.focusAnimation, value: isFocused)
-        }
-
-        private var fill: Color {
-            if isFocused { return Palette.accent.opacity(0.9) }
-            if isSelected { return Palette.accentSoft }
-            return .clear
-        }
+    private var fill: Color {
+        if isFocused { return Palette.accent.opacity(0.9) }
+        if isSelected { return Palette.accentSoft }
+        return .clear
     }
 }
 
