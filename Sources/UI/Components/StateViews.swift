@@ -114,6 +114,34 @@ public struct SkeletonBox: View {
     }
 }
 
+/// Placeholder channel-strip list shown while the TV Guide loads — mirrors the
+/// Guide's own row layout (label + a strip of programme cells) rather than the
+/// poster grid.
+public struct SkeletonGuide: View {
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: Metrics.space3) {
+            ForEach(0..<6, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 6) {
+                    SkeletonBox(cornerRadius: 6)
+                        .frame(width: 180, height: 20)
+                        .padding(.horizontal, Metrics.screenMargin)
+                    HStack(spacing: Metrics.space1) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            SkeletonBox().frame(width: 248, height: 118)
+                        }
+                    }
+                    .padding(.horizontal, Metrics.screenMargin)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.top, Metrics.space5)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Placeholder poster rail shown while a catalog loads.
 public struct SkeletonShelf: View {
     let cardWidth: CGFloat

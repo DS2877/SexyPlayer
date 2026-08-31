@@ -87,10 +87,9 @@ struct GuideView: View {
     @ViewBuilder
     private func content(_ model: GuideViewModel) -> some View {
         if model.isLoading {
-            ProgressView().controlSize(.large).tint(Palette.accent)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonGuide()
         } else if model.rows.isEmpty, env.loadState.isImporting || !env.catalogComplete {
-            LibraryLoadingPlaceholder()
+            SkeletonGuide()
         } else if model.rows.isEmpty {
             EmptyStateView(
                 icon: "rectangle.grid.1x2",
