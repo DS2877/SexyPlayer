@@ -81,12 +81,18 @@ user-supplied streams are uncontrolled — that's fine and correct.
 
 ## App Privacy ("Data Not Collected")
 
-Select **Data Not Collected**. Verify before submitting:
-- No analytics SDK, no ad SDK, no third-party SDKs (only GRDB is planned, and it's
-  a local database). ✅
-- Credentials: Keychain only, never transmitted except to the provider. ✅
-- If AI-assisted search ships enabled by default at some point, revisit this — but
-  it's off by default and sends no personal data.
+Select **Data Not Collected**. Verify against the built binary before submitting:
+- One SPM dependency: **VLCKitSPM** (bundled media decoder, no network, no
+  telemetry). No analytics SDK, no ad SDK, no crash reporter. ✅
+- Credentials (Xtream user/pass, M3U URL, optional TMDB/Claude keys): **Keychain
+  only**, never transmitted except to their own service. ✅
+- TMDB enrichment (on by default): each request sends only a **title + year**. No
+  user identifier, no provider details, no watch history. Uses the app's bundled
+  read token or the user's own key.
+- AI-assisted search: **off by default**; when on, sends only the query string +
+  the library's genre/language vocabulary. Requires the user's own Claude key.
+- Catalog cache + preferences + watch progress: local files / `UserDefaults` /
+  Keychain on the device only. No iCloud, no server.
 
 ## Export compliance
 
@@ -104,15 +110,23 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 
 > This app is an IPTV **player only**. It does not provide, sell, host, bundle, or
 > recommend any channels, streams, or media. The user connects an IPTV service
-> they already subscribe to (Xtream Codes or an M3U URL).
+> they already subscribe to (Xtream Codes or an M3U playlist URL). It is
+> conceptually the same category as a web browser or a media player: the software
+> is neutral; the content is entirely user-supplied.
 >
 > **To review without credentials:** on the first screen choose **"Try the demo"**.
-> This loads a built-in sample library (public-domain test streams from Apple and
-> Mux) so you can exercise every screen — Home, browsing, filters, the guide,
-> search, detail pages, and playback — end to end.
+> This loads a built-in sample library backed by public-domain test streams (Apple
+> and Mux) so you can exercise every screen — Home, Movies/Series browsing and
+> filters, Live TV, the guide, natural-language search, detail pages with cast and
+> "More Like This", Watch History, Favorites, Settings — and play content end to end.
 >
-> No account is required or offered. No data is collected. All settings and the
-> library cache are stored locally on the device.
+> No account is required or offered. No data is collected or transmitted to us (we
+> operate no servers). All settings and the library cache are stored locally on the
+> device; credentials are in the keychain and are only ever sent to the user's own
+> provider.
+>
+> Optional artwork enrichment queries The Movie Database with only a title and year.
+> Optional AI-assisted search is off by default and requires the user's own API key.
 
 ## Screenshots
 
