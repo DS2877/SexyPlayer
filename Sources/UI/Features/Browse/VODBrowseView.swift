@@ -53,6 +53,7 @@ struct VODBrowseView: View {
         ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
+                Color.clear.frame(height: 1).id("vod-top")
                 Section {
                     if model.cards.isEmpty && !model.isLoading && (env.loadState.isImporting || !env.catalogComplete) {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
@@ -90,7 +91,14 @@ struct VODBrowseView: View {
             }
         }
         .scrollClipDisabled()
-        .onChange(of: model.filter) { _, _ in
+        .onChange(of: model.filter) { old, new in
+            // A narrowing change (genre / language / year) resets the list —
+            // snap to the top. A pure sort change keeps position.
+            if old.isNarrowed != new.isNarrowed || old.genres != new.genres
+                || old.audioLanguages != new.audioLanguages
+                || old.subtitleLanguages != new.subtitleLanguages {
+                withAnimation { proxy.scrollTo("vod-top", anchor: .top) }
+            }
             model.scheduleReload()
         }
         }

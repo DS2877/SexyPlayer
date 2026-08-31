@@ -137,6 +137,7 @@ struct LiveTVBrowseView: View {
         ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
+                Color.clear.frame(height: 1).id("live-top")
                 Section {
                     if model.rows.isEmpty && !model.isLoading && env.loadState.isImporting {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
@@ -168,9 +169,11 @@ struct LiveTVBrowseView: View {
         }
         .scrollClipDisabled()
         .onChange(of: model.selectedCategory) { _, _ in
+            withAnimation { proxy.scrollTo("live-top", anchor: .top) }
             Task { await model.reload() }
         }
         .onChange(of: model.sort) { _, _ in
+            withAnimation { proxy.scrollTo("live-top", anchor: .top) }
             Task { await model.reload() }
         }
         }

@@ -198,10 +198,10 @@ struct SeriesDetailView: View {
             Button {
                 env.favorites.toggle(id: series.id, kind: .series)
             } label: {
-                Label(env.favorites.isFavorite(series.id) ? "In Favorites" : "Add to Favorites",
-                      systemImage: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
+                Image(systemName: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
             }
             .buttonStyle(SecondaryButtonStyle())
+            .accessibilityLabel(env.favorites.isFavorite(series.id) ? "Remove from Favorites" : "Add to Favorites")
         }
     }
 
