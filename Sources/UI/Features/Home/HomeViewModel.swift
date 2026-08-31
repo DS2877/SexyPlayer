@@ -174,20 +174,29 @@ public final class HomeViewModel {
             rows.insert(contentsOf: genreRows, at: anchor)
         }
 
-        // Featured heroes — highest TMDB rating first, then newest. The banner
-        // resolves the real backdrop + synopsis from TMDB itself.
-        let heroes: [HomeCard] = Array(moviesByRecency.prefix(150))
+        // Featured heroes — highest TMDB rating first, then newest, drawn from
+        // both movies and series. The banner resolves the real backdrop +
+        // synopsis from TMDB itself.
+        let heroPool: [(card: HomeCard, score: Double, added: Date)] =
+            moviesByRecency.prefix(120).map { m in
+                (HomeCard(id: m.id, kind: .movie, title: m.title, subtitle: m.synopsis,
+                          artworkURL: m.backdropURL ?? m.posterURL, year: m.year,
+                          eyebrow: metadataSubtitle(for: m)),
+                 ratings[m.id.rawValue] ?? 0, m.addedAt ?? .distantPast)
+            }
+            + seriesByRecency.prefix(40).map { s in
+                (HomeCard(id: s.id, kind: .series, title: s.title, subtitle: s.synopsis,
+                          artworkURL: s.backdropURL ?? s.posterURL, year: s.year,
+                          eyebrow: heroEyebrow(for: s)),
+                 ratings[s.id.rawValue] ?? 0, s.addedAt ?? .distantPast)
+            }
+        let heroes: [HomeCard] = heroPool
             .sorted { lhs, rhs in
-                let l = ratings[lhs.id.rawValue] ?? 0, r = ratings[rhs.id.rawValue] ?? 0
-                if l != r { return l > r }
-                return (lhs.addedAt ?? .distantPast) > (rhs.addedAt ?? .distantPast)
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.added > rhs.added
             }
             .prefix(5)
-            .map { movie in
-                HomeCard(id: movie.id, kind: .movie, title: movie.title, subtitle: movie.synopsis,
-                         artworkURL: movie.backdropURL ?? movie.posterURL,
-                         year: movie.year, eyebrow: metadataSubtitle(for: movie))
-            }
+            .map(\.card)
 
         let tonight = prefs.isRowEnabled(.tonight)
             ? buildTonight(channels: catalog.channels, epg: epg, now: now) : []
@@ -277,6 +286,15 @@ public final class HomeViewModel {
             let o = overlap(s.genres); if o > 0 { scored.append((card(for: s), o)) }
         }
         return scored.sorted { $0.score > $1.score }.prefix(limit).map(\.card)
+    }
+
+    nonisolated static func heroEyebrow(for series: Series) -> String {
+        var parts: [String] = []
+        if let year = series.year { parts.append(String(year)) }
+        if let genre = series.genres.first { parts.append(genre.displayName) }
+        parts.append("\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")")
+        if series.quality > .unknown { parts.append(series.quality.shortLabel) }
+        return parts.joined(separator: " · ")
     }
 
     nonisolated static func metadataSubtitle(for movie: Movie) -> String {

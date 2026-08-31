@@ -36,8 +36,8 @@ public struct ChannelCard: View {
                     GeneratedArtwork(seed: name)
 
                     if let logoURL {
-                        AsyncImage(url: logoURL) { $0.resizable().scaledToFit().padding(Metrics.space3) }
-                            placeholder: { monogram }
+                        CachedImage(url: logoURL, contentMode: .fit) { monogram }
+                            .padding(Metrics.space3)
                     } else {
                         monogram
                     }

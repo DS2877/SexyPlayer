@@ -141,20 +141,22 @@ private extension FileManager {
 /// while loading and if the load fails.
 struct CachedImage<Fallback: View>: View {
     private let url: URL?
+    private let contentMode: ContentMode
     private let fallback: () -> Fallback
 
     @State private var image: UIImage?
     @State private var didFail = false
 
-    init(url: URL?, @ViewBuilder fallback: @escaping () -> Fallback) {
+    init(url: URL?, contentMode: ContentMode = .fill, @ViewBuilder fallback: @escaping () -> Fallback) {
         self.url = url
+        self.contentMode = contentMode
         self.fallback = fallback
     }
 
     var body: some View {
         ZStack {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
             } else if didFail {
                 fallback()
             }
@@ -178,7 +180,7 @@ struct CachedImage<Fallback: View>: View {
 }
 
 extension CachedImage where Fallback == Color {
-    init(url: URL?) {
-        self.init(url: url, fallback: { Color.clear })
+    init(url: URL?, contentMode: ContentMode = .fill) {
+        self.init(url: url, contentMode: contentMode, fallback: { Color.clear })
     }
 }

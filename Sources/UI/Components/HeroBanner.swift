@@ -22,6 +22,10 @@ struct HeroBanner: View {
         return heroes[min(index, heroes.count - 1)]
     }
 
+    /// Restart the rotation whenever the set *or its lead item* changes, not just
+    /// its length.
+    private var heroKey: String { "\(heroes.count)-\(heroes.first?.id.rawValue ?? "")" }
+
     var body: some View {
         if let hero = current {
             ZStack(alignment: .bottomLeading) {
@@ -32,7 +36,10 @@ struct HeroBanner: View {
             .frame(maxWidth: .infinity)
             .clipped()
             .task(id: hero.id) { await resolveOverview(for: hero) }
-            .task(id: heroes.count) { await rotate() }
+            .task(id: heroKey) {
+                if index >= heroes.count { index = 0 }
+                await rotate()
+            }
         }
     }
 
