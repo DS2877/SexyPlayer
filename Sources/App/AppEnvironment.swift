@@ -523,9 +523,11 @@ public final class AppEnvironment {
         let resume = UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12)
         var continueItems: [TopShelfPayload.Item] = []
         for point in resume {
-            let image = point.artworkURL
-                ?? (await metadata.metadata(for: point.containerID, title: point.primaryTitle,
-                                            year: nil, isSeries: point.isSeries)?.posterURL)
+            var image = point.artworkURL
+            if image == nil {
+                image = await metadata.metadata(for: point.containerID, title: point.primaryTitle,
+                                                year: nil, isSeries: point.isSeries)?.posterURL
+            }
             continueItems.append(.init(
                 title: point.primaryTitle, subtitle: point.secondaryText, imageURL: image,
                 routeKind: point.isSeries ? "series" : "movie", id: point.containerID.rawValue
@@ -540,16 +542,20 @@ public final class AppEnvironment {
             .prefix(4)
         var recentItems: [TopShelfPayload.Item] = []
         for movie in recentMovies {
-            let image = movie.posterURL
-                ?? (await metadata.metadata(for: movie.id, title: movie.title,
-                                            year: movie.year, isSeries: false)?.posterURL)
+            var image = movie.posterURL
+            if image == nil {
+                image = await metadata.metadata(for: movie.id, title: movie.title,
+                                                year: movie.year, isSeries: false)?.posterURL
+            }
             recentItems.append(.init(title: movie.title, subtitle: movie.year.map(String.init),
                                      imageURL: image, routeKind: "movie", id: movie.id.rawValue))
         }
         for series in recentSeries {
-            let image = series.posterURL
-                ?? (await metadata.metadata(for: series.id, title: series.title,
-                                            year: series.year, isSeries: true)?.posterURL)
+            var image = series.posterURL
+            if image == nil {
+                image = await metadata.metadata(for: series.id, title: series.title,
+                                                year: series.year, isSeries: true)?.posterURL
+            }
             recentItems.append(.init(title: series.title, subtitle: series.year.map(String.init),
                                      imageURL: image, routeKind: "series", id: series.id.rawValue))
         }
