@@ -15,11 +15,11 @@ public enum Palette {
     public static let textSecondary = Color(red: 0.596, green: 0.596, blue: 0.624)   // #98989F
     public static let textTertiary = Color(red: 0.388, green: 0.388, blue: 0.400)    // #636366
 
-    /// Single accent — warm gold, tied to the beige/charcoal brand mark. Used
-    /// sparingly: progress, the live dot, small selected-state marks.
-    /// Also mirrored in Assets/AccentColor.
-    public static let accent = Color(red: 0.859, green: 0.671, blue: 0.325)           // #DBAB53
-    public static let accentSoft = accent.opacity(0.14)
+    /// Single accent — a bright premium blue, tied to the Aeria+ mark. Used
+    /// sparingly: progress fills, ratings, small selected-state marks, the app
+    /// `.tint`. Also mirrored in Assets/AccentColor.
+    public static let accent = Color(red: 0.231, green: 0.620, blue: 1.0)             // #3B9EFF
+    public static let accentSoft = accent.opacity(0.16)
 
     /// Bright fill for a focused control — dark label rides on top (Apple TV app).
     public static let focusFill = Color(red: 0.96, green: 0.96, blue: 0.965)

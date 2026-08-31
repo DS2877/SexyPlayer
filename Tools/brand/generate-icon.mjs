@@ -17,7 +17,7 @@ const PREVIEW = join(REPO, "docs/brand");
 // ---- palette --------------------------------------------------------------
 const TILE_TOP = "#15161A";   // top of the tile
 const TILE_BOT = "#08080A";   // bottom of the tile
-const BLUE     = "#3C9DFF";   // the plus + the aura
+const BLUE     = "#3B9EFF";   // the plus + the aura (matches Palette.accent)
 const BLUE_DEEP = "#1E63E6";
 
 // ---- geometry helpers ---------------------------------------------------------

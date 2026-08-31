@@ -236,7 +236,7 @@ private struct LibraryStatusPill: View {
 /// The Aeria+ mark — a chrome "A" with a blue "+" on a dark tile. Matches the
 /// app icon; used in the sidebar header.
 struct BrandMark: View {
-    static let blue = Color(red: 0.24, green: 0.62, blue: 1.0)
+    static let blue = Palette.accent
 
     var body: some View {
         GeometryReader { geo in
