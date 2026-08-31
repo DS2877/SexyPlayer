@@ -93,13 +93,18 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 
 ## Required URLs
 
-Contact email is set to `philipklingstedt@gmail.com` in both pages.
+Contact email is set to `info@aeriaplus.se` in both pages.
 
-- **Privacy Policy URL:** host `docs/privacy-policy.html`. Repo Settings → Pages →
-  Source: `main` / `/docs`. URL: `https://<github-user>.github.io/<repo>/privacy-policy.html`
-  (rename the repo to `aeria` for a cleaner path, or leave it — Apple doesn't check).
-- **Support URL:** `docs/support.html` the same way.
-- After enabling Pages, open both URLs in a browser and confirm they render.
+You own **aeriaplus.se** — host the two pages there for a professional URL:
+- **Privacy Policy URL:** `https://aeriaplus.se/privacy` (or `/privacy-policy.html`)
+- **Support URL:** `https://aeriaplus.se/support`
+
+The files to publish are `docs/privacy-policy.html` and `docs/support.html`
+(plus `docs/index.html` as the landing page at `https://aeriaplus.se`). Any static
+host works — a `docs/` folder on GitHub Pages with a CNAME to `aeriaplus.se`, Netlify,
+Cloudflare Pages, or plain web hosting.
+
+After publishing, open both URLs in a browser and confirm they render.
 
 ## App Review notes (paste into the review notes field)
 
