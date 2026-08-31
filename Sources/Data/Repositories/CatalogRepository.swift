@@ -19,6 +19,10 @@ public protocol CatalogRepository: Sendable {
     func movies(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Movie]
     func series(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Series]
 
+    /// First-letter jump targets for the A–Z browse index (title-sorted list).
+    func movieTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
+    func seriesTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
+
     func moviesCount(filter: CatalogFilter) async -> Int
     func seriesCount(filter: CatalogFilter) async -> Int
     func channelsCount(in category: String?) async -> Int
