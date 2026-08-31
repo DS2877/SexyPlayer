@@ -1,4 +1,4 @@
-# SexyPlayer
+# Aeria+
 
 A premium IPTV **client** for Apple TV (tvOS). It turns a user's own IPTV
 subscription into an experience that feels like a modern streaming service.
@@ -22,7 +22,7 @@ Day to day:
 ```bash
 git pull
 xcodegen generate        # after any pull that adds/removes files
-open SexyPlayer.xcodeproj
+open Aeria.xcodeproj
 ```
 
 If the build system gets into a bad state (`invalid reuse after initialization
@@ -91,7 +91,7 @@ Sources/
     Components/     PosterCard, ChannelCard, Shelf, FilterSheet, state views…
     Navigation/     SidebarShell, AppRoute
     Features/       Home, Browse, Guide, Search, Favorites, Detail, Player, Setup, Settings
-Tests/SexyPlayerTests/   parsing, normalization, search, cache, preferences, compatibility
+Tests/AeriaTests/   parsing, normalization, search, cache, preferences, compatibility
 Tools/brand/             icon generator
 docs/                    privacy policy, support, store listing (host via GitHub Pages)
 ```

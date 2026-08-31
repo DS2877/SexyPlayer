@@ -102,7 +102,7 @@ Inside the `SexyPlayer` folder:
 
 ```bash
 xcodegen generate
-open SexyPlayer.xcodeproj
+open Aeria.xcodeproj
 ```
 
 Xcode opens.

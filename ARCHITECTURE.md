@@ -153,7 +153,7 @@ content — so it cannot hallucinate a title.
 ## Module map
 
 ```
-App/       SexyPlayerApp (@main) · AppEnvironment (DI) · RootView (tab navigation)
+App/       AeriaApp (@main) · AppEnvironment (DI) · RootView (tab navigation)
 Core/      AppLogger · small pure utilities
 Domain/    Models/ · Providers/ (ProviderClient, RawCatalog, ProviderError) · Search/ (contracts)
 Data/      Normalization/ · Mock/ · Repositories/
@@ -164,7 +164,7 @@ UI/
                   SectionHeader · SkeletonView · EmptyStateView · ErrorStateView
   Features/       Home/ (HomeView, HomeViewModel) · … (added per milestone)
 Tests/
-  SexyPlayerTests/  normalization · parsing · search-intent · search-engine
+  AeriaTests/  normalization · parsing · search-intent · search-engine
 ```
 
 ---

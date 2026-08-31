@@ -1,4 +1,4 @@
-# Install SexyPlayer on your Apple TV
+# Install Aeria+ on your Apple TV
 
 You have a paid Apple Developer account, so you have two good options:
 
@@ -32,10 +32,10 @@ want to stop being tethered to the Mac.
 
 4. Regenerate and open:
    ```bash
-   cd ~/Developer/SexyPlayer && git pull && xcodegen generate && open SexyPlayer.xcodeproj
+   cd ~/Developer/SexyPlayer && git pull && xcodegen generate && open Aeria.xcodeproj
    ```
 
-5. In Xcode: select the **SexyPlayer** target → **Signing & Capabilities**.
+5. In Xcode: select the **Aeria** target → **Signing & Capabilities**.
    It should show your team and **no errors**. If it complains, click
    *"Try Again"* / *"Register Device"* — with a paid account Xcode handles the
    provisioning profile automatically.
@@ -59,7 +59,7 @@ want to stop being tethered to the Mac.
 3. Press **▶ Run**.
 4. **First launch only:** if you see *"Untrusted Developer"*, on the Apple TV go
    **Settings → General → VPN & Device Management → [your account] → Trust**,
-   then open SexyPlayer.
+   then open Aeria+.
 
 With the paid account this stays valid for **1 year**. To update, just press
 ▶ Run again.
@@ -72,7 +72,7 @@ With the paid account this stays valid for **1 year**. To update, just press
 
 1. [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → **Apps → +
    → New App**.
-2. Platform: **tvOS**. Name: anything unique (you can rename later — "SexyPlayer"
+2. Platform: **tvOS**. Name: anything unique (you can rename later — "Aeria"
    is fine for TestFlight, not for the public store). Primary language, SKU
    (any string, e.g. `sexyplayer-1`), and the **bundle ID** you set in step 0.3.
 
@@ -90,7 +90,7 @@ With the paid account this stays valid for **1 year**. To update, just press
 2. Under **Internal Testing**, create a group, add yourself (uses your Apple ID
    email). Internal builds need **no review**.
 3. On the Apple TV: install the **TestFlight** app from the App Store, sign in
-   with the same Apple ID, and SexyPlayer will be there to install.
+   with the same Apple ID, and Aeria+ will be there to install.
 4. Future updates: bump `CURRENT_PROJECT_VERSION` in `project.yml` (must be
    unique per upload), `xcodegen generate`, Archive, Upload. It appears in
    TestFlight automatically.

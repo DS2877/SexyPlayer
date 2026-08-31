@@ -1,30 +1,22 @@
-# App Store Connect — listing draft
+# App Store Connect — listing draft (Aeria+)
 
-Fill the blanks, then paste into App Store Connect. Nothing here is final —
-especially the **name**.
+Paste into App Store Connect. Bundle id `com.aeriaplus.appletv`, category
+Entertainment, primary language English.
 
 ---
 
-## Name (30 chars max)
+## Name
 
-**"SexyPlayer" should not be the store name.** It reads as adult content (it
-isn't), it's a weak search term, and App Review name guidelines (2.3.7 / 4.1)
-will likely bounce it. Pick something calm and premium. Candidates:
+**Aeria+** (6 chars — well under the 30-char limit).
 
-- **Lumen TV**
-- **Kanal**
-- **Nord Player**
-- **Halo — IPTV Player**
-- **Clear — IPTV Player**
-- **Tuner**
-
-Whatever you pick, the codebase, bundle id, and icon don't depend on it.
+> Trademark note: "Aeria Games" is an existing games company. A tvOS IPTV player
+> is a different class of goods and the "+" differentiates, but if Apple or a
+> rights-holder ever objects, `Aeria TV` / `Aeria Player` are fallbacks that need
+> no code change (only `CFBundleDisplayName` + the listing).
 
 ## Subtitle (30 chars max)
 
-- `Your IPTV, done beautifully`
-- `A premium player for your IPTV`
-- `Bring your own IPTV service`
+`Your IPTV, done beautifully` (26)
 
 ## Promotional text (170 chars, editable any time without review)
 
@@ -33,7 +25,7 @@ Whatever you pick, the codebase, bundle id, and icon don't depend on it.
 
 ## Description
 
-> **[App Name] is a player for the IPTV service you already subscribe to.**
+> **Aeria+ is a player for the IPTV service you already subscribe to.**
 > It doesn't provide, sell, or host any channels or content — you connect your
 > own source, and it turns it into something that feels like a modern streaming
 > app instead of a spreadsheet.
@@ -61,7 +53,7 @@ Whatever you pick, the codebase, bundle id, and icon don't depend on it.
 > provider. Optional AI-assisted search sends only your words and your library's
 > genre/language list — never credentials, links, or history.
 >
-> [App Name] is not affiliated with any IPTV service and does not include or
+> Aeria+ is not affiliated with any IPTV service and does not include or
 > recommend any channel lists.
 
 ## Keywords (100 chars, comma-separated, no spaces after commas)
@@ -101,10 +93,13 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 
 ## Required URLs
 
-- **Privacy Policy URL:** host `docs/privacy-policy.html` (GitHub Pages: enable
-  Pages on the repo, `/docs` folder → `https://<user>.github.io/SexyPlayer/privacy-policy.html`)
-- **Support URL:** `docs/support.html` the same way
-- Replace `REPLACE_WITH_SUPPORT_EMAIL` in both files first.
+Contact email is set to `philipklingstedt@gmail.com` in both pages.
+
+- **Privacy Policy URL:** host `docs/privacy-policy.html`. Repo Settings → Pages →
+  Source: `main` / `/docs`. URL: `https://<github-user>.github.io/<repo>/privacy-policy.html`
+  (rename the repo to `aeria` for a cleaner path, or leave it — Apple doesn't check).
+- **Support URL:** `docs/support.html` the same way.
+- After enabling Pages, open both URLs in a browser and confirm they render.
 
 ## App Review notes (paste into the review notes field)
 
@@ -127,13 +122,20 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 >
 > Optional artwork enrichment queries The Movie Database with only a title and year.
 > Optional AI-assisted search is off by default and requires the user's own API key.
+>
+> The app declares an App Group (`group.com.aeriaplus.appletv`) used solely to pass
+> a small "Continue Watching" list to the bundled Top Shelf extension on the same
+> device. Nothing leaves the device.
 
 ## Screenshots
 
 tvOS requires 1920×1080 or 3840×2160. Capture from the Simulator (⌘S) with the
-**Demo Library** loaded so there's real-looking content:
-1. Home — hero + shelves
-2. A movie detail page
-3. The TV guide
-4. Search with interpreted filter chips
-5. The player (optional)
+**Demo Library** loaded (its titles are real public-domain films, so artwork looks
+real):
+1. Home — rotating hero + shelves
+2. A movie detail page — cast rail + "More Like This"
+3. Live TV
+4. The TV guide
+5. Search with interpreted filter chips
+
+Optional: a 15–30s app preview video (same resolution).

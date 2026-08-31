@@ -9,7 +9,7 @@ Status legend: ✅ done · 🔨 in progress · ⬜ not started · 👤 needs you
 | | Item | Notes |
 |---|---|---|
 | 👤 | **Apple Developer Program enrollment** ($99/yr) | Identity verification takes 24–48h. Nothing App-Store-related can happen until this clears. Start at developer.apple.com/programs. |
-| 👤 | Decide the **app name** | "SexyPlayer" will likely be rejected by App Review (name guidelines) and is a poor store search term. Pick a real product name — the icon/UI don't depend on it. |
+| ✅ | App name chosen | **Aeria+** (display) · module/target `Aeria` · bundle `com.aeriaplus.appletv`. |
 | ✅ | App icon + top-shelf art | Layered parallax icon, App Store icon, both top-shelf sizes. Regenerate via `Tools/brand/`. |
 | ⬜ | **Privacy policy URL** (hosted page) | Required field in App Store Connect. We collect ~nothing — easy to write, must be reachable at a stable URL. |
 | ⬜ | **Support URL** (hosted page) | Required. Can be a single simple page. |
