@@ -37,7 +37,9 @@ struct HomeView: View {
             self.model = model
             await model.rebuild()
             prefetchArtwork(model)
+            consumePendingRoute()
         }
+        .onChange(of: environment.pendingRoute) { _, _ in consumePendingRoute() }
         .onChange(of: path.isEmpty) { _, backAtRoot in
             // Returning to Home refreshes Continue Watching after playback.
             if backAtRoot { Task { await model?.rebuild() } }
@@ -58,6 +60,15 @@ struct HomeView: View {
         .onChange(of: environment.metadataRevision) { _, _ in
             Task { await model?.rebuild() }
         }
+    }
+
+    /// Push a Top Shelf deep link onto the stack once Home is on screen and the
+    /// catalog is loaded enough to resolve it.
+    private func consumePendingRoute() {
+        guard let route = environment.pendingRoute else { return }
+        guard case .ready = environment.loadState else { return }
+        if path.last != route { path.append(route) }
+        environment.clearPendingRoute()
     }
 
     /// Warm the image cache for the hero and the first few rows so Home looks

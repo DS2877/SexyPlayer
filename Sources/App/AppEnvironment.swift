@@ -53,6 +53,11 @@ public final class AppEnvironment {
     /// Only Home observes this (for the "Top Rated" row).
     public private(set) var metadataRevision = 0
 
+    /// Set when a deep link (Top Shelf) needs a detail screen shown over the app.
+    public var pendingRoute: AppRoute?
+
+    private var topShelfWriteTask: Task<Void, Never>?
+
     public var activeProvider: ProviderDescriptor? {
         providers.activeConfiguration?.descriptor
     }
@@ -167,6 +172,7 @@ public final class AppEnvironment {
                 self.catalogRevision += 1
                 AppLog.app.info("Cache fully loaded — \(vod.movies.count) mv · \(vod.series.count) sr · \(events.count) EPG.")
                 self.startMetadataWarmUp()
+                await self.writeTopShelfSnapshot()
             }
 
             if chans.age > staleAfter {
@@ -215,6 +221,7 @@ public final class AppEnvironment {
             AppLog.app.info("Catalog ready (staged) in \(elapsed)s — \(RuntimeStats.catalogSummary(assembled)).")
             await cache.save(assembled, providerID: providerID)
             startMetadataWarmUp()
+            await writeTopShelfSnapshot()
         } catch {
             if loadState == .ready {
                 // The user already has a working app — keep the partial catalog
@@ -464,5 +471,76 @@ public final class AppEnvironment {
 
     public func recordProgress(id: CatalogID, kind: ContentKind, position: Double, duration: Double) {
         watchProgress.record(id: id, kind: kind, positionSeconds: position, durationSeconds: duration)
+        scheduleTopShelfWrite()
+    }
+
+    // MARK: - Deep links (Top Shelf)
+
+    /// Handle an `aeria://…` URL opened from the Top Shelf. Shown as a cover over
+    /// whatever screen is active.
+    public func open(_ url: URL) {
+        guard let route = AppRoute(deepLink: url) else {
+            AppLog.app.notice("Ignored unrecognised deep link.")
+            return
+        }
+        pendingRoute = route
+    }
+
+    public func clearPendingRoute() { pendingRoute = nil }
+
+    // MARK: - Top Shelf snapshot
+
+    /// Coalesced write of the Top Shelf hand-off (Continue Watching + Recently
+    /// Added) to the shared App Group container.
+    func scheduleTopShelfWrite() {
+        topShelfWriteTask?.cancel()
+        topShelfWriteTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            await self?.writeTopShelfSnapshot()
+        }
+    }
+
+    func writeTopShelfSnapshot() async {
+        let catalog = await repository.snapshot()
+        guard !catalog.isEmpty else { return }
+        let progress = watchProgress.allEntries()
+
+        let resume = UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12)
+        var continueItems: [TopShelfPayload.Item] = []
+        for point in resume {
+            let image = point.artworkURL
+                ?? (await metadata.metadata(for: point.containerID, title: point.primaryTitle,
+                                            year: nil, isSeries: point.isSeries)?.posterURL)
+            continueItems.append(.init(
+                title: point.primaryTitle, subtitle: point.secondaryText, imageURL: image,
+                routeKind: point.isSeries ? "series" : "movie", id: point.containerID.rawValue
+            ))
+        }
+
+        let recentMovies = catalog.movies
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(8)
+        let recentSeries = catalog.series
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(4)
+        var recentItems: [TopShelfPayload.Item] = []
+        for movie in recentMovies {
+            let image = movie.posterURL
+                ?? (await metadata.metadata(for: movie.id, title: movie.title,
+                                            year: movie.year, isSeries: false)?.posterURL)
+            recentItems.append(.init(title: movie.title, subtitle: movie.year.map(String.init),
+                                     imageURL: image, routeKind: "movie", id: movie.id.rawValue))
+        }
+        for series in recentSeries {
+            let image = series.posterURL
+                ?? (await metadata.metadata(for: series.id, title: series.title,
+                                            year: series.year, isSeries: true)?.posterURL)
+            recentItems.append(.init(title: series.title, subtitle: series.year.map(String.init),
+                                     imageURL: image, routeKind: "series", id: series.id.rawValue))
+        }
+
+        let payload = TopShelfPayload(continueWatching: continueItems, recentlyAdded: recentItems)
+        await Task.detached { TopShelfStore.save(payload) }.value
     }
 }

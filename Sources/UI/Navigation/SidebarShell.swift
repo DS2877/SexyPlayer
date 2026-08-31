@@ -51,6 +51,11 @@ struct SidebarShell: View {
                 .overlay(alignment: .top) { LibraryStatusPill() }
         }
         .background(Palette.canvas.ignoresSafeArea())
+        .onChange(of: env.pendingRoute) { _, route in
+            // A Top Shelf deep link lands here — Home owns the nav stack that
+            // shows detail screens.
+            if route != nil { selection = .home }
+        }
     }
 
     // MARK: Sidebar

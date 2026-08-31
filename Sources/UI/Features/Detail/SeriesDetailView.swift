@@ -25,26 +25,9 @@ struct SeriesDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: seriesID) {
-            series = await env.repository.series(id: seriesID)
-            notFound = series == nil
-            if let loaded = series, !loaded.hasEpisodes {
-                loadingEpisodes = true
-                series = await env.ensureEpisodes(forSeries: seriesID)
-                loadingEpisodes = false
-            }
-            // Jump to the season of an in-progress episode, else the first.
-            selectedSeason = resumeEpisode(in: series)?.seasonNumber
-                ?? series?.seasons.first?.number
-            if let series {
-                related = await env.repository
-                    .similarSeries(to: series.id, genres: series.genres, limit: 18)
-                    .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
-                                       posterURL: $0.posterURL, isSeries: true) }
-                enriched = await env.metadata.details(
-                    for: series.id, title: series.title, year: series.year, isSeries: true
-                )
-            }
+        .task(id: seriesID) { await load() }
+        .onChange(of: env.catalogRevision) { _, _ in
+            if series == nil { Task { await load() } }
         }
         .fullScreenCover(item: $playback) { item in
             PlayerScreen(
@@ -69,6 +52,26 @@ struct SeriesDetailView: View {
             else { return }
             playback = env.playback(forEpisode: next, seriesTitle: series.title)
         }
+    }
+
+    private func load() async {
+        var found = await env.repository.series(id: seriesID)
+        notFound = found == nil && env.catalogComplete
+        if let loaded = found, !loaded.hasEpisodes {
+            loadingEpisodes = true
+            found = await env.ensureEpisodes(forSeries: seriesID)
+            loadingEpisodes = false
+        }
+        series = found
+        selectedSeason = resumeEpisode(in: found)?.seasonNumber ?? found?.seasons.first?.number
+        guard let found else { return }
+        related = await env.repository
+            .similarSeries(to: found.id, genres: found.genres, limit: 18)
+            .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                               posterURL: $0.posterURL, isSeries: true) }
+        enriched = await env.metadata.details(
+            for: found.id, title: found.title, year: found.year, isSeries: true
+        )
     }
 
     private func nextEpisode(in series: Series, after episodeID: CatalogID) -> Episode? {

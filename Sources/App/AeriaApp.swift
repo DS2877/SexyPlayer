@@ -12,6 +12,7 @@ struct AeriaApp: App {
                     await environment.applyPreferences()
                     await environment.bootstrap()
                 }
+                .onOpenURL { environment.open($0) }
         }
     }
 }

@@ -22,17 +22,10 @@ struct MovieDetailView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: movieID) {
-            movie = await env.repository.movie(id: movieID)
-            notFound = movie == nil
-            guard let movie else { return }
-            related = await env.repository
-                .similarMovies(to: movie.id, genres: movie.genres, limit: 18)
-                .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
-                                   posterURL: $0.posterURL, isSeries: false) }
-            enriched = await env.metadata.details(
-                for: movie.id, title: movie.title, year: movie.year, isSeries: false
-            )
+        .task(id: movieID) { await load() }
+        .onChange(of: env.catalogRevision) { _, _ in
+            // A deep link may open this before the VOD stage has merged in.
+            if movie == nil { Task { await load() } }
         }
         .fullScreenCover(item: $playback) { item in
             PlayerScreen(
@@ -43,6 +36,20 @@ struct MovieDetailView: View {
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }
         }
+    }
+
+    private func load() async {
+        let found = await env.repository.movie(id: movieID)
+        movie = found
+        notFound = found == nil && env.catalogComplete
+        guard let found else { return }
+        related = await env.repository
+            .similarMovies(to: found.id, genres: found.genres, limit: 18)
+            .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                               posterURL: $0.posterURL, isSeries: false) }
+        enriched = await env.metadata.details(
+            for: found.id, title: found.title, year: found.year, isSeries: false
+        )
     }
 
     @ViewBuilder
