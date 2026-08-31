@@ -49,7 +49,13 @@ struct SidebarShell: View {
             sidebar
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .top) { LibraryStatusPill() }
+                .overlay(alignment: .top) {
+                    VStack(spacing: Metrics.space1) {
+                        if !env.network.isOnline { OfflinePill() }
+                        LibraryStatusPill()
+                    }
+                    .animation(.easeInOut, value: env.network.isOnline)
+                }
                 // Its own focus region — pressing → from anywhere in the sidebar
                 // lands on the content's last-focused element regardless of
                 // vertical alignment (the tvOS two-column pattern).
@@ -206,6 +212,26 @@ private struct SidebarButtonBody: View {
         if isFocused { return Palette.focusFill }
         if isSelected { return .white.opacity(0.07) }
         return .clear
+    }
+}
+
+/// Shown across the top when the Apple TV has no network — everything here needs
+/// one (the provider, artwork, streams).
+private struct OfflinePill: View {
+    var body: some View {
+        HStack(spacing: Metrics.space1) {
+            Image(systemName: "wifi.slash")
+            Text("You're offline — check your network")
+        }
+        .font(.dsCaption)
+        .foregroundStyle(Palette.textPrimary)
+        .padding(.horizontal, Metrics.space2)
+        .padding(.vertical, Metrics.space1)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Palette.liveDot.opacity(0.5)))
+        .padding(.top, Metrics.space2)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityAddTraits(.isStaticText)
     }
 }
 

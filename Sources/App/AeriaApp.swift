@@ -9,6 +9,7 @@ struct AeriaApp: App {
             RootView()
                 .environment(environment)
                 .task {
+                    environment.network.start()
                     await environment.applyPreferences()
                     await environment.bootstrap()
                 }

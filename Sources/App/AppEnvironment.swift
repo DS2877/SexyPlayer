@@ -25,6 +25,7 @@ public final class AppEnvironment {
     public let preferences: PreferencesStore
     public let parental: ParentalControlsStore
     public let metadata = MetadataService()
+    public let network = NetworkMonitor()
     private let normalizer: Normalizer
     private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
