@@ -92,6 +92,20 @@ struct SeriesDetailView: View {
         return ordered[idx + 1]
     }
 
+    /// What the primary button should play when nothing is mid-watch: the first
+    /// unwatched episode after the latest finished one, else the very first.
+    private func nextUnwatchedEpisode(in series: Series) -> Episode? {
+        let ordered = series.seasons
+            .sorted { $0.number < $1.number }
+            .flatMap { $0.episodes.sorted { $0.episodeNumber < $1.episodeNumber } }
+        guard !ordered.isEmpty else { return nil }
+        let lastFinishedIdx = ordered.lastIndex {
+            env.watchProgress.progress(for: $0.id)?.isFinished == true
+        }
+        guard let idx = lastFinishedIdx else { return ordered.first }
+        return idx + 1 < ordered.count ? ordered[idx + 1] : ordered.first
+    }
+
     /// The most recently-watched, not-yet-finished episode of this series.
     private func resumeEpisode(in series: Series?) -> Episode? {
         guard let series else { return nil }
@@ -186,13 +200,23 @@ struct SeriesDetailView: View {
                     }
                     .buttonStyle(SecondaryButtonStyle())
                 }
-            } else if let first = firstEpisode(in: series) {
+            } else if let next = nextUnwatchedEpisode(in: series) {
+                let anyFinished = next.id != firstEpisode(in: series)?.id
                 Button {
-                    playback = env.playback(forEpisode: first, seriesTitle: series.title)
+                    playback = env.playback(forEpisode: next, seriesTitle: series.title)
                 } label: {
-                    Label("Play \(first.code)", systemImage: "play.fill")
+                    Label("\(anyFinished ? "Next" : "Play") \(next.code)", systemImage: "play.fill")
                 }
                 .buttonStyle(PrimaryButtonStyle())
+
+                if anyFinished, let first = firstEpisode(in: series) {
+                    Button {
+                        playback = env.playback(forEpisode: first, seriesTitle: series.title)
+                    } label: {
+                        Label("From Start", systemImage: "gobackward")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
             }
 
             Button {
