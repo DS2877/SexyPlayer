@@ -241,12 +241,15 @@ public final class AppEnvironment {
             await applyPreferences()
             loadState = .ready
             hasLoadedOnce = true
+            Task { await cache.saveChannels(channels, providerID: providerID) }
         case .vod(let movies, let shells, let episodes):
             let result = await normalizer.normalizeVOD(
                 movies: movies, shells: shells, episodes: episodes, providerID: providerID
             )
             await repository.mergeVOD(movies: result.movies, series: result.series)
             catalogRevision += 1
+            let (m, s) = (result.movies, result.series)
+            Task { await cache.saveVOD(movies: m, series: s, providerID: providerID) }
         case .guide(let raw):
             let now = Date()
             let lower = now.addingTimeInterval(-Self.epgWindowPast)
@@ -255,6 +258,7 @@ public final class AppEnvironment {
             let events = await normalizer.normalizeGuide(windowed)
             await repository.mergeEPG(events)
             catalogRevision += 1
+            Task { await cache.saveEPG(events, providerID: providerID) }
         }
     }
 

@@ -71,15 +71,30 @@ public actor CatalogCache {
     // MARK: - Save
 
     public func save(_ catalog: Catalog, providerID: String) {
-        let v = Self.currentVersion
-        write(ChannelsEnvelope(version: v, savedAt: Date(), channels: catalog.channels), to: url(providerID, "channels"), label: "channels")
-        write(VODEnvelope(version: v, movies: catalog.movies, series: catalog.series), to: url(providerID, "vod"), label: "vod")
+        saveChannels(catalog.channels, providerID: providerID)
+        saveVOD(movies: catalog.movies, series: catalog.series, providerID: providerID)
+        saveEPG(catalog.epg, providerID: providerID)
+    }
 
+    /// Per-section saves, so a staged cold import persists each phase as it
+    /// lands — a killed first import still leaves a usable cache behind.
+    public func saveChannels(_ channels: [Channel], providerID: String) {
+        write(ChannelsEnvelope(version: Self.currentVersion, savedAt: Date(), channels: channels),
+              to: url(providerID, "channels"), label: "channels")
+    }
+
+    public func saveVOD(movies: [Movie], series: [Series], providerID: String) {
+        write(VODEnvelope(version: Self.currentVersion, movies: movies, series: series),
+              to: url(providerID, "vod"), label: "vod")
+    }
+
+    public func saveEPG(_ epg: [EPGEvent], providerID: String) {
         let now = Date()
         let lower = now.addingTimeInterval(-2 * 3600)
         let upper = now.addingTimeInterval(4 * 24 * 3600)
-        let events = catalog.epg.filter { $0.stop > lower && $0.start < upper }
-        write(EPGEnvelope(version: v, events: events), to: url(providerID, "epg"), label: "epg (\(events.count) events)")
+        let events = epg.filter { $0.stop > lower && $0.start < upper }
+        write(EPGEnvelope(version: Self.currentVersion, events: events),
+              to: url(providerID, "epg"), label: "epg (\(events.count) events)")
     }
 
     private func write<T: Encodable>(_ value: T, to url: URL, label: String) {
