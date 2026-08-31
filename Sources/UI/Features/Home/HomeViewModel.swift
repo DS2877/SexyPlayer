@@ -12,15 +12,18 @@ public final class HomeViewModel {
     private let watchProgress: WatchProgressStore
     private let preferences: PreferencesStore
     private let metadata: MetadataService
+    private let channelHistory: ChannelHistoryStore
 
     public init(repository: any CatalogRepository,
                 watchProgress: WatchProgressStore,
                 preferences: PreferencesStore,
-                metadata: MetadataService) {
+                metadata: MetadataService,
+                channelHistory: ChannelHistoryStore) {
         self.repository = repository
         self.watchProgress = watchProgress
         self.preferences = preferences
         self.metadata = metadata
+        self.channelHistory = channelHistory
     }
 
     public func rebuild(now: Date = .now) async {
@@ -37,10 +40,12 @@ public final class HomeViewModel {
         let ratings = await metadata.ratingsSnapshot()
         // Already ranked: regulars first, then home country, then the rest.
         let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
+        let recentChannelIDs = channelHistory.recent(limit: 16)
 
         content = await Task.detached(priority: .userInitiated) {
             Self.makeContent(catalog: catalog, epg: epg, progress: progress,
-                             prefs: prefs, ratings: ratings, liveNow: liveNow, now: now)
+                             prefs: prefs, ratings: ratings, liveNow: liveNow,
+                             recentChannelIDs: recentChannelIDs, now: now)
         }.value
     }
 
@@ -48,7 +53,8 @@ public final class HomeViewModel {
 
     nonisolated static func makeContent(
         catalog: Catalog, epg: EPGIndex, progress: [WatchProgress],
-        prefs: UserPreferences, ratings: [String: Double], liveNow: [Channel], now: Date
+        prefs: UserPreferences, ratings: [String: Double], liveNow: [Channel],
+        recentChannelIDs: [CatalogID] = [], now: Date
     ) -> HomeContent {
         let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
@@ -67,14 +73,17 @@ public final class HomeViewModel {
 
         add(.continueWatching, "Continue Watching", continueWatchingCards(catalog: catalog, progress: progress))
 
-        let liveCards = liveNow.prefix(16).map { channel -> HomeCard in
-            let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
-            return HomeCard(id: channel.id, kind: .channel, title: channel.name,
-                            subtitle: event?.title ?? channel.category,
-                            artworkURL: channel.logoURL, badge: event != nil ? "LIVE" : nil,
-                            liveProgress: event?.progress(at: now))
-        }
+        let liveCards = liveNow.prefix(16).map { channelCard($0, epg: epg, now: now) }
         add(.liveNow, "Live Now", Array(liveCards))
+
+        // "Recently Watched" live channels — the viewer's own tune-in history.
+        let recentChannelRow: HomeRow? = {
+            guard !recentChannelIDs.isEmpty else { return nil }
+            let byID = Dictionary(catalog.channels.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let cards = recentChannelIDs.compactMap { byID[$0] }.map { channelCard($0, epg: epg, now: now) }
+            guard cards.count >= 2 else { return nil }
+            return HomeRow(id: "recent-channels", title: "Recently Watched", subtitle: nil, cards: cards)
+        }()
 
         let seriesByRecency = catalog.series.sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
 
@@ -124,6 +133,7 @@ public final class HomeViewModel {
                                 subtitle: "Highest rated in your library", cards: Array(topRated)))
         }
         if let becauseRow { rows.append(becauseRow) }
+        if let recentChannelRow { rows.append(recentChannelRow) }
 
         // Genre shelves — the biggest few genres in the library. Like "Top
         // Rated" these are new, so they're shown regardless of the saved row
@@ -155,17 +165,20 @@ public final class HomeViewModel {
                 < (prefs.homeRows.firstIndex { $0.rawValue == rhs.id } ?? 99)
         }
 
-        // Float "Top Rated" then "Because You Watched" up just below Continue
-        // Watching (neither has a saved position to sort by).
+        // Float the position-less rows up just below Continue Watching, in a
+        // deliberate order: Top Rated, Because You Watched, Recently Watched.
         var floatIDs = [HomeRowKind.topRated.rawValue]
         if let becauseID = becauseRow?.id { floatIDs.append(becauseID) }
+        if let recentID = recentChannelRow?.id { floatIDs.append(recentID) }
+        var placedFloats: Set<String> = []
         for floatID in floatIDs {
             guard let idx = rows.firstIndex(where: { $0.id == floatID }) else { continue }
             let row = rows.remove(at: idx)
             let insertAt = rows.lastIndex { $0.id == HomeRowKind.continueWatching.rawValue
-                || $0.id == HomeRowKind.topRated.rawValue }
+                || placedFloats.contains($0.id) }
                 .map { $0 + 1 } ?? 0
             rows.insert(row, at: Swift.min(insertAt, rows.count))
+            placedFloats.insert(floatID)
         }
 
         // Genre shelves sit just above the generic Movies / Series shelves.
@@ -243,6 +256,14 @@ public final class HomeViewModel {
     nonisolated static func card(for movie: Movie) -> HomeCard {
         HomeCard(id: movie.id, kind: .movie, title: movie.title,
                  subtitle: metadataSubtitle(for: movie), artworkURL: movie.posterURL, year: movie.year)
+    }
+
+    nonisolated static func channelCard(_ channel: Channel, epg: EPGIndex, now: Date) -> HomeCard {
+        let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
+        return HomeCard(id: channel.id, kind: .channel, title: channel.name,
+                        subtitle: event?.title ?? channel.category,
+                        artworkURL: channel.logoURL, badge: event != nil ? "LIVE" : nil,
+                        liveProgress: event?.progress(at: now))
     }
 
     nonisolated static func card(for series: Series) -> HomeCard {

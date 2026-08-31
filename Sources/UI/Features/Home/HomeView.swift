@@ -32,7 +32,8 @@ struct HomeView: View {
                 repository: environment.repository,
                 watchProgress: environment.watchProgress,
                 preferences: environment.preferences,
-                metadata: environment.metadata
+                metadata: environment.metadata,
+                channelHistory: environment.channelHistory
             )
             self.model = model
             await model.rebuild()
