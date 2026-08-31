@@ -46,8 +46,17 @@ struct SearchView: View {
                 header(model)
 
                 if model.isSearching {
-                    ProgressView().controlSize(.large).tint(Palette.accent)
-                        .frame(maxWidth: .infinity).padding(.top, Metrics.space6)
+                    VStack(spacing: Metrics.gridSpacing) {
+                        ForEach(0..<2, id: \.self) { _ in
+                            HStack(spacing: Metrics.cardSpacing) {
+                                ForEach(0..<5, id: \.self) { _ in
+                                    SkeletonBox().frame(width: Metrics.posterWidth, height: Metrics.posterHeight)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Metrics.space4)
                 } else if !model.hasSearched {
                     exampleQueries(model)
                 } else if model.results.isEmpty, env.loadState.isImporting {
