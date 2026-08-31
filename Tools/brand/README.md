@@ -6,13 +6,15 @@ straight into `Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets/
 
 ## The mark
 
-Warm beige field · rich charcoal squircle (Apple superellipse) with a subtle top
-bevel and soft contact shadow · an off-white geometric capital **"A"** (an upward
-wedge that reads as the letter, as ascent/air for *Aeria*, and — rotated — still
-nods to a play triangle). Built as a compound `fill-rule="evenodd"` path in
-`markPath()`; tune `H` / `W` / `barY` / `apexDrop` / `innerW` there.
+Near-black tile with a soft blue aura · a **chrome capital "A"** (one open
+polyline — foot → apex → foot — stroked with a vertical chrome gradient, round
+caps) · a **blue "+"** floating in the crossbar gap with a blue glow.
 
-Palette lives at the top of the script (`BEIGE`, `INK`, …).
+Parallax layers: **Back** = tile + aura · **Middle** = the A · **Front** = the +
+(so the plus lifts off the A on the Apple TV home screen).
+
+Tune `aPath()` / `plusPaths()` and the palette (`TILE_*`, `BLUE`, `chrome`
+gradient stops) at the top of the script.
 
 ## Regenerate
 

@@ -73,7 +73,7 @@ struct ProviderSetupView: View {
         VStack(alignment: .leading, spacing: Metrics.space4) {
             VStack(alignment: .leading, spacing: Metrics.space1) {
                 Text("Add your TV provider").font(.dsHero)
-                Text("Connect the service you already subscribe to. Aeria+ is just the player — it doesn't provide any channels or content.")
+                Text("Connect the IPTV service you already subscribe to. Aeria+ is just the player — it provides, hosts, and controls no channels or content of its own.")
                     .font(.dsBody).foregroundStyle(Palette.textSecondary)
                     .frame(maxWidth: 800, alignment: .leading)
             }

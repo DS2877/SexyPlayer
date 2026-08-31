@@ -5,36 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aeria+ — IPTV Player for Apple TV</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root { color-scheme: dark; }
   body {
-    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    max-width: 640px; margin: 0 auto; padding: 64px 24px; text-align: center;
-    color: #1a1a1a; background: #E8DECD;
+    font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 660px; margin: 0 auto; padding: 72px 24px; text-align: center;
+    color: #e9eaec;
+    background: radial-gradient(60% 45% at 50% 32%, #16181d 0%, #0a0b0d 60%, #060607 100%);
+    min-height: 100vh;
   }
-  @media (prefers-color-scheme: dark) { body { color: #e8e8e8; background: #131313; } }
   .mark {
-    width: 132px; height: 132px; margin: 0 auto 24px; border-radius: 30px;
-    background: #181509; display: flex; align-items: center; justify-content: center;
+    width: 132px; height: 132px; margin: 0 auto 28px; border-radius: 30px;
+    background: linear-gradient(180deg, #15161a 0%, #08080a 100%);
+    box-shadow: 0 0 60px rgba(60,157,255,.18), inset 0 1px 0 rgba(255,255,255,.04);
+    display: flex; align-items: center; justify-content: center;
   }
-  .mark svg { width: 54px; height: 54px; }
-  h1 { font-size: 26px; }
-  p { max-width: 480px; margin: 12px auto; }
-  a { color: inherit; }
-  nav { margin-top: 32px; font-size: 15px; }
+  .mark svg { width: 76px; height: 76px; }
+  .eyebrow {
+    font-size: 13px; letter-spacing: .22em; font-weight: 700;
+    color: #4c9dff; margin-bottom: 6px;
+  }
+  h1 {
+    font-size: 40px; font-weight: 700; margin: 0 0 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #c8ccd2 45%, #ffffff 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  p { max-width: 500px; margin: 12px auto; color: #b9bcc2; }
+  .fine { font-size: 14px; color: #7c7f86; margin-top: 22px; }
+  a { color: #4c9dff; text-decoration: none; }
+  nav { margin-top: 36px; font-size: 15px; }
 </style>
 </head>
 <body>
   <div class="mark">
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <path d="M50 19 L74 83 L26 83 Z M50 34 L58 63 L42 63 Z" fill="#F0E9DA"
-            fill-rule="evenodd" stroke="#F0E9DA" stroke-width="3" stroke-linejoin="round"/>
+      <defs>
+        <linearGradient id="c" x1="0" y1="0" x2="0.15" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/><stop offset="34%" stop-color="#dfe2e6"/>
+          <stop offset="52%" stop-color="#9ba1a9"/><stop offset="70%" stop-color="#c6cbd1"/>
+          <stop offset="100%" stop-color="#ffffff"/>
+        </linearGradient>
+      </defs>
+      <path d="M27 80 L50 20 L73 80" fill="none" stroke="url(#c)" stroke-width="9"
+            stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="#3c9dff">
+        <rect x="38" y="52.5" width="24" height="9" rx="3.5"/>
+        <rect x="45.5" y="45" width="9" height="24" rx="3.5"/>
+      </g>
     </svg>
   </div>
+  <div class="eyebrow">PREMIUM IPTV PLAYER</div>
   <h1>Aeria+</h1>
-  <p>
-    A premium IPTV player for Apple&nbsp;TV. Connect the IPTV service you already
-    subscribe to and watch it like a modern streaming app. Aeria+ provides no
-    channels or content of its own.
+  <p>Built for picture, for sound, and for the silence between them.<br>
+     We provide the player. You choose what to watch.</p>
+  <p class="fine">
+    Aeria+ does not provide, host, or control any channels or content. You connect
+    an IPTV service you already subscribe to. We take no responsibility for content
+    that third parties choose to view through the player.
   </p>
   <nav>
     <a href="privacy-policy.html">Privacy Policy</a> &nbsp;·&nbsp;

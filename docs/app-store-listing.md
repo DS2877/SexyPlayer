@@ -20,15 +20,16 @@ Entertainment, primary language English.
 
 ## Promotional text (170 chars, editable any time without review)
 
-> Connect the IPTV service you already have and watch it like a modern streaming
-> app — clean names, real artwork, a proper guide, resume, and natural-language search.
+> Built for picture, for sound, and for the silence between them. Connect your own
+> IPTV service and watch it like a modern streaming app — artwork, guide, resume, search.
 
 ## Description
 
-> **Aeria+ is a player for the IPTV service you already subscribe to.**
-> It doesn't provide, sell, or host any channels or content — you connect your
-> own source, and it turns it into something that feels like a modern streaming
-> app instead of a spreadsheet.
+> **We provide the player. You choose what to watch.**
+> Aeria+ is a player for the IPTV service you already subscribe to. It provides,
+> hosts, and controls no channels or content of its own — you connect your own
+> source, and it turns it into something that feels like a modern streaming app
+> instead of a spreadsheet.
 >
 > **Bring your own source**
 > Connect with Xtream Codes or an M3U playlist URL. Your details are stored
@@ -53,8 +54,9 @@ Entertainment, primary language English.
 > provider. Optional AI-assisted search sends only your words and your library's
 > genre/language list — never credentials, links, or history.
 >
-> Aeria+ is not affiliated with any IPTV service and does not include or
-> recommend any channel lists.
+> Aeria+ is not affiliated with any IPTV service and includes no channel lists.
+> We take no responsibility for content that third parties choose to view through
+> the player.
 
 ## Keywords (100 chars, comma-separated, no spaces after commas)
 

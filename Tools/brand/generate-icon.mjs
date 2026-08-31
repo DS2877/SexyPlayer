@@ -1,5 +1,10 @@
-// Regenerates the tvOS app icon (layered parallax) + top-shelf art.
+// Regenerates the tvOS app icon (layered parallax) + top-shelf art for Aeria+.
 // Usage:  cd Tools/brand && npm i sharp && node generate-icon.mjs
+//
+// The mark: a near-black tile with a soft blue aura, a chrome capital "A"
+// (two rounded strokes meeting at a point), and a blue "+" floating in the
+// crossbar gap. Parallax layers: Back = tile + glow · Middle = the A ·
+// Front = the +  (so the plus lifts off the A on the Apple TV home screen).
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -9,105 +14,93 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const BRAND = join(REPO, "Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets");
 const PREVIEW = join(REPO, "docs/brand");
 
-// ---- palette ---------------------------------------------------------------
-const BEIGE     = "#E8DFCC";
-const BEIGE_HI  = "#F2ECDD";
-const BEIGE_LO  = "#DBD0B8";
-const INK       = "#1A1710";   // warm near-black
-const INK_HI    = "#2E2A20";   // top bevel of the tile
+// ---- palette --------------------------------------------------------------
+const TILE_TOP = "#15161A";   // top of the tile
+const TILE_BOT = "#08080A";   // bottom of the tile
+const BLUE     = "#3C9DFF";   // the plus + the aura
+const BLUE_DEEP = "#1E63E6";
 
-// ---- superellipse (Apple-style squircle) ----------------------------------
-function squirclePath(cx, cy, size, n = 4.6, steps = 96) {
-  const a = size / 2, b = size / 2;
-  let d = "";
-  for (let i = 0; i <= steps; i++) {
-    const t = (i / steps) * 2 * Math.PI;
-    const ct = Math.cos(t), st = Math.sin(t);
-    const x = cx + a * Math.sign(ct) * Math.pow(Math.abs(ct), 2 / n);
-    const y = cy + b * Math.sign(st) * Math.pow(Math.abs(st), 2 / n);
-    d += (i === 0 ? "M" : "L") + x.toFixed(2) + " " + y.toFixed(2) + " ";
-  }
-  return d + "Z";
+// ---- geometry helpers ---------------------------------------------------------
+// The "A": one open polyline foot → apex → foot, round caps + joins.
+function aPath(cx, cy, h) {
+  const AH = h * 0.300;            // half-height
+  const AW = h * 0.232;            // half-width at the feet
+  const apex = [cx, cy - AH];
+  const lf   = [cx - AW, cy + AH];
+  const rf   = [cx + AW, cy + AH];
+  const d = `M ${lf[0].toFixed(1)} ${lf[1].toFixed(1)} ` +
+            `L ${apex[0].toFixed(1)} ${apex[1].toFixed(1)} ` +
+            `L ${rf[0].toFixed(1)} ${rf[1].toFixed(1)}`;
+  return { d, width: h * 0.088 };
 }
 
-// The "Aeria" mark: a bold geometric capital A — an upward wedge that reads as
-// the letter, as ascent/air, and (rotated) still nods to a play triangle. Built
-// as a compound path (solid outer A minus the counter above the crossbar) with
-// `fill-rule="evenodd"`; corners are softened by a matched round-join stroke.
-function markPath(cx, cy, h) {
-  const H  = h * 0.235;              // half-height of the A
-  const W  = h * 0.210;              // half-width at the base (outer)
-  const barY = cy + H * 0.40;        // bottom of the counter = top of the crossbar
-  const apexDrop = h * 0.072;        // inner apex sits below the outer apex
-  const innerW = h * 0.085;          // half-width of the counter at the crossbar
-
-  const topY = cy - H, botY = cy + H;
-
-  const outer =
-    `M ${cx.toFixed(2)} ${topY.toFixed(2)} ` +
-    `L ${(cx + W).toFixed(2)} ${botY.toFixed(2)} ` +
-    `L ${(cx - W).toFixed(2)} ${botY.toFixed(2)} Z`;
-
-  // Counter (the triangular hole) — only the part above the crossbar.
-  const counter =
-    `M ${cx.toFixed(2)} ${(topY + apexDrop).toFixed(2)} ` +
-    `L ${(cx + innerW).toFixed(2)} ${barY.toFixed(2)} ` +
-    `L ${(cx - innerW).toFixed(2)} ${barY.toFixed(2)} Z`;
-
-  // Small round-join stroke just to soften the points — thin enough that it
-  // doesn't close the counter.
-  return { d: `${outer} ${counter}`, round: h * 0.022 };
+// The "+": two rounded bars, centred just below the icon centre.
+function plusPaths(cx, cy, h) {
+  const c = [cx, cy + h * 0.055];
+  const arm = h * 0.120;          // half-length of each bar
+  const t   = h * 0.066;          // bar thickness
+  const r   = t * 0.42;
+  const hBar = `M ${(c[0]-arm).toFixed(1)} ${(c[1]-t/2).toFixed(1)} h ${(2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${r} v ${(t-2*r).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${r} h ${(-2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${-r} v ${(-(t-2*r)).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${-r} Z`;
+  const vBar = `M ${(c[0]-t/2).toFixed(1)} ${(c[1]-arm).toFixed(1)} v ${(2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${r} h ${(-(t-2*r)).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${-r} v ${(-2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${-r} h ${(t-2*r).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${r} Z`;
+  return `${hBar} ${vBar}`;
 }
 
-// ---- one layer ----------------------------------------------------------------
+// ---- one layer --------------------------------------------------------------
 // layer: back | middle | front | flat
-function svg(w, h, layer, { cxFrac = 0.5, cyFrac = 0.5, tile = 0.76 } = {}) {
+function svg(w, h, layer, { cxFrac = 0.5, cyFrac = 0.5, markScale = 1 } = {}) {
   const cx = w * cxFrac, cy = h * cyFrac;
-  const size = h * tile;
-  const sq = squirclePath(cx, cy, size);
-  const t = markPath(cx, cy, h);
+  const a = aPath(cx, cy, h * markScale);
+  const plus = plusPaths(cx, cy, h * markScale);
+  const has = (name) => layer === name || layer === "flat";
 
   const defs = `
-    <radialGradient id="bg" cx="${(cx / w) * 100}%" cy="${(cy / h) * 42}%" r="80%">
-      <stop offset="0%"  stop-color="${BEIGE_HI}"/>
-      <stop offset="55%" stop-color="${BEIGE}"/>
-      <stop offset="100%" stop-color="${BEIGE_LO}"/>
-    </radialGradient>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"  stop-color="${INK_HI}"/>
-      <stop offset="14%" stop-color="${INK}"/>
-      <stop offset="100%" stop-color="${INK}"/>
+      <stop offset="0%"  stop-color="${TILE_TOP}"/>
+      <stop offset="100%" stop-color="${TILE_BOT}"/>
     </linearGradient>
-    <filter id="sh" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="${h * 0.045}"/>
+    <radialGradient id="aura" cx="50%" cy="46%" r="42%">
+      <stop offset="0%"  stop-color="${BLUE}" stop-opacity="0.42"/>
+      <stop offset="55%" stop-color="${BLUE_DEEP}" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="${BLUE_DEEP}" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="chrome" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="34%"  stop-color="#DFE2E6"/>
+      <stop offset="52%"  stop-color="#9BA1A9"/>
+      <stop offset="70%"  stop-color="#C6CBD1"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <filter id="blueGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="${h * 0.03}"/>
+    </filter>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="${h * 0.012}"/>
     </filter>`;
 
   const parts = [];
-  const has = (name) => layer === name || layer === "flat";
 
-  if (has("back")) parts.push(`<rect width="${w}" height="${h}" fill="url(#bg)"/>`);
+  if (has("back")) {
+    parts.push(`<rect width="${w}" height="${h}" fill="url(#tile)"/>`);
+    parts.push(`<rect width="${w}" height="${h}" fill="url(#aura)"/>`);
+  }
 
   if (has("middle")) {
-    parts.push(`<g opacity="0.20"><path d="${squirclePath(cx, cy + h * 0.03, size * 1.02)}" fill="${INK}" filter="url(#sh)"/></g>`);
-    parts.push(`<path d="${sq}" fill="url(#tile)"/>`);
-    // faint top rim light
-    parts.push(`<path d="${sq}" fill="none" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="${h * 0.012}"/>`);
-    // mark contact shadow lives here so it stays put during parallax
-    parts.push(`<g opacity="0.28"><path d="${t.d}" fill="#000" fill-rule="evenodd" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
+    // faint drop for depth, then the chrome A
+    parts.push(`<g opacity="0.5"><path d="${a.d}" fill="none" stroke="#000" stroke-width="${a.width}" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft)" transform="translate(0 ${h*0.012})"/></g>`);
+    parts.push(`<path d="${a.d}" fill="none" stroke="url(#chrome)" stroke-width="${a.width}" stroke-linecap="round" stroke-linejoin="round"/>`);
   }
 
   if (has("front")) {
-    if (layer === "flat") {
-      parts.push(`<g opacity="0.24"><path d="${t.d}" fill="#000" fill-rule="evenodd" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
-    }
-    parts.push(`<path d="${t.d}" fill="${BEIGE_HI}" fill-rule="evenodd" stroke="${BEIGE_HI}" stroke-width="${t.round}" stroke-linejoin="round"/>`);
+    // nonzero winding — the two bars overlap in the centre and must stay solid
+    parts.push(`<g filter="url(#blueGlow)" opacity="0.9"><path d="${plus}" fill="${BLUE}"/></g>`);
+    parts.push(`<path d="${plus}" fill="${BLUE}"/>`);
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <defs>${defs}</defs>${parts.join("")}</svg>`;
 }
 
-// ---- render + asset catalog ----------------------------------------------
+// ---- render + asset catalog --------------------------------------------------
 async function render(svgStr, w, h, outPath) {
   mkdirSync(dirname(outPath), { recursive: true });
   await sharp(Buffer.from(svgStr)).resize(w, h).png().toFile(outPath);
@@ -135,10 +128,10 @@ async function buildFlat(dir, w, h, opts) {
 
 await buildStack(join(BRAND, "App Icon.imagestack"), 400, 240);
 await buildStack(join(BRAND, "App Icon - App Store.imagestack"), 1280, 768);
-await buildFlat(join(BRAND, "Top Shelf Image.imageset"), 1920, 720, { cxFrac: 0.30, tile: 0.62 });
-await buildFlat(join(BRAND, "Top Shelf Image Wide.imageset"), 2320, 720, { cxFrac: 0.26, tile: 0.62 });
+await buildFlat(join(BRAND, "Top Shelf Image.imageset"), 1920, 720, { cxFrac: 0.30, markScale: 0.62 });
+await buildFlat(join(BRAND, "Top Shelf Image Wide.imageset"), 2320, 720, { cxFrac: 0.26, markScale: 0.62 });
 
 await render(svg(1200, 720, "flat"), 1200, 720, join(PREVIEW, "icon-preview.png"));
 await render(svg(400, 240, "flat"), 400, 240, join(PREVIEW, "icon-400.png"));
-await render(svg(1920, 720, "flat", { cxFrac: 0.30, tile: 0.62 }), 1920, 720, join(PREVIEW, "topshelf-preview.png"));
+await render(svg(1920, 720, "flat", { cxFrac: 0.30, markScale: 0.62 }), 1920, 720, join(PREVIEW, "topshelf-preview.png"));
 console.log("done");

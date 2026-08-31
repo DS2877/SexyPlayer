@@ -188,7 +188,7 @@ struct SettingsView: View {
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: Metrics.space1) {
             SectionHeader("About")
-            Text("Aeria+ is a player only. It does not provide, sell, host, or recommend any channels, streams, or media. You connect a provider you already subscribe to.")
+            Text("Aeria+ is a player only. It does not provide, host, or control any channels, streams, or media — you connect an IPTV service you already subscribe to. We take no responsibility for content that third parties choose to view through the player.")
                 .font(.dsCaption).foregroundStyle(Palette.textSecondary)
                 .frame(maxWidth: 1000, alignment: .leading)
         }

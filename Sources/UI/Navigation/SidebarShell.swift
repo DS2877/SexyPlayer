@@ -63,11 +63,8 @@ struct SidebarShell: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: Metrics.space1) {
             HStack(spacing: Metrics.space1) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Palette.canvas)
+                BrandMark()
                     .frame(width: 44, height: 44)
-                    .background(Palette.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Text("Aeria+").font(.dsCardTitle).foregroundStyle(Palette.textPrimary)
             }
             .padding(.horizontal, Metrics.space2)
@@ -233,5 +230,44 @@ private struct LibraryStatusPill: View {
             .padding(.vertical, Metrics.space1)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(Palette.hairline))
+    }
+}
+
+/// The Aeria+ mark — a chrome "A" with a blue "+" on a dark tile. Matches the
+/// app icon; used in the sidebar header.
+struct BrandMark: View {
+    static let blue = Color(red: 0.24, green: 0.62, blue: 1.0)
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(geo.size.width, geo.size.height)
+            ZStack {
+                RoundedRectangle(cornerRadius: s * 0.24, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.03)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: s * 0.24, style: .continuous)
+                            .fill(RadialGradient(colors: [Self.blue.opacity(0.28), .clear],
+                                                 center: .center, startRadius: 0, endRadius: s * 0.5))
+                    )
+
+                Path { p in
+                    p.move(to: CGPoint(x: s * 0.27, y: s * 0.79))
+                    p.addLine(to: CGPoint(x: s * 0.50, y: s * 0.21))
+                    p.addLine(to: CGPoint(x: s * 0.73, y: s * 0.79))
+                }
+                .stroke(LinearGradient(colors: [.white, Color(white: 0.72), .white],
+                                       startPoint: .top, endPoint: .bottom),
+                        style: StrokeStyle(lineWidth: s * 0.105, lineCap: .round, lineJoin: .round))
+
+                ZStack {
+                    Capsule().frame(width: s * 0.24, height: s * 0.09)
+                    Capsule().frame(width: s * 0.09, height: s * 0.24)
+                }
+                .foregroundStyle(Self.blue)
+                .offset(y: s * 0.06)
+            }
+            .frame(width: s, height: s)
+        }
     }
 }
