@@ -1,5 +1,5 @@
 import XCTest
-@testable import SexyPlayer
+@testable import Aeria
 
 /// Exercises the in-memory repository at a real provider's scale so regressions
 /// in the hot paths (EPG lookup, filtering, facets, search) show up as failures,

@@ -6,7 +6,7 @@ import OSLog
 /// **Never** pass credentials, tokens, or private stream URLs here. Use
 /// `redacting(_:)` for anything that might contain them.
 public enum AppLog {
-    private static let subsystem = "com.sexyplayer.app"
+    private static let subsystem = "com.aeriaplus.appletv"
 
     public static let app       = Logger(subsystem: subsystem, category: "app")
     public static let provider  = Logger(subsystem: subsystem, category: "provider")

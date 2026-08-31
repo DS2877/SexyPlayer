@@ -23,7 +23,7 @@ public struct HTTPClient: @unchecked Sendable {  // URLSession is thread-safe
         configuration.timeoutIntervalForRequest = config.timeout
         configuration.timeoutIntervalForResource = config.timeout * 4
         configuration.waitsForConnectivity = false
-        configuration.httpAdditionalHeaders = ["User-Agent": "SexyPlayer/0.1 (tvOS)"]
+        configuration.httpAdditionalHeaders = ["User-Agent": "Aeria/1.0 (tvOS)"]
         self.session = URLSession(configuration: configuration)
     }
 

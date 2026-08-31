@@ -1,5 +1,5 @@
 import XCTest
-@testable import SexyPlayer
+@testable import Aeria
 
 @MainActor
 final class ParentalControlsTests: XCTestCase {

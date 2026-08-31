@@ -1,5 +1,5 @@
 import XCTest
-@testable import SexyPlayer
+@testable import Aeria
 
 /// A stand-in for the future remote (Claude) parser. Unit tests never touch a
 /// live model.

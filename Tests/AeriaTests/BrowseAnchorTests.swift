@@ -1,5 +1,5 @@
 import XCTest
-@testable import SexyPlayer
+@testable import Aeria
 
 /// Covers the A–Z jump index: first-letter grouping, digit/symbol → "#",
 /// diacritic folding, and that indices line up with the sorted list.

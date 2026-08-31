@@ -1,7 +1,7 @@
-name: SexyPlayer
+name: Aeria
 
 options:
-  bundleIdPrefix: com.sexyplayer
+  bundleIdPrefix: com.aeriaplus
   deploymentTarget:
     tvOS: "18.0"
   createIntermediateGroups: true
@@ -21,7 +21,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: targeted
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     # Your Apple Developer Team ID — developer.apple.com → Membership details.
     # Safe to commit (it's embedded in every shipped app anyway).
@@ -30,7 +30,7 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
 targets:
-  SexyPlayer:
+  Aeria:
     type: application
     platform: tvOS
     sources:
@@ -42,46 +42,49 @@ targets:
     info:
       path: Sources/App/Info.plist
       properties:
-        CFBundleDisplayName: SexyPlayer
+        CFBundleDisplayName: Aeria+
         UIUserInterfaceStyle: Dark
+        # HTTPS-only / system crypto → no custom encryption. Skips the
+        # export-compliance prompt on every upload.
+        ITSAppUsesNonExemptEncryption: false
         # IPTV servers are very often plain HTTP. This is required for a working
         # IPTV client; the App Store review notes will explain it.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.sexyplayer.app
-        PRODUCT_NAME: SexyPlayer
+        PRODUCT_BUNDLE_IDENTIFIER: com.aeriaplus.appletv
+        PRODUCT_NAME: Aeria
         TARGETED_DEVICE_FAMILY: "3"
         ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_EMIT_LOC_STRINGS: YES
 
-  SexyPlayerTests:
+  AeriaTests:
     type: bundle.unit-test
     platform: tvOS
     sources:
-      - path: Tests/SexyPlayerTests
+      - path: Tests/AeriaTests
     dependencies:
-      - target: SexyPlayer
+      - target: Aeria
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.sexyplayer.app.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.aeriaplus.appletv.tests
 
 schemes:
-  SexyPlayer:
+  Aeria:
     build:
       targets:
-        SexyPlayer: all
-        SexyPlayerTests: [test]
+        Aeria: all
+        AeriaTests: [test]
     run:
       config: Debug
     test:
       config: Debug
       gatherCoverageData: true
       targets:
-        - SexyPlayerTests
+        - AeriaTests
     profile:
       config: Release
     archive:

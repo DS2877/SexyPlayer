@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SexyPlayerApp: App {
+struct AeriaApp: App {
     @State private var environment = AppEnvironment.live()
 
     var body: some Scene {

@@ -1,5 +1,5 @@
 import XCTest
-@testable import SexyPlayer
+@testable import Aeria
 
 final class QualityDetectorTests: XCTestCase {
 

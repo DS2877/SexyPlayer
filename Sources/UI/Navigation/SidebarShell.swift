@@ -63,7 +63,7 @@ struct SidebarShell: View {
                     .foregroundStyle(Palette.canvas)
                     .frame(width: 44, height: 44)
                     .background(Palette.textPrimary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text("SexyPlayer").font(.dsCardTitle).foregroundStyle(Palette.textPrimary)
+                Text("Aeria+").font(.dsCardTitle).foregroundStyle(Palette.textPrimary)
             }
             .padding(.horizontal, Metrics.space2)
             .padding(.top, Metrics.space4)

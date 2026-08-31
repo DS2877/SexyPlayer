@@ -188,7 +188,7 @@ struct SettingsView: View {
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: Metrics.space1) {
             SectionHeader("About")
-            Text("SexyPlayer is a player only. It does not provide, sell, host, or recommend any channels, streams, or media. You connect a provider you already subscribe to.")
+            Text("Aeria+ is a player only. It does not provide, sell, host, or recommend any channels, streams, or media. You connect a provider you already subscribe to.")
                 .font(.dsCaption).foregroundStyle(Palette.textSecondary)
                 .frame(maxWidth: 1000, alignment: .leading)
         }

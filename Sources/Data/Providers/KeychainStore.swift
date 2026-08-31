@@ -5,7 +5,7 @@ import Security
 /// generic passwords scoped to this app.
 public enum KeychainStore {
 
-    private static let service = "com.sexyplayer.app.providers"
+    private static let service = "com.aeriaplus.appletv.providers"
 
     public static func set(_ value: String, for account: String) {
         let data = Data(value.utf8)

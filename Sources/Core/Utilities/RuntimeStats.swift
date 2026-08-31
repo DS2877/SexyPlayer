@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Lightweight runtime instrumentation so large-library behaviour can be judged
 /// from the logs on a real device.
