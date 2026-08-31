@@ -147,6 +147,7 @@ struct HomeView: View {
                 logoURL: card.artworkURL,
                 nowTitle: card.subtitle,
                 quality: .unknown,
+                nowProgress: card.liveProgress,
                 action: { navigate(card) }
             )
         case .movie, .series:

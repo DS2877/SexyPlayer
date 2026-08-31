@@ -12,6 +12,8 @@ public struct HomeCard: Identifiable, Sendable {
     public let year: Int?
     public let badge: String?
     public let progress: Double?
+    /// How far through the current live programme a channel card is (0…1).
+    public let liveProgress: Double?
     /// Small uppercase line above the title (hero only): "2024 · Sci-Fi · 4K".
     public let eyebrow: String?
     /// For Continue Watching cards: the item that actually plays / gets marked
@@ -19,7 +21,7 @@ public struct HomeCard: Identifiable, Sendable {
     /// card taps through to). `nil` for every other card.
     public let resumeItemID: CatalogID?
 
-    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil, resumeItemID: CatalogID? = nil) {
+    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, liveProgress: Double? = nil, eyebrow: String? = nil, resumeItemID: CatalogID? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -28,6 +30,7 @@ public struct HomeCard: Identifiable, Sendable {
         self.year = year
         self.badge = badge
         self.progress = progress
+        self.liveProgress = liveProgress
         self.eyebrow = eyebrow
         self.resumeItemID = resumeItemID
     }

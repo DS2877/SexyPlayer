@@ -71,7 +71,8 @@ public final class HomeViewModel {
             let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
             return HomeCard(id: channel.id, kind: .channel, title: channel.name,
                             subtitle: event?.title ?? channel.category,
-                            artworkURL: channel.logoURL, badge: event != nil ? "LIVE" : nil)
+                            artworkURL: channel.logoURL, badge: event != nil ? "LIVE" : nil,
+                            liveProgress: event?.progress(at: now))
         }
         add(.liveNow, "Live Now", Array(liveCards))
 
