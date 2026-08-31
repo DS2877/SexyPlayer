@@ -50,6 +50,7 @@ struct VODBrowseView: View {
 
     @ViewBuilder
     private func grid(_ model: VODBrowseViewModel) -> some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                 Section {
@@ -84,16 +85,41 @@ struct VODBrowseView: View {
                         .padding(.bottom, Metrics.space7)
                     }
                 } header: {
-                    header(model)
+                    header(model, proxy: proxy)
                 }
             }
         }
         .onChange(of: model.filter) { _, _ in
             model.scheduleReload()
         }
+        }
     }
 
-    private func header(_ model: VODBrowseViewModel) -> some View {
+    @ViewBuilder
+    private func letterRail(_ model: VODBrowseViewModel, proxy: ScrollViewProxy) -> some View {
+        if model.anchors.count > 2 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Metrics.space1) {
+                    ForEach(model.anchors) { anchor in
+                        FilterChip(label: anchor.letter, isSelected: false) {
+                            Task {
+                                if let id = await model.jump(to: anchor) {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.12))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, Metrics.space1)
+            }
+            .focusSection()
+            .accessibilityLabel("Jump to letter")
+        }
+    }
+
+    private func header(_ model: VODBrowseViewModel, proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
             HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
                 Text(kind.title).font(.dsTitle).accessibilityAddTraits(.isHeader)
@@ -127,6 +153,8 @@ struct VODBrowseView: View {
                 }
                 .focusSection()
             }
+
+            letterRail(model, proxy: proxy)
         }
         .padding(.horizontal, Metrics.screenMargin)
         .padding(.top, Metrics.space4)

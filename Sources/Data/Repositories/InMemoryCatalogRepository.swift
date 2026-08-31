@@ -68,6 +68,8 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     }
 
     private func rebuildVisible() {
+        movieQueryCache = nil
+        seriesQueryCache = nil
         if hideAdult {
             catalog = Catalog(
                 channels: source.channels.filter { !$0.isAdult },
@@ -118,25 +120,71 @@ public actor InMemoryCatalogRepository: CatalogRepository {
 
     // MARK: - Movies / Series
 
-    public func movies(filter: CatalogFilter, page: Int, pageSize: Int) -> [Movie] {
-        catalog.movies
+    // A one-deep cache of the last sorted+filtered result. Browse paginates by
+    // calling back for page after page of the *same* filter; without this each
+    // page re-sorts the whole library (O(n log n) × pages).
+    private var movieQueryCache: (filter: CatalogFilter, result: [Movie])?
+    private var seriesQueryCache: (filter: CatalogFilter, result: [Series])?
+
+    private func sortedFilteredMovies(_ filter: CatalogFilter) -> [Movie] {
+        if let c = movieQueryCache, c.filter == filter { return c.result }
+        let result = catalog.movies
             .filter { filter.matches(movie: $0) }
             .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
-            .page(page, size: pageSize)
+        movieQueryCache = (filter, result)
+        return result
+    }
+
+    private func sortedFilteredSeries(_ filter: CatalogFilter) -> [Series] {
+        if let c = seriesQueryCache, c.filter == filter { return c.result }
+        let result = catalog.series
+            .filter { filter.matches(series: $0) }
+            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
+        seriesQueryCache = (filter, result)
+        return result
+    }
+
+    public func movies(filter: CatalogFilter, page: Int, pageSize: Int) -> [Movie] {
+        sortedFilteredMovies(filter).page(page, size: pageSize)
     }
 
     public func series(filter: CatalogFilter, page: Int, pageSize: Int) -> [Series] {
-        catalog.series
-            .filter { filter.matches(series: $0) }
-            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
-            .page(page, size: pageSize)
+        sortedFilteredSeries(filter).page(page, size: pageSize)
     }
 
     public func moviesCount(filter: CatalogFilter) -> Int {
-        catalog.movies.reduce(0) { filter.matches(movie: $1) ? $0 + 1 : $0 }
+        sortedFilteredMovies(filter).count
     }
     public func seriesCount(filter: CatalogFilter) -> Int {
-        catalog.series.reduce(0) { filter.matches(series: $1) ? $0 + 1 : $0 }
+        sortedFilteredSeries(filter).count
+    }
+
+    /// First-letter jump targets for an A–Z browse list: the index in the
+    /// sorted+filtered result where each initial letter starts.
+    public func movieTitleAnchors(filter: CatalogFilter) -> [BrowseAnchor] {
+        Self.anchors(sortedFilteredMovies(filter).map(\.title))
+    }
+    public func seriesTitleAnchors(filter: CatalogFilter) -> [BrowseAnchor] {
+        Self.anchors(sortedFilteredSeries(filter).map(\.title))
+    }
+
+    private static func anchors(_ titles: [String]) -> [BrowseAnchor] {
+        var result: [BrowseAnchor] = []
+        var seen = Set<String>()
+        for (index, title) in titles.enumerated() {
+            let letter = anchorLetter(for: title)
+            if seen.insert(letter).inserted {
+                result.append(BrowseAnchor(letter: letter, index: index))
+            }
+        }
+        return result
+    }
+
+    private static func anchorLetter(for title: String) -> String {
+        let stripped = title.folding(options: .diacriticInsensitive, locale: nil)
+            .drop { !$0.isLetter && !$0.isNumber }
+        guard let first = stripped.first else { return "#" }
+        return first.isNumber ? "#" : first.uppercased()
     }
     public func channelsCount(in category: String?) -> Int {
         guard let category, category != "All" else { return catalog.channels.count }
@@ -176,6 +224,7 @@ public actor InMemoryCatalogRepository: CatalogRepository {
             catalog.series[j].seasons = seasons
             seriesByID[id] = catalog.series[j]
         }
+        seriesQueryCache = nil
     }
 
     public func recentlyAdded(limit: Int) -> [SearchResult.Item] {

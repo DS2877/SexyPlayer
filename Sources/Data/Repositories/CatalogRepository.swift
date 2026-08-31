@@ -52,6 +52,18 @@ public protocol CatalogRepository: Sendable {
 /// Composable, structured filter used by browse screens (distinct from
 /// `SearchIntent`, which is the *parsed* form of a natural-language query —
 /// though a `SearchIntent` maps cleanly onto a `CatalogFilter`).
+/// A first-letter jump target for an A–Z browse list.
+public struct BrowseAnchor: Identifiable, Sendable, Hashable {
+    public let letter: String   // "A"…"Z" or "#"
+    public let index: Int       // position in the sorted+filtered list
+    public var id: String { letter }
+
+    public init(letter: String, index: Int) {
+        self.letter = letter
+        self.index = index
+    }
+}
+
 public enum BrowseSort: String, CaseIterable, Sendable, Codable {
     case recentlyAdded
     case titleAscending

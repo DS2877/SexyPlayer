@@ -14,6 +14,8 @@ public final class VODBrowseViewModel {
     public private(set) var availableGenres: [Genre] = []
     public private(set) var availableAudio: [Language] = []
     public private(set) var availableSubtitles: [Language] = []
+    /// A–Z jump targets — populated only when sorting alphabetically.
+    public private(set) var anchors: [BrowseAnchor] = []
 
     public var filter = CatalogFilter()
 
@@ -65,9 +67,33 @@ public final class VODBrowseViewModel {
         case .series: total = await repository.seriesCount(filter: snapshotFilter)
         }
         guard !Task.isCancelled else { return }
+
+        if snapshotFilter.sort == .titleAscending {
+            switch kind {
+            case .movies: anchors = await repository.movieTitleAnchors(filter: snapshotFilter)
+            case .series: anchors = await repository.seriesTitleAnchors(filter: snapshotFilter)
+            }
+        } else {
+            anchors = []
+        }
+        guard !Task.isCancelled else { return }
+
         cards = []
         await loadPage(replacing: true, filter: snapshotFilter)
         isLoading = false
+    }
+
+    /// Load pages until the item at `anchor.index` is in `cards`, then return
+    /// its id so the view can scroll to it. Pages are O(1) slices of a cached
+    /// sorted list, so walking to a deep letter is cheap.
+    public func jump(to anchor: BrowseAnchor) async -> CatalogID? {
+        let target = filter
+        while cards.count <= anchor.index, canLoadMore, filter == target {
+            let before = cards.count
+            await loadPage(replacing: false, filter: target)
+            if cards.count == before { break }
+        }
+        return cards.indices.contains(anchor.index) ? cards[anchor.index].id : cards.last?.id
     }
 
     public func loadMoreIfNeeded(currentItem: BrowseCard) async {
