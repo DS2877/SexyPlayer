@@ -12,7 +12,8 @@ public protocol CatalogRepository: Sendable {
     /// When `true`, every query and `snapshot()` excludes adult-flagged items.
     func setHideAdult(_ hide: Bool) async
 
-    func channels(in category: String?, page: Int, pageSize: Int) async -> [Channel]
+    func channels(in category: String?, sort: ChannelSort, page: Int, pageSize: Int) async -> [Channel]
+    func channelTitleAnchors(in category: String?) async -> [BrowseAnchor]
     func allChannelCategories() async -> [String]
 
     func movies(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Movie]
@@ -61,6 +62,18 @@ public struct BrowseAnchor: Identifiable, Sendable, Hashable {
     public init(letter: String, index: Int) {
         self.letter = letter
         self.index = index
+    }
+}
+
+public enum ChannelSort: String, CaseIterable, Sendable {
+    case number
+    case nameAsc
+
+    public var label: String {
+        switch self {
+        case .number:  return "Channel no."
+        case .nameAsc: return "A–Z"
+        }
     }
 }
 

@@ -70,6 +70,7 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     private func rebuildVisible() {
         movieQueryCache = nil
         seriesQueryCache = nil
+        channelQueryCache = nil
         if hideAdult {
             catalog = Catalog(
                 channels: source.channels.filter { !$0.isAdult },
@@ -104,16 +105,33 @@ public actor InMemoryCatalogRepository: CatalogRepository {
 
     // MARK: - Channels
 
-    public func channels(in category: String?, page: Int, pageSize: Int) -> [Channel] {
+    private var channelQueryCache: (category: String?, sort: ChannelSort, result: [Channel])?
+
+    private func sortedChannels(in category: String?, sort: ChannelSort) -> [Channel] {
+        if let c = channelQueryCache, c.category == category, c.sort == sort { return c.result }
         var list = catalog.channels
         if let category, category != "All" {
             list = list.filter { $0.category == category }
         }
-        list.sort { lhs, rhs in
-            if lhs.sortIndex != rhs.sortIndex { return lhs.sortIndex < rhs.sortIndex }
-            return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+        switch sort {
+        case .number:
+            list.sort { lhs, rhs in
+                if lhs.sortIndex != rhs.sortIndex { return lhs.sortIndex < rhs.sortIndex }
+                return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+            }
+        case .nameAsc:
+            list.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
         }
-        return list.page(page, size: pageSize)
+        channelQueryCache = (category, sort, list)
+        return list
+    }
+
+    public func channels(in category: String?, sort: ChannelSort, page: Int, pageSize: Int) -> [Channel] {
+        sortedChannels(in: category, sort: sort).page(page, size: pageSize)
+    }
+
+    public func channelTitleAnchors(in category: String?) -> [BrowseAnchor] {
+        Self.anchors(sortedChannels(in: category, sort: .nameAsc).map(\.name))
     }
 
     public func allChannelCategories() -> [String] { facetCategories }

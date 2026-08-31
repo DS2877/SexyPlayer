@@ -18,8 +18,10 @@ public final class LiveTVBrowseViewModel {
     public private(set) var total = 0
     public private(set) var isLoading = false
     public private(set) var canLoadMore = true
+    public private(set) var anchors: [BrowseAnchor] = []
 
     public var selectedCategory = "All"
+    public var sort: ChannelSort = .number
 
     private let repository: any CatalogRepository
     private let pageSize = 90
@@ -39,10 +41,12 @@ public final class LiveTVBrowseViewModel {
         page = 0
         canLoadMore = true
         let category = selectedCategory
+        let sort = self.sort
         total = await repository.channelsCount(in: category)
+        anchors = sort == .nameAsc ? await repository.channelTitleAnchors(in: category) : []
         guard !Task.isCancelled else { return }
         rows = []
-        await loadPage(replacing: true, category: category)
+        await loadPage(replacing: true, category: category, sort: sort)
         isLoading = false
     }
 
@@ -51,15 +55,27 @@ public final class LiveTVBrowseViewModel {
               let idx = rows.firstIndex(where: { $0.id == currentItem.id }),
               idx >= rows.count - 15
         else { return }
-        await loadPage(replacing: false, category: selectedCategory)
+        await loadPage(replacing: false, category: selectedCategory, sort: sort)
     }
 
-    private func loadPage(replacing: Bool, category: String) async {
+    /// Page in until the channel at `anchor.index` is loaded; return its id.
+    public func jump(to anchor: BrowseAnchor) async -> CatalogID? {
+        let category = selectedCategory, sort = self.sort
+        while rows.count <= anchor.index, canLoadMore,
+              category == selectedCategory, sort == self.sort {
+            let before = rows.count
+            await loadPage(replacing: false, category: category, sort: sort)
+            if rows.count == before { break }
+        }
+        return rows.indices.contains(anchor.index) ? rows[anchor.index].id : rows.last?.id
+    }
+
+    private func loadPage(replacing: Bool, category: String, sort: ChannelSort) async {
         isLoading = true
         defer { isLoading = false }
 
-        let channels = await repository.channels(in: category, page: page, pageSize: pageSize)
-        guard !Task.isCancelled, category == selectedCategory else { return }
+        let channels = await repository.channels(in: category, sort: sort, page: page, pageSize: pageSize)
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
 
         let now = Date()
         var built: [LiveChannelRow] = []
@@ -118,6 +134,7 @@ struct LiveTVBrowseView: View {
 
     @ViewBuilder
     private func content(_ model: LiveTVBrowseViewModel) -> some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
                 Section {
@@ -145,20 +162,32 @@ struct LiveTVBrowseView: View {
                         .padding(.bottom, Metrics.space7)
                     }
                 } header: {
-                    header(model)
+                    header(model, proxy: proxy)
                 }
             }
         }
         .onChange(of: model.selectedCategory) { _, _ in
             Task { await model.reload() }
         }
+        .onChange(of: model.sort) { _, _ in
+            Task { await model.reload() }
+        }
+        }
     }
 
-    private func header(_ model: LiveTVBrowseViewModel) -> some View {
+    private func header(_ model: LiveTVBrowseViewModel, proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
             HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
                 Text("Live TV").font(.dsTitle).accessibilityAddTraits(.isHeader)
                 Text("\(model.total)").font(.dsCardTitle).foregroundStyle(Palette.textTertiary)
+                Spacer()
+                HStack(spacing: Metrics.space1) {
+                    ForEach(ChannelSort.allCases, id: \.self) { option in
+                        FilterChip(label: option.label, isSelected: model.sort == option) {
+                            model.sort = option
+                        }
+                    }
+                }
             }
             if model.categories.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -172,6 +201,27 @@ struct LiveTVBrowseView: View {
                     .padding(.vertical, Metrics.space1)
                 }
                 .focusSection()
+            }
+
+            if model.sort == .nameAsc && model.anchors.count > 2 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Metrics.space1) {
+                        ForEach(model.anchors) { anchor in
+                            FilterChip(label: anchor.letter, isSelected: false) {
+                                Task {
+                                    if let id = await model.jump(to: anchor) {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            proxy.scrollTo(id, anchor: UnitPoint(x: 0, y: 0.12))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, Metrics.space1)
+                }
+                .focusSection()
+                .accessibilityLabel("Jump to letter")
             }
         }
         .padding(.horizontal, Metrics.screenMargin)
