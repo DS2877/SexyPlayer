@@ -15,11 +15,11 @@ struct SettingsView: View {
                         .accessibilityAddTraits(.isHeader)
                         .padding(.top, Metrics.space4)
 
-                    providersSection
-                    personalizeSection
-                    artworkSection
-                    aiSection
-                    aboutSection
+                    providersSection.modifier(SettingsCard())
+                    personalizeSection.modifier(SettingsCard())
+                    artworkSection.modifier(SettingsCard())
+                    aiSection.modifier(SettingsCard())
+                    aboutSection.modifier(SettingsCard())
                 }
                 .padding(.horizontal, Metrics.screenMargin)
                 .padding(.bottom, Metrics.space7)
@@ -187,11 +187,37 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: Metrics.space1) {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             SectionHeader("About")
             Text("Aeria+ is a player only. It does not provide, host, or control any channels, streams, or media — you connect an IPTV service you already subscribe to. We take no responsibility for content that third parties choose to view through the player.")
                 .font(.dsCaption).foregroundStyle(Palette.textSecondary)
                 .frame(maxWidth: 1000, alignment: .leading)
+            HStack(spacing: Metrics.space3) {
+                Text("Version \(Self.appVersion)")
+                Text("info@aeriaplus.se")
+            }
+            .font(.dsCaption)
+            .foregroundStyle(Palette.textTertiary)
+        }
+    }
+
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String
+        return build.map { "\(short) (\($0))" } ?? short
+    }
+
+    /// Groups a settings section into a calm surface card.
+    private struct SettingsCard: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Metrics.space4)
+                .background(Palette.surface.opacity(0.45),
+                            in: RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .strokeBorder(Palette.hairline))
         }
     }
 
