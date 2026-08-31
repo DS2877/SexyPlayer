@@ -245,39 +245,41 @@ private struct LibraryStatusPill: View {
     }
 }
 
-/// The Aeria+ mark — a chrome "A" with a blue "+" on a dark tile. Matches the
-/// app icon; used in the sidebar header.
+/// The Aeria+ mark — a clean geometric "A" in soft off-white with a small raised
+/// blue "+" on a near-black tile. Matches the app icon.
 struct BrandMark: View {
     static let blue = Palette.accent
+    private static let letter = LinearGradient(
+        colors: [Color(white: 0.965), Color(white: 0.87)], startPoint: .top, endPoint: .bottom)
 
     var body: some View {
         GeometryReader { geo in
             let s = min(geo.size.width, geo.size.height)
             ZStack {
                 RoundedRectangle(cornerRadius: s * 0.24, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.03)],
+                    .fill(LinearGradient(colors: [Color(white: 0.08), Color(white: 0.025)],
                                          startPoint: .top, endPoint: .bottom))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: s * 0.24, style: .continuous)
-                            .fill(RadialGradient(colors: [Self.blue.opacity(0.28), .clear],
-                                                 center: .center, startRadius: 0, endRadius: s * 0.5))
-                    )
 
+                // A — mitred legs
                 Path { p in
-                    p.move(to: CGPoint(x: s * 0.27, y: s * 0.79))
-                    p.addLine(to: CGPoint(x: s * 0.50, y: s * 0.21))
-                    p.addLine(to: CGPoint(x: s * 0.73, y: s * 0.79))
+                    p.move(to: CGPoint(x: s * 0.28, y: s * 0.75))
+                    p.addLine(to: CGPoint(x: s * 0.47, y: s * 0.27))
+                    p.addLine(to: CGPoint(x: s * 0.66, y: s * 0.75))
                 }
-                .stroke(LinearGradient(colors: [.white, Color(white: 0.72), .white],
-                                       startPoint: .top, endPoint: .bottom),
-                        style: StrokeStyle(lineWidth: s * 0.105, lineCap: .round, lineJoin: .round))
+                .stroke(Self.letter, style: StrokeStyle(lineWidth: s * 0.13, lineJoin: .miter))
+                // A — crossbar
+                RoundedRectangle(cornerRadius: s * 0.01)
+                    .fill(Self.letter)
+                    .frame(width: s * 0.24, height: s * 0.10)
+                    .position(x: s * 0.47, y: s * 0.565)
 
+                // raised +
                 ZStack {
-                    Capsule().frame(width: s * 0.24, height: s * 0.09)
-                    Capsule().frame(width: s * 0.09, height: s * 0.24)
+                    Capsule().frame(width: s * 0.16, height: s * 0.062)
+                    Capsule().frame(width: s * 0.062, height: s * 0.16)
                 }
                 .foregroundStyle(Self.blue)
-                .offset(y: s * 0.06)
+                .position(x: s * 0.71, y: s * 0.33)
             }
             .frame(width: s, height: s)
         }

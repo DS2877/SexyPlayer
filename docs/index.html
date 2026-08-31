@@ -15,11 +15,11 @@
   }
   .mark {
     width: 132px; height: 132px; margin: 0 auto 28px; border-radius: 30px;
-    background: linear-gradient(180deg, #15161a 0%, #08080a 100%);
-    box-shadow: 0 0 60px rgba(60,157,255,.18), inset 0 1px 0 rgba(255,255,255,.04);
+    background: linear-gradient(180deg, #101216 0%, #060608 100%);
+    box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
     display: flex; align-items: center; justify-content: center;
   }
-  .mark svg { width: 76px; height: 76px; }
+  .mark svg { width: 92px; height: 92px; }
   .eyebrow {
     font-size: 13px; letter-spacing: .22em; font-weight: 700;
     color: #5CACFF; margin-bottom: 6px;
@@ -39,17 +39,18 @@
   <div class="mark">
     <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="c" x1="0" y1="0" x2="0.15" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/><stop offset="34%" stop-color="#dfe2e6"/>
-          <stop offset="52%" stop-color="#9ba1a9"/><stop offset="70%" stop-color="#c6cbd1"/>
-          <stop offset="100%" stop-color="#ffffff"/>
+        <linearGradient id="l" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#F6F7F9"/><stop offset="100%" stop-color="#DDDFE3"/>
         </linearGradient>
       </defs>
-      <path d="M27 80 L50 20 L73 80" fill="none" stroke="url(#c)" stroke-width="9"
-            stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- A: mitred legs + crossbar, optical centre ~46 -->
+      <path d="M28 76 L46 24 L64 76" fill="none" stroke="url(#l)" stroke-width="12"
+            stroke-linejoin="miter" stroke-miterlimit="6"/>
+      <path d="M35 55 h22 v9 h-22 Z" fill="url(#l)"/>
+      <!-- raised + -->
       <g fill="#3B9EFF">
-        <rect x="38" y="52.5" width="24" height="9" rx="3.5"/>
-        <rect x="45.5" y="45" width="9" height="24" rx="3.5"/>
+        <rect x="62" y="30.5" width="15" height="7" rx="3"/>
+        <rect x="66" y="26.5" width="7" height="15" rx="3"/>
       </g>
     </svg>
   </div>

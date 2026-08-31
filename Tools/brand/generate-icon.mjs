@@ -1,10 +1,10 @@
 // Regenerates the tvOS app icon (layered parallax) + top-shelf art for Aeria+.
 // Usage:  cd Tools/brand && npm i sharp && node generate-icon.mjs
 //
-// The mark: a near-black tile with a soft blue aura, a chrome capital "A"
-// (two rounded strokes meeting at a point), and a blue "+" floating in the
-// crossbar gap. Parallax layers: Back = tile + glow · Middle = the A ·
-// Front = the +  (so the plus lifts off the A on the Apple TV home screen).
+// Direction: sibling to "tv+" / "D+" — a near-black tile with a faint top light
+// and a clean geometric "A+" wordmark. The A is a solid letterform in soft
+// off-white; the "+" is a small raised mark, the one spot of blue. No chrome,
+// no glow. Parallax layers: Back = tile + light · Middle = the A · Front = the +.
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -15,84 +15,90 @@ const BRAND = join(REPO, "Resources/Assets.xcassets/App Icon & Top Shelf Image.b
 const PREVIEW = join(REPO, "docs/brand");
 
 // ---- palette --------------------------------------------------------------
-const TILE_TOP = "#15161A";   // top of the tile
-const TILE_BOT = "#08080A";   // bottom of the tile
-const BLUE     = "#3B9EFF";   // the plus + the aura (matches Palette.accent)
-const BLUE_DEEP = "#1E63E6";
+const TILE_TOP = "#101216";
+const TILE_BOT = "#060608";
+const BLUE     = "#3B9EFF";   // the "+" — matches Palette.accent
 
-// ---- geometry helpers ---------------------------------------------------------
-// The "A": one open polyline foot → apex → foot, round caps + joins.
-function aPath(cx, cy, h) {
-  const AH = h * 0.300;            // half-height
-  const AW = h * 0.232;            // half-width at the feet
-  const apex = [cx, cy - AH];
-  const lf   = [cx - AW, cy + AH];
-  const rf   = [cx + AW, cy + AH];
-  const d = `M ${lf[0].toFixed(1)} ${lf[1].toFixed(1)} ` +
-            `L ${apex[0].toFixed(1)} ${apex[1].toFixed(1)} ` +
-            `L ${rf[0].toFixed(1)} ${rf[1].toFixed(1)}`;
-  return { d, width: h * 0.088 };
+// ---- the "A" ---------------------------------------------------------------
+// Two mitred legs (a sharp ^) plus a crossbar, all one fill. `x` is the optical
+// centre of the letter.
+function letterA(x, cy, h) {
+  const AH = h * 0.212;              // half-height
+  const OW = h * 0.176;              // outer half-width at the feet
+  const LT = h * 0.124;              // leg thickness
+  const top = cy - AH, bot = cy + AH;
+
+  const legs = `M ${(x - OW).toFixed(1)} ${bot.toFixed(1)} ` +
+               `L ${x.toFixed(1)} ${top.toFixed(1)} ` +
+               `L ${(x + OW).toFixed(1)} ${bot.toFixed(1)}`;
+
+  // crossbar just above the vertical middle; spans to (almost) the outer edges
+  const barY = cy + AH * 0.24;
+  const f = (barY - top) / (2 * AH);
+  const half = OW * f - LT * 0.12;
+  const barT = h * 0.100;
+  const cross = `M ${(x - half).toFixed(1)} ${(barY - barT / 2).toFixed(1)} ` +
+                `h ${(2 * half).toFixed(1)} v ${barT.toFixed(1)} ` +
+                `h ${(-2 * half).toFixed(1)} Z`;
+
+  return { legs, cross, legWidth: LT, rightEdge: x + OW, apexY: top };
 }
 
-// The "+": two rounded bars, centred just below the icon centre.
-function plusPaths(cx, cy, h) {
-  const c = [cx, cy + h * 0.055];
-  const arm = h * 0.120;          // half-length of each bar
-  const t   = h * 0.066;          // bar thickness
-  const r   = t * 0.42;
-  const hBar = `M ${(c[0]-arm).toFixed(1)} ${(c[1]-t/2).toFixed(1)} h ${(2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${r} v ${(t-2*r).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${r} h ${(-2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${-r} v ${(-(t-2*r)).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${-r} Z`;
-  const vBar = `M ${(c[0]-t/2).toFixed(1)} ${(c[1]-arm).toFixed(1)} v ${(2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${r} h ${(-(t-2*r)).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${-r} v ${(-2*arm).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${-r} h ${(t-2*r).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${r} Z`;
-  return `${hBar} ${vBar}`;
+// ---- the "+" -------------------------------------------------------------
+// Small raised mark to the upper-right of the A. Two rounded bars, nonzero fill.
+function plusMark(cx, cy, h) {
+  const arm = h * 0.082;
+  const t   = h * 0.050;
+  const r   = t * 0.44;
+  const bar = (w, ht) =>
+    `M ${(cx - w).toFixed(1)} ${(cy - ht).toFixed(1)} ` +
+    `h ${(2 * w).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${r} ` +
+    `v ${(2 * ht - 2 * r).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${r} ` +
+    `h ${(-2 * w).toFixed(1)} a ${r} ${r} 0 0 1 ${-r} ${-r} ` +
+    `v ${(-(2 * ht - 2 * r)).toFixed(1)} a ${r} ${r} 0 0 1 ${r} ${-r} Z`;
+  return `${bar(arm, t / 2)} ${bar(t / 2, arm)}`;
 }
 
-// ---- one layer --------------------------------------------------------------
+// ---- one layer -----------------------------------------------------------
 // layer: back | middle | front | flat
 function svg(w, h, layer, { cxFrac = 0.5, cyFrac = 0.5, markScale = 1 } = {}) {
-  const cx = w * cxFrac, cy = h * cyFrac;
-  const a = aPath(cx, cy, h * markScale);
-  const plus = plusPaths(cx, cy, h * markScale);
+  const s = h * markScale;
+  const cy = h * cyFrac;
+  // shift the A left of centre so the whole "A+" lockup is optically centred
+  const ax = w * cxFrac - s * 0.03;
+  const a = letterA(ax, cy, s);
+  const plusX = a.rightEdge + s * 0.03;      // kisses the A's right leg
+  const plusY = a.apexY + s * 0.075;         // raised, near the apex
+  const plus = plusMark(plusX, plusY, s);
   const has = (name) => layer === name || layer === "flat";
 
   const defs = `
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"  stop-color="${TILE_TOP}"/>
-      <stop offset="100%" stop-color="${TILE_BOT}"/>
+      <stop offset="0%" stop-color="${TILE_TOP}"/><stop offset="100%" stop-color="${TILE_BOT}"/>
     </linearGradient>
-    <radialGradient id="aura" cx="50%" cy="46%" r="42%">
-      <stop offset="0%"  stop-color="${BLUE}" stop-opacity="0.42"/>
-      <stop offset="55%" stop-color="${BLUE_DEEP}" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="${BLUE_DEEP}" stop-opacity="0"/>
+    <radialGradient id="toplight" cx="50%" cy="0%" r="75%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="60%" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="chrome" x1="0" y1="0" x2="0.15" y2="1">
-      <stop offset="0%"   stop-color="#FFFFFF"/>
-      <stop offset="34%"  stop-color="#DFE2E6"/>
-      <stop offset="52%"  stop-color="#9BA1A9"/>
-      <stop offset="70%"  stop-color="#C6CBD1"/>
-      <stop offset="100%" stop-color="#FFFFFF"/>
-    </linearGradient>
-    <filter id="blueGlow" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur stdDeviation="${h * 0.03}"/>
-    </filter>
-    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="${h * 0.012}"/>
-    </filter>`;
+    <linearGradient id="letter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F6F7F9"/><stop offset="100%" stop-color="#DDDFE3"/>
+    </linearGradient>`;
 
   const parts = [];
 
   if (has("back")) {
     parts.push(`<rect width="${w}" height="${h}" fill="url(#tile)"/>`);
-    parts.push(`<rect width="${w}" height="${h}" fill="url(#aura)"/>`);
+    parts.push(`<rect width="${w}" height="${h}" fill="url(#toplight)"/>`);
   }
 
   if (has("middle")) {
-    // faint drop for depth, then the chrome A
-    parts.push(`<g opacity="0.5"><path d="${a.d}" fill="none" stroke="#000" stroke-width="${a.width}" stroke-linecap="round" stroke-linejoin="round" filter="url(#soft)" transform="translate(0 ${h*0.012})"/></g>`);
-    parts.push(`<path d="${a.d}" fill="none" stroke="url(#chrome)" stroke-width="${a.width}" stroke-linecap="round" stroke-linejoin="round"/>`);
+    parts.push(`<g fill="none" stroke="url(#letter)" stroke-width="${a.legWidth}" ` +
+               `stroke-linejoin="miter" stroke-miterlimit="6" stroke-linecap="butt">` +
+               `<path d="${a.legs}"/></g>`);
+    parts.push(`<path d="${a.cross}" fill="url(#letter)"/>`);
   }
 
   if (has("front")) {
-    // nonzero winding — the two bars overlap in the centre and must stay solid
-    parts.push(`<g filter="url(#blueGlow)" opacity="0.9"><path d="${plus}" fill="${BLUE}"/></g>`);
     parts.push(`<path d="${plus}" fill="${BLUE}"/>`);
   }
 

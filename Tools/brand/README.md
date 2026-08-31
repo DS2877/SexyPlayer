@@ -6,15 +6,16 @@ straight into `Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets/
 
 ## The mark
 
-Near-black tile with a soft blue aura · a **chrome capital "A"** (one open
-polyline — foot → apex → foot — stroked with a vertical chrome gradient, round
-caps) · a **blue "+"** floating in the crossbar gap with a blue glow.
+Sibling to `tv+` / `D+` — a near-black tile with a faint top light and a clean
+geometric **"A+"** wordmark. The A is a solid letterform (mitred legs + crossbar)
+in soft off-white; the **"+"** is a small raised mark, the one spot of blue. No
+chrome, no glow.
 
-Parallax layers: **Back** = tile + aura · **Middle** = the A · **Front** = the +
-(so the plus lifts off the A on the Apple TV home screen).
+Parallax layers: **Back** = tile + light · **Middle** = the A · **Front** = the +
+(so the plus lifts slightly on the Apple TV home screen).
 
-Tune `aPath()` / `plusPaths()` and the palette (`TILE_*`, `BLUE`, `chrome`
-gradient stops) at the top of the script.
+Tune `letterA()` / `plusMark()` and the palette (`TILE_*`, `BLUE`, the `letter`
+gradient) at the top of the script.
 
 ## Regenerate
 
