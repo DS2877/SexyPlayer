@@ -19,6 +19,7 @@ public final class AppEnvironment {
     public let searchEngine: SearchEngine
     public let aiService: AIService
     public let watchProgress: WatchProgressStore
+    public let channelHistory: ChannelHistoryStore
     public let favorites: FavoritesStore
     public let providers: ProviderStore
     public let preferences: PreferencesStore
@@ -70,6 +71,7 @@ public final class AppEnvironment {
         self.searchEngine = SearchEngine()
         self.aiService = AIService(mode: .onDeviceOnly)
         self.watchProgress = WatchProgressStore()
+        self.channelHistory = ChannelHistoryStore()
         self.favorites = FavoritesStore()
         self.providers = ProviderStore()
         self.preferences = PreferencesStore()
@@ -87,6 +89,8 @@ public final class AppEnvironment {
         let prefs = preferences.preferences
         await repository.setHideAdult(prefs.hideAdultContent)
         await repository.setRegionLimit(prefs.limitToRelevantRegions)
+        await repository.setHomeRegions(RelevanceFilter.homeRegions(for: prefs.preferredAudioLanguages))
+        await repository.setRecentChannels(channelHistory.recent())
         await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
 
         let aiKey = KeychainStore.get(Self.aiKeyAccount) ?? ""
@@ -464,6 +468,7 @@ public final class AppEnvironment {
 
     public func playback(forChannel id: CatalogID) async -> PlaybackItem? {
         guard let channel = await repository.channel(id: id) else { return nil }
+        recordChannelView(channel.id)
         return PlaybackItem(
             id: channel.id,
             kind: .liveChannel,
@@ -477,6 +482,16 @@ public final class AppEnvironment {
     public func recordProgress(id: CatalogID, kind: ContentKind, position: Double, duration: Double) {
         watchProgress.record(id: id, kind: kind, positionSeconds: position, durationSeconds: duration)
         scheduleTopShelfWrite()
+    }
+
+    /// Called when live playback of a channel starts — feeds the "your regulars
+    /// first" ordering in Live TV and the Home "Live Now" row.
+    public func recordChannelView(_ id: CatalogID) {
+        channelHistory.record(id)
+        Task {
+            await repository.setRecentChannels(channelHistory.recent())
+            catalogRevision += 1
+        }
     }
 
     /// "Mark as Watched" from a Continue Watching card — records a finished entry

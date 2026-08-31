@@ -8,9 +8,31 @@ import Foundation
 /// (24-7, Sport, PPV…) and drops the rest.
 public enum RelevanceFilter {
 
+    public static let nordic: Set<String> = ["SE", "NO", "DK", "FI", "IS"]
+    public static let english: Set<String> = ["GB", "IE", "US", "CA", "AU", "NZ"]
+
     /// ISO country codes kept when the region limit is on. Everything with no
     /// detected country is also kept (generic / international feeds).
-    public static let keptRegions: Set<String> = ["SE", "NO", "DK", "FI", "IS", "GB", "IE", "US", "CA", "AU", "NZ"]
+    public static let keptRegions: Set<String> = nordic.union(english)
+
+    /// Sort rank for a country: 0 = the viewer's home country, 1 = other Nordic,
+    /// 2 = English / generic, 3 = anything else. Lower sorts first.
+    public static func priority(countryCode: String?, home: Set<String>) -> Int {
+        guard let code = countryCode else { return 2 }
+        if home.contains(code) { return 0 }
+        if nordic.contains(code) { return 1 }
+        if english.contains(code) { return 2 }
+        return 3
+    }
+
+    /// The viewer's home country codes, from their chosen audio languages.
+    /// Defaults to Sweden — the launch market.
+    public static func homeRegions(for languages: [Language]) -> Set<String> {
+        let map = ["sv": "SE", "no": "NO", "nb": "NO", "nn": "NO",
+                   "da": "DK", "fi": "FI", "is": "IS", "en": "GB"]
+        let codes = Set(languages.compactMap { map[$0.code] })
+        return codes.isEmpty ? ["SE"] : codes
+    }
 
     /// Foreign-language markers that show up in provider category / channel names
     /// even when no clean country token was parsed. Matched as whole words.

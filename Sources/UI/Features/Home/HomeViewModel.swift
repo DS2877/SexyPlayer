@@ -35,10 +35,12 @@ public final class HomeViewModel {
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
         let ratings = await metadata.ratingsSnapshot()
+        // Already ranked: regulars first, then home country, then the rest.
+        let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
 
         content = await Task.detached(priority: .userInitiated) {
             Self.makeContent(catalog: catalog, epg: epg, progress: progress,
-                             prefs: prefs, ratings: ratings, now: now)
+                             prefs: prefs, ratings: ratings, liveNow: liveNow, now: now)
         }.value
     }
 
@@ -46,7 +48,7 @@ public final class HomeViewModel {
 
     nonisolated static func makeContent(
         catalog: Catalog, epg: EPGIndex, progress: [WatchProgress],
-        prefs: UserPreferences, ratings: [String: Double], now: Date
+        prefs: UserPreferences, ratings: [String: Double], liveNow: [Channel], now: Date
     ) -> HomeContent {
         let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
@@ -65,7 +67,7 @@ public final class HomeViewModel {
 
         add(.continueWatching, "Continue Watching", continueWatchingCards(catalog: catalog, progress: progress))
 
-        let liveCards = catalog.channels.prefix(16).map { channel -> HomeCard in
+        let liveCards = liveNow.prefix(16).map { channel -> HomeCard in
             let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
             return HomeCard(id: channel.id, kind: .channel, title: channel.name,
                             subtitle: event?.title ?? channel.category,

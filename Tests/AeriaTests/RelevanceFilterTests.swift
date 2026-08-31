@@ -39,6 +39,46 @@ final class RelevanceFilterTests: XCTestCase {
         XCTAssertTrue(keep(nil, "Pirates of the Caribbean", "Movies"))
     }
 
+    func testPriorityRanksHomeThenNordicThenEnglish() {
+        let home: Set<String> = ["SE"]
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "SE", home: home), 0)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "NO", home: home), 1)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "GB", home: home), 2)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: nil,  home: home), 2)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "DE", home: home), 3)
+    }
+
+    func testHomeRegionsFromLanguages() {
+        XCTAssertEqual(RelevanceFilter.homeRegions(for: []), ["SE"])
+        XCTAssertEqual(RelevanceFilter.homeRegions(for: [.swedish]), ["SE"])
+        XCTAssertEqual(RelevanceFilter.homeRegions(for: [.norwegian, .danish]), ["NO", "DK"])
+    }
+
+    @MainActor
+    func testChannelSortPutsHomeCountryAndRegularsFirst() async {
+        let repo = InMemoryCatalogRepository()
+        let url = URL(string: "https://x/s")!
+        func ch(_ id: String, _ name: String, _ code: String?, num: Int) -> Channel {
+            Channel(id: .init(rawValue: id), name: name, category: "General",
+                    countryCode: code, streamURL: url, sortIndex: num)
+        }
+        await repo.load(Catalog(channels: [
+            ch("gb1", "BBC One", "GB", num: 1),
+            ch("se2", "SVT2", "SE", num: 2),
+            ch("no1", "NRK1", "NO", num: 1),
+            ch("se1", "SVT1", "SE", num: 1),
+        ]))
+        await repo.setHomeRegions(["SE"])
+
+        var order = await repo.channels(in: nil, sort: .number, page: 0, pageSize: 10).map(\.name)
+        XCTAssertEqual(order, ["SVT1", "SVT2", "NRK1", "BBC One"])
+
+        // Watching BBC One floats it to the very top.
+        await repo.setRecentChannels([.init(rawValue: "gb1")])
+        order = await repo.channels(in: nil, sort: .number, page: 0, pageSize: 10).map(\.name)
+        XCTAssertEqual(order.first, "BBC One")
+    }
+
     @MainActor
     func testRepositoryAppliesTheFilter() async {
         let repo = InMemoryCatalogRepository()

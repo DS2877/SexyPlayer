@@ -70,12 +70,14 @@ public struct BrowseAnchor: Identifiable, Sendable, Hashable {
 }
 
 public enum ChannelSort: String, CaseIterable, Sendable {
+    /// Your regulars first, then your country, then other Nordic / English, each
+    /// tier by the provider's channel number.
     case number
     case nameAsc
 
     public var label: String {
         switch self {
-        case .number:  return "Channel no."
+        case .number:  return "For you"
         case .nameAsc: return "A–Z"
         }
     }

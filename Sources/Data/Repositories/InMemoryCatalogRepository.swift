@@ -136,16 +136,47 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     // MARK: - Channels
 
     private var channelQueryCache: (category: String?, sort: ChannelSort, result: [Channel])?
+    /// The viewer's home country codes (from chosen languages) — channels from
+    /// these sort first in `.number` mode. Set via `applyPreferences()`.
+    private var homeRegions: Set<String> = ["SE"]
+    /// Recently-watched channel ids → recency rank (0 = most recent). These float
+    /// to the very top of `.number` mode.
+    private var recentChannelRank: [CatalogID: Int] = [:]
 
-    private func sortedChannels(in category: String?, sort: ChannelSort) -> [Channel] {
+    public func setHomeRegions(_ regions: Set<String>) {
+        guard regions != homeRegions else { return }
+        homeRegions = regions
+        channelQueryCache = nil
+    }
+
+    public func setRecentChannels(_ ids: [CatalogID]) {
+        let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
+        guard rank != recentChannelRank else { return }
+        recentChannelRank = rank
+        channelQueryCache = nil
+    }
+
+    private func sortedChannels(in rawCategory: String?, sort: ChannelSort) -> [Channel] {
+        let category = (rawCategory == "All") ? nil : rawCategory   // same result either way
         if let c = channelQueryCache, c.category == category, c.sort == sort { return c.result }
         var list = catalog.channels
-        if let category, category != "All" {
+        if let category {
             list = list.filter { $0.category == category }
         }
         switch sort {
         case .number:
+            let home = homeRegions
+            let recent = recentChannelRank
             list.sort { lhs, rhs in
+                // 1. channels the viewer actually watches, most recent first
+                let lr = recent[lhs.id], rr = recent[rhs.id]
+                if (lr != nil) != (rr != nil) { return lr != nil }
+                if let lr, let rr, lr != rr { return lr < rr }
+                // 2. home country, then other Nordic, then English, then the rest
+                let lp = RelevanceFilter.priority(countryCode: lhs.countryCode, home: home)
+                let rp = RelevanceFilter.priority(countryCode: rhs.countryCode, home: home)
+                if lp != rp { return lp < rp }
+                // 3. the provider's channel number, then name
                 if lhs.sortIndex != rhs.sortIndex { return lhs.sortIndex < rhs.sortIndex }
                 return lhs.name.localizedCompare(rhs.name) == .orderedAscending
             }
