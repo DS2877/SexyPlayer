@@ -54,6 +54,13 @@ struct SidebarShell: View {
                 // lands on the content's last-focused element regardless of
                 // vertical alignment (the tvOS two-column pattern).
                 .focusSection()
+                // Menu from a section root moves focus back to the sidebar (the
+                // Apple TV convention). On Home, Menu is left alone so it
+                // backgrounds the app, per the HIG. A pushed detail screen's
+                // NavigationStack still gets Menu first and pops as usual.
+                .modifier(MenuReturnsToSidebar(enabled: selection != .home) {
+                    withAnimation(Metrics.focusAnimation) { focusedItem = selection }
+                })
         }
         .background(Palette.canvas.ignoresSafeArea())
         .onChange(of: focusedItem) { _, item in
@@ -113,6 +120,21 @@ struct SidebarShell: View {
         case .favorites: FavoritesView()
         case .history:   HistoryView()
         case .settings:  SettingsView()
+        }
+    }
+}
+
+/// Applies `.onExitCommand` only when `enabled` — `.onExitCommand` always
+/// consumes the press, so on Home we must not attach it at all.
+private struct MenuReturnsToSidebar: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onExitCommand(perform: action)
+        } else {
+            content
         }
     }
 }
