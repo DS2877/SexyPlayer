@@ -36,6 +36,7 @@ struct HomeView: View {
             )
             self.model = model
             await model.rebuild()
+            prefetchArtwork(model)
         }
         .onChange(of: path.isEmpty) { _, backAtRoot in
             // Returning to Home refreshes Continue Watching after playback.
@@ -49,11 +50,25 @@ struct HomeView: View {
             Task { await model?.rebuild() }
         }
         .onChange(of: environment.catalogRevision) { _, _ in
-            Task { await model?.rebuild() }
+            Task {
+                await model?.rebuild()
+                if let model { prefetchArtwork(model) }
+            }
         }
         .onChange(of: environment.metadataRevision) { _, _ in
             Task { await model?.rebuild() }
         }
+    }
+
+    /// Warm the image cache for the hero and the first few rows so Home looks
+    /// populated the instant it appears rather than filling in poster by poster.
+    private func prefetchArtwork(_ model: HomeViewModel) {
+        var urls: [URL] = []
+        if let hero = model.content.hero?.artworkURL { urls.append(hero) }
+        for row in model.content.rows.prefix(3) {
+            urls += row.cards.prefix(8).compactMap(\.artworkURL)
+        }
+        ImageCache.shared.prefetch(urls)
     }
 
     private var loadingView: some View {

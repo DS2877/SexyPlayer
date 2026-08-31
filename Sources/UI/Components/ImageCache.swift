@@ -79,6 +79,14 @@ actor ImageCache {
         return image
     }
 
+    /// Warm the cache for URLs about to scroll into view, so the first
+    /// screenful of a grid is already decoded when it renders.
+    nonisolated func prefetch(_ urls: [URL]) {
+        for url in urls where DecodedImageMemoryCache.shared.image(for: url) == nil {
+            Task.detached(priority: .utility) { _ = await ImageCache.shared.image(for: url) }
+        }
+    }
+
     // MARK: - Helpers
 
     private static func decode(_ data: Data) -> UIImage? {

@@ -30,14 +30,22 @@ struct VODBrowseView: View {
                 vm.filter.sort = env.preferences.preferences.defaultSort
                 model = vm
                 await vm.start()
+                prefetchPosters(vm)
             }
         }
         .onChange(of: path.isEmpty) { _, atRoot in
             if atRoot { Task { await model?.start() } }
         }
         .onChange(of: env.catalogRevision) { _, _ in
-            Task { await model?.start() }
+            Task {
+                await model?.start()
+                if let model { prefetchPosters(model) }
+            }
         }
+    }
+
+    private func prefetchPosters(_ model: VODBrowseViewModel) {
+        ImageCache.shared.prefetch(model.cards.prefix(15).compactMap(\.posterURL))
     }
 
     @ViewBuilder
