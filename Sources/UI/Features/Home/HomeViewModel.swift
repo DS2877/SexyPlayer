@@ -76,6 +76,18 @@ public final class HomeViewModel {
         add(.liveNow, "Live Now", Array(liveCards))
 
         let seriesByRecency = catalog.series.sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+
+        // "Because You Watched X" — genre-similar titles to the newest thing the
+        // viewer has played. Floated just under Continue Watching below.
+        let becauseRow: HomeRow? = {
+            guard let anchor = mostRecentWatched(progress: progress, catalog: catalog) else { return nil }
+            let cards = similarTitles(toGenres: anchor.genres, excluding: anchor.id,
+                                      movies: moviesByRecency, series: seriesByRecency, limit: 20)
+            guard cards.count >= 5 else { return nil }
+            return HomeRow(id: "because-\(anchor.id.rawValue)",
+                           title: "Because You Watched \(anchor.title)", subtitle: nil, cards: cards)
+        }()
+
         var recent = Array(moviesByRecency.prefix(12)).map { card(for: $0) }
         recent += Array(seriesByRecency.prefix(6)).map { card(for: $0) }
         add(.recentlyAdded, "Recently Added", Array(recent.prefix(16)))
@@ -110,6 +122,7 @@ public final class HomeViewModel {
             rows.append(HomeRow(id: HomeRowKind.topRated.rawValue, title: "Top Rated",
                                 subtitle: "Highest rated in your library", cards: Array(topRated)))
         }
+        if let becauseRow { rows.append(becauseRow) }
 
         // Genre shelves — the biggest few genres in the library. Like "Top
         // Rated" these are new, so they're shown regardless of the saved row
@@ -141,11 +154,13 @@ public final class HomeViewModel {
                 < (prefs.homeRows.firstIndex { $0.rawValue == rhs.id } ?? 99)
         }
 
-        // Float "Top Rated" up just below Continue Watching (it has no saved
-        // position to sort by).
-        if let idx = rows.firstIndex(where: { $0.id == HomeRowKind.topRated.rawValue }) {
+        // Float "Top Rated" then "Because You Watched" up just below Continue
+        // Watching (neither has a saved position to sort by).
+        for floatID in [HomeRowKind.topRated.rawValue, becauseRow?.id].compactMap({ $0 }) {
+            guard let idx = rows.firstIndex(where: { $0.id == floatID }) else { continue }
             let row = rows.remove(at: idx)
-            let insertAt = rows.firstIndex { $0.id == HomeRowKind.continueWatching.rawValue }
+            let insertAt = rows.lastIndex { $0.id == HomeRowKind.continueWatching.rawValue
+                || $0.id == HomeRowKind.topRated.rawValue }
                 .map { $0 + 1 } ?? 0
             rows.insert(row, at: Swift.min(insertAt, rows.count))
         }
@@ -218,6 +233,49 @@ public final class HomeViewModel {
         HomeCard(id: series.id, kind: .series, title: series.title,
                  subtitle: "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")",
                  artworkURL: series.posterURL, year: series.year)
+    }
+
+    /// The newest movie / series the viewer has played that still carries genre
+    /// tags — the anchor for the "Because You Watched" row.
+    nonisolated static func mostRecentWatched(
+        progress: [WatchProgress], catalog: Catalog
+    ) -> (id: CatalogID, title: String, genres: [Genre])? {
+        let moviesByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var seriesByEpisode: [CatalogID: Series] = [:]
+        for s in catalog.series {
+            for season in s.seasons { for e in season.episodes { seriesByEpisode[e.id] = s } }
+        }
+        for entry in progress.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            switch entry.kind {
+            case .movie:
+                if let m = moviesByID[entry.itemID], !m.genres.isEmpty { return (m.id, m.title, m.genres) }
+            case .series:
+                if let s = seriesByEpisode[entry.itemID], !s.genres.isEmpty { return (s.id, s.title, s.genres) }
+            case .liveChannel:
+                break
+            }
+        }
+        return nil
+    }
+
+    /// Movies + series that share a genre with `genres`, ranked by shared-genre
+    /// count (ties keep the incoming recency order). Excludes the anchor itself.
+    nonisolated static func similarTitles(
+        toGenres genres: [Genre], excluding excludeID: CatalogID,
+        movies: [Movie], series: [Series], limit: Int
+    ) -> [HomeCard] {
+        guard !genres.isEmpty else { return [] }
+        let want = Set(genres)
+        func overlap(_ g: [Genre]) -> Int { Set(g).intersection(want).count }
+
+        var scored: [(card: HomeCard, score: Int)] = []
+        for m in movies where m.id != excludeID {
+            let o = overlap(m.genres); if o > 0 { scored.append((card(for: m), o)) }
+        }
+        for s in series where s.id != excludeID {
+            let o = overlap(s.genres); if o > 0 { scored.append((card(for: s), o)) }
+        }
+        return scored.sorted { $0.score > $1.score }.prefix(limit).map(\.card)
     }
 
     nonisolated static func metadataSubtitle(for movie: Movie) -> String {
