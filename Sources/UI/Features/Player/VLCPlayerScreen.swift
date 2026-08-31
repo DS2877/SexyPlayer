@@ -15,6 +15,9 @@ struct VLCPlayerScreen: View {
     @State private var controlsVisible = true
     @State private var showTracks = false
     @State private var hideWorkItem: DispatchWorkItem?
+    /// The transport has no visible controls to focus, so the whole surface must
+    /// hold focus or the remote's Play/Pause / arrows / Menu never reach us.
+    @FocusState private var surfaceFocused: Bool
 
     // Scrubbing: presses accumulate into a pending target shown on the bar and
     // committed a beat after the last press, so seeking an MKV over the network
@@ -49,8 +52,10 @@ struct VLCPlayerScreen: View {
             }
         }
         .focusable()
+        .focused($surfaceFocused)
         .onPlayPauseCommand { model?.togglePlayPause(); flashControls() }
         .onMoveCommand { direction in
+            flashControls()
             switch direction {
             case .left:  scrub(by: -1)
             case .right: scrub(by: 1)
@@ -63,6 +68,12 @@ struct VLCPlayerScreen: View {
         .fullScreenCover(isPresented: $showTracks) {
             if let model { VLCTrackSheet(model: model) }
         }
+        .onChange(of: showTracks) { _, showing in
+            if !showing { surfaceFocused = true }   // reclaim focus when the sheet closes
+        }
+        .onChange(of: model?.state) { _, state in
+            if case .failed = state {} else { surfaceFocused = true }
+        }
         .onAppear {
             let m = VLCPlayerModel(item: item,
                                    preferredAudio: preferredAudio,
@@ -71,6 +82,7 @@ struct VLCPlayerScreen: View {
             }
             m.onFinished = { dismiss() }
             model = m
+            surfaceFocused = true
             flashControls()
         }
         .onDisappear {
@@ -95,7 +107,6 @@ struct VLCPlayerScreen: View {
         let base = pendingSeek ?? model.position
         pendingSeek = min(max(0, base + sign * step), model.duration)
 
-        flashControls()
         seekCommitWork?.cancel()
         let work = DispatchWorkItem {
             if let target = pendingSeek { model.seek(to: target) }

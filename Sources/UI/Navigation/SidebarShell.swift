@@ -42,6 +42,7 @@ struct SidebarShell: View {
     private static let primary: [Section] = [.home, .search, .liveTV, .guide, .movies, .series, .favorites, .history]
 
     @State private var selection: Section = .home
+    @FocusState private var focusedItem: Section?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -49,12 +50,21 @@ struct SidebarShell: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) { LibraryStatusPill() }
+                // Its own focus region — pressing → from anywhere in the sidebar
+                // lands on the content's last-focused element regardless of
+                // vertical alignment (the tvOS two-column pattern).
+                .focusSection()
         }
         .background(Palette.canvas.ignoresSafeArea())
+        .onChange(of: focusedItem) { _, item in
+            // Focus-driven sidebar, the way the Apple TV app works: moving up/down
+            // the list switches the content live.
+            if let item { selection = item }
+        }
         .onChange(of: env.pendingRoute) { _, route in
             // A Top Shelf deep link lands here — Home owns the nav stack that
             // shows detail screens.
-            if route != nil { selection = .home }
+            if route != nil { selection = .home; focusedItem = .home }
         }
     }
 
@@ -74,11 +84,13 @@ struct SidebarShell: View {
 
             ForEach(Self.primary) { item in
                 SidebarItem(section: item, isSelected: selection == item) { select(item) }
+                    .focused($focusedItem, equals: item)
             }
 
             Spacer(minLength: 0)
 
             SidebarItem(section: .settings, isSelected: selection == .settings) { select(.settings) }
+                .focused($focusedItem, equals: .settings)
                 .padding(.bottom, Metrics.space4)
         }
         .frame(width: 320)

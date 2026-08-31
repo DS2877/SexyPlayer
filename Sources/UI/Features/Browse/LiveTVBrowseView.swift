@@ -233,5 +233,6 @@ struct LiveTVBrowseView: View {
         .padding(.top, Metrics.space5)
         .padding(.bottom, Metrics.space3)
         .background(Palette.canvas.opacity(0.98))
+        .focusSection()
     }
 }

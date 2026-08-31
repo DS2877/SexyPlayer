@@ -165,6 +165,9 @@ struct VODBrowseView: View {
         .padding(.top, Metrics.space5)
         .padding(.bottom, Metrics.space3)
         .background(Palette.canvas.opacity(0.98))
+        // One region: pressing ↑ from the grid lands on the last-used control
+        // here (a chip or Filters), ↓ returns to the grid.
+        .focusSection()
         .sheet(isPresented: $showFilters) {
             FilterSheet(
                 filter: Binding(get: { model.filter }, set: { model.filter = $0 }),

@@ -118,6 +118,7 @@ struct HomeView: View {
                     if !model.content.heroes.isEmpty {
                         HeroBanner(heroes: model.content.heroes) { navigate($0) }
                             .padding(.bottom, Metrics.space5)
+                            .focusSection()
                     }
 
                     LazyVStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
