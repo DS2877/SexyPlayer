@@ -4,6 +4,8 @@ struct SearchView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var model: SearchViewModel?
     @State private var path: [AppRoute] = []
+    @State private var didAutoFocus = false
+    @FocusState private var searchFieldFocused: Bool
 
     private let examples = [
         "Something scary with Swedish subtitles",
@@ -81,7 +83,16 @@ struct SearchView: View {
                 ))
                 .textFieldStyle(.plain)
                 .font(.dsCardTitle)
+                .focused($searchFieldFocused)
                 .onSubmit { Task { await model.search(vocabulary: env.vocabulary) } }
+                .task {
+                    // Land on the field the first time Search opens, the way the
+                    // Apple TV search screens do. Not on every return trip.
+                    if !didAutoFocus, !model.hasSearched, model.query.isEmpty {
+                        didAutoFocus = true
+                        searchFieldFocused = true
+                    }
+                }
             }
             .padding(.horizontal, Metrics.space3)
             .padding(.vertical, Metrics.space2 + 4)
