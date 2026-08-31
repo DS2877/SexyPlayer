@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 import CryptoKit
 
 /// Decoded `UIImage`s kept in memory for instant redisplay while scrolling.
@@ -89,7 +90,23 @@ actor ImageCache {
 
     // MARK: - Helpers
 
+    /// Largest edge we ever keep in memory. A tvOS backdrop is ~1920px wide at
+    /// 1x; posters need ~480px. Provider artwork is frequently many megapixels —
+    /// downsampling on decode is the difference between ~1MB and ~20MB per image.
+    private static let maxPixelSize = 1400
+
     private static func decode(_ data: Data) -> UIImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        if let source = CGImageSourceCreateWithData(data as CFData, nil),
+           let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
+            return UIImage(cgImage: cg)
+        }
+        // Fallback: plain decode, forced off the main thread.
         guard let image = UIImage(data: data) else { return nil }
         return image.preparingForDisplay() ?? image
     }
