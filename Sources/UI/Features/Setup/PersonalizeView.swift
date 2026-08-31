@@ -70,6 +70,10 @@ struct PersonalizeView: View {
 
                     PersonalizeSection("Playback & content", nil) {
                         VStack(spacing: Metrics.space2) {
+                            OptionRow(icon: "globe.europe.africa",
+                                      title: "Nordic & English only",
+                                      note: "Hides the flood of channels and titles from other regions. Turn off to see the provider's full catalogue.",
+                                      isOn: working.limitToRelevantRegions) { working.limitToRelevantRegions.toggle() }
                             OptionRow(icon: "eye.slash",
                                       title: "Hide adult categories",
                                       note: "Keeps adult-flagged channels and titles out of Home, browsing and search.",

@@ -20,7 +20,7 @@ public actor CatalogCache {
     private struct EPGEnvelope: Codable { let version: Int; let events: [EPGEvent] }
 
     /// Bump whenever normalization or the model shape changes.
-    private static let currentVersion = 6   // 3-file split cache
+    private static let currentVersion = 7   // v7: series carry a countryCode
     private let directory: URL
 
     private static let encoder: PropertyListEncoder = {

@@ -86,11 +86,16 @@ public final class AppEnvironment {
     public func applyPreferences() async {
         let prefs = preferences.preferences
         await repository.setHideAdult(prefs.hideAdultContent)
+        await repository.setRegionLimit(prefs.limitToRelevantRegions)
         await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
 
         let aiKey = KeychainStore.get(Self.aiKeyAccount) ?? ""
         await aiService.setRemoteParser(aiKey.isEmpty ? nil : ClaudeQueryParser(apiKey: aiKey))
         await metadata.setKey(effectiveTMDBKey)
+
+        // A toggle (adult / region) may have re-filtered the catalog — nudge the
+        // feature screens to re-query.
+        if hasLoadedOnce { catalogRevision += 1 }
     }
 
     /// A key entered in Settings wins; otherwise the bundled default.

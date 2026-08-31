@@ -61,6 +61,11 @@ public struct UserPreferences: Codable, Sendable, Equatable {
     /// Keep adult categories out of Home, browsing and search.
     public var hideAdultContent: Bool
 
+    /// Hide channels / movies / series from regions outside the Nordics and the
+    /// English-speaking world (see `RelevanceFilter`). On by default — a typical
+    /// provider is 90% noise for this audience.
+    public var limitToRelevantRegions: Bool
+
     /// Which Home rows to show, in order.
     public var homeRows: [HomeRowKind]
 
@@ -80,6 +85,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         preferredAudioLanguages: [Language] = [],
         preferredSubtitleLanguage: Language? = nil,
         hideAdultContent: Bool = true,
+        limitToRelevantRegions: Bool = true,
         homeRows: [HomeRowKind] = HomeRowKind.defaultEnabled,
         defaultSort: BrowseSort = .recentlyAdded,
         autoPlayNextEpisode: Bool = true,
@@ -89,6 +95,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         self.preferredAudioLanguages = preferredAudioLanguages
         self.preferredSubtitleLanguage = preferredSubtitleLanguage
         self.hideAdultContent = hideAdultContent
+        self.limitToRelevantRegions = limitToRelevantRegions
         self.homeRows = homeRows
         self.defaultSort = defaultSort
         self.autoPlayNextEpisode = autoPlayNextEpisode
@@ -99,7 +106,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
     public func isRowEnabled(_ kind: HomeRowKind) -> Bool { homeRows.contains(kind) }
 
     private enum CodingKeys: String, CodingKey {
-        case preferredAudioLanguages, preferredSubtitleLanguage, hideAdultContent
+        case preferredAudioLanguages, preferredSubtitleLanguage, hideAdultContent, limitToRelevantRegions
         case homeRows, defaultSort, autoPlayNextEpisode, aiAssistedSearch, hasOnboarded
     }
 
@@ -111,6 +118,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         preferredAudioLanguages   = try c.decodeIfPresent([Language].self, forKey: .preferredAudioLanguages) ?? d.preferredAudioLanguages
         preferredSubtitleLanguage = try c.decodeIfPresent(Language.self, forKey: .preferredSubtitleLanguage) ?? d.preferredSubtitleLanguage
         hideAdultContent          = try c.decodeIfPresent(Bool.self, forKey: .hideAdultContent) ?? d.hideAdultContent
+        limitToRelevantRegions    = try c.decodeIfPresent(Bool.self, forKey: .limitToRelevantRegions) ?? d.limitToRelevantRegions
         homeRows                  = try c.decodeIfPresent([HomeRowKind].self, forKey: .homeRows) ?? d.homeRows
         defaultSort               = try c.decodeIfPresent(BrowseSort.self, forKey: .defaultSort) ?? d.defaultSort
         autoPlayNextEpisode       = try c.decodeIfPresent(Bool.self, forKey: .autoPlayNextEpisode) ?? d.autoPlayNextEpisode

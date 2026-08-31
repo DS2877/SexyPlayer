@@ -12,6 +12,10 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     private var catalog: Catalog
     private var ready: Bool
     private var hideAdult = false
+    /// When on, foreign-region channels / movies / series are hidden everywhere
+    /// (see `RelevanceFilter`). The app switches this on from `UserPreferences`
+    /// via `applyPreferences()`; off here so tests see the raw catalog.
+    private var regionLimited = false
 
     // Indexes rebuilt whenever `catalog` changes — keep large-library queries
     // off the O(n) path.
@@ -67,15 +71,41 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         rebuildVisible()
     }
 
+    public func setRegionLimit(_ limited: Bool) {
+        guard limited != regionLimited else { return }
+        regionLimited = limited
+        rebuildVisible()
+    }
+
     private func rebuildVisible() {
         movieQueryCache = nil
         seriesQueryCache = nil
         channelQueryCache = nil
-        if hideAdult {
+
+        let keepChannel: (Channel) -> Bool = { [hideAdult, regionLimited] c in
+            if hideAdult && c.isAdult { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(countryCode: c.countryCode,
+                                                            name: c.name, category: c.category) { return false }
+            return true
+        }
+        let keepMovie: (Movie) -> Bool = { [hideAdult, regionLimited] m in
+            if hideAdult && m.isAdult { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(countryCode: m.countryCode,
+                                                            name: m.title, category: m.genres.first?.displayName ?? "") { return false }
+            return true
+        }
+        let keepSeries: (Series) -> Bool = { [hideAdult, regionLimited] s in
+            if hideAdult && s.isAdult { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(countryCode: s.countryCode,
+                                                            name: s.title, category: s.genres.first?.displayName ?? "") { return false }
+            return true
+        }
+
+        if hideAdult || regionLimited {
             catalog = Catalog(
-                channels: source.channels.filter { !$0.isAdult },
-                movies: source.movies.filter { !$0.isAdult },
-                series: source.series.filter { !$0.isAdult },
+                channels: source.channels.filter(keepChannel),
+                movies: source.movies.filter(keepMovie),
+                series: source.series.filter(keepSeries),
                 epg: source.epg
             )
         } else {
