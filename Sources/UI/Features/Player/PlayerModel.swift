@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import MediaPlayer
 import Observation
 
 /// Owns the `AVPlayer` lifecycle for one `PlaybackItem`: start/resume, periodic
@@ -178,6 +179,7 @@ public final class PlayerModel {
             applyLanguagePreferencesIfNeeded()
             state = .playing
             player.play()
+            updateNowPlaying()
         case .failed:
             fail(with: player.currentItem?.error)
         case .unknown:
@@ -244,6 +246,31 @@ public final class PlayerModel {
         let duration = resolvedDuration()
         guard position.isFinite, position > 0, duration > 0 else { return }
         onProgress(activeItem, position, duration)
+        updateNowPlaying()
+    }
+
+    // MARK: - Now Playing (tvOS info panel / Control Center)
+
+    private func updateNowPlaying() {
+        guard !activeItem.isLive else { clearNowPlaying(); return }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: activeItem.title,
+            MPNowPlayingInfoPropertyPlaybackRate: player.rate,
+        ]
+        if let subtitle = activeItem.subtitle, !subtitle.isEmpty {
+            info[MPMediaItemPropertyArtist] = subtitle
+        }
+        let duration = resolvedDuration()
+        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
+        let elapsed = player.currentTime().seconds
+        if elapsed.isFinite, elapsed >= 0 {
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    private func clearNowPlaying() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     private func resolvedDuration() -> Double {
@@ -257,5 +284,6 @@ public final class PlayerModel {
         reportProgress()
         player.pause()
         removeObservers()
+        clearNowPlaying()
     }
 }
