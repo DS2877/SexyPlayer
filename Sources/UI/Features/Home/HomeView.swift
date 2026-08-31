@@ -63,8 +63,7 @@ struct HomeView: View {
     /// Warm the image cache for the hero and the first few rows so Home looks
     /// populated the instant it appears rather than filling in poster by poster.
     private func prefetchArtwork(_ model: HomeViewModel) {
-        var urls: [URL] = []
-        if let hero = model.content.hero?.artworkURL { urls.append(hero) }
+        var urls: [URL] = model.content.heroes.compactMap(\.artworkURL)
         for row in model.content.rows.prefix(3) {
             urls += row.cards.prefix(8).compactMap(\.artworkURL)
         }
@@ -95,16 +94,9 @@ struct HomeView: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if let hero = model.content.hero {
-                        HeroBanner(
-                            title: hero.title,
-                            tagline: hero.subtitle ?? "",
-                            metadata: hero.eyebrow.map { [$0] } ?? [],
-                            artworkURL: hero.artworkURL,
-                            primaryActionTitle: "More Info",
-                            primaryAction: { navigate(hero) }
-                        )
-                        .padding(.bottom, Metrics.space5)
+                    if !model.content.heroes.isEmpty {
+                        HeroBanner(heroes: model.content.heroes) { navigate($0) }
+                            .padding(.bottom, Metrics.space5)
                     }
 
                     LazyVStack(alignment: .leading, spacing: Metrics.shelfSpacing) {

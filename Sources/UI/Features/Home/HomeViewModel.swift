@@ -156,15 +156,25 @@ public final class HomeViewModel {
             rows.insert(contentsOf: genreRows, at: anchor)
         }
 
-        let hero = moviesByRecency.first.map { movie in
-            HomeCard(id: movie.id, kind: .movie, title: movie.title, subtitle: movie.synopsis,
-                     artworkURL: movie.backdropURL ?? movie.posterURL, eyebrow: metadataSubtitle(for: movie))
-        }
+        // Featured heroes — highest TMDB rating first, then newest. The banner
+        // resolves the real backdrop + synopsis from TMDB itself.
+        let heroes: [HomeCard] = Array(moviesByRecency.prefix(150))
+            .sorted { lhs, rhs in
+                let l = ratings[lhs.id.rawValue] ?? 0, r = ratings[rhs.id.rawValue] ?? 0
+                if l != r { return l > r }
+                return (lhs.addedAt ?? .distantPast) > (rhs.addedAt ?? .distantPast)
+            }
+            .prefix(5)
+            .map { movie in
+                HomeCard(id: movie.id, kind: .movie, title: movie.title, subtitle: movie.synopsis,
+                         artworkURL: movie.backdropURL ?? movie.posterURL,
+                         year: movie.year, eyebrow: metadataSubtitle(for: movie))
+            }
 
         let tonight = prefs.isRowEnabled(.tonight)
             ? buildTonight(channels: catalog.channels, epg: epg, now: now) : []
 
-        return HomeContent(hero: hero, rows: rows.filter { !$0.cards.isEmpty }, tonight: tonight)
+        return HomeContent(heroes: heroes, rows: rows.filter { !$0.cards.isEmpty }, tonight: tonight)
     }
 
     nonisolated private static func continueWatchingCards(catalog: Catalog, progress: [WatchProgress]) -> [HomeCard] {

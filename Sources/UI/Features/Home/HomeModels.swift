@@ -54,9 +54,11 @@ public struct TonightItem: Identifiable, Sendable {
 }
 
 public struct HomeContent: Sendable {
-    public var hero: HomeCard?
+    public var heroes: [HomeCard]
     public var rows: [HomeRow]
     public var tonight: [TonightItem]
 
-    public static let empty = HomeContent(hero: nil, rows: [], tonight: [])
+    public var hero: HomeCard? { heroes.first }
+
+    public static let empty = HomeContent(heroes: [], rows: [], tonight: [])
 }
