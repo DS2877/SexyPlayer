@@ -44,6 +44,40 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertEqual(cards.map(\.title), ["Strong", "Weak"])
     }
 
+    func testRecentlyWatchedChannelsRow() {
+        let url = URL(string: "https://x/s")!
+        func ch(_ key: String, _ name: String) -> Channel {
+            Channel(id: CatalogID(providerID: "p", kind: .liveChannel, providerItemKey: key),
+                    name: name, category: "General", streamURL: url)
+        }
+        let a = ch("a", "SVT1"), b = ch("b", "TV4"), c = ch("c", "Kanal 5")
+        let catalog = Catalog(channels: [a, b, c])
+
+        let content = HomeViewModel.makeContent(
+            catalog: catalog, epg: [:], progress: [],
+            prefs: UserPreferences(), ratings: [:], liveNow: [],
+            recentChannelIDs: [b.id, a.id], now: .now
+        )
+        let row = content.rows.first { $0.id == "recent-channels" }
+        XCTAssertEqual(row?.title, "Recently Watched")
+        XCTAssertEqual(row?.cards.map(\.title), ["TV4", "SVT1"])
+    }
+
+    func testTopRatedSeriesCanHeadlineTheHero() {
+        let m = movie("m", "Fine Movie", genres: [.drama])
+        let seriesID = CatalogID(providerID: "p", kind: .series, providerItemKey: "s")
+        let series = Series(id: seriesID, title: "Great Show", genres: [.drama], seasons: [])
+        let catalog = Catalog(movies: [m], series: [series])
+
+        let content = HomeViewModel.makeContent(
+            catalog: catalog, epg: [:], progress: [],
+            prefs: UserPreferences(), ratings: [m.id.rawValue: 6.0, seriesID.rawValue: 9.1],
+            liveNow: [], now: .now
+        )
+        XCTAssertEqual(content.heroes.first?.id, seriesID)
+        XCTAssertEqual(content.heroes.first?.kind, .series)
+    }
+
     func testMakeContentProducesABecauseYouWatchedRow() {
         let watched = movie("seed", "Seed", genres: [.action])
         let siblings = (0..<6).map { movie("s\($0)", "Sibling \($0)", genres: [.action]) }
