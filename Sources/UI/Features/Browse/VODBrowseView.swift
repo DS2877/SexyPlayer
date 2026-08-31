@@ -89,6 +89,7 @@ struct VODBrowseView: View {
                 }
             }
         }
+        .scrollClipDisabled()
         .onChange(of: model.filter) { _, _ in
             model.scheduleReload()
         }
@@ -113,7 +114,9 @@ struct VODBrowseView: View {
                     }
                 }
                 .padding(.vertical, Metrics.space1)
+                .padding(.horizontal, 2)
             }
+            .scrollClipDisabled()
             .focusSection()
             .accessibilityLabel("Jump to letter")
         }
@@ -150,15 +153,17 @@ struct VODBrowseView: View {
                         }
                     }
                     .padding(.vertical, Metrics.space1)
+                    .padding(.horizontal, 2)
                 }
+                .scrollClipDisabled()
                 .focusSection()
             }
 
             letterRail(model, proxy: proxy)
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space4)
-        .padding(.bottom, Metrics.space2)
+        .padding(.top, Metrics.space5)
+        .padding(.bottom, Metrics.space3)
         .background(Palette.canvas.opacity(0.98))
         .sheet(isPresented: $showFilters) {
             FilterSheet(

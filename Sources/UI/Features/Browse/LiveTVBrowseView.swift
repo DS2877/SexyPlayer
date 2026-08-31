@@ -166,6 +166,7 @@ struct LiveTVBrowseView: View {
                 }
             }
         }
+        .scrollClipDisabled()
         .onChange(of: model.selectedCategory) { _, _ in
             Task { await model.reload() }
         }
@@ -199,7 +200,9 @@ struct LiveTVBrowseView: View {
                         }
                     }
                     .padding(.vertical, Metrics.space1)
+                    .padding(.horizontal, 2)
                 }
+                .scrollClipDisabled()
                 .focusSection()
             }
 
@@ -219,14 +222,16 @@ struct LiveTVBrowseView: View {
                         }
                     }
                     .padding(.vertical, Metrics.space1)
+                    .padding(.horizontal, 2)
                 }
+                .scrollClipDisabled()
                 .focusSection()
                 .accessibilityLabel("Jump to letter")
             }
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space4)
-        .padding(.bottom, Metrics.space2)
+        .padding(.top, Metrics.space5)
+        .padding(.bottom, Metrics.space3)
         .background(Palette.canvas.opacity(0.98))
     }
 }
