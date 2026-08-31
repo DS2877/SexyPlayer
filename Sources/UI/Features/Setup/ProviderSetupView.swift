@@ -182,6 +182,8 @@ struct LabeledField: View {
     var prompt: String = ""
     var isSecure: Bool = false
 
+    @FocusState private var focused: Bool
+
     init(_ label: String, text: Binding<String>, prompt: String = "", isSecure: Bool = false) {
         self.label = label
         self._text = text
@@ -201,8 +203,13 @@ struct LabeledField: View {
             }
             .textFieldStyle(.plain)
             .font(.dsBody)
+            .focused($focused)
             .padding(Metrics.space2)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
+            .background(focused ? Palette.surfaceElevated : Palette.surface,
+                        in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius))
+            .overlay(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius)
+                .strokeBorder(focused ? Palette.accent : Palette.hairline, lineWidth: focused ? 2 : 1))
+            .animation(Metrics.focusAnimation, value: focused)
             .frame(maxWidth: 760)
         }
     }

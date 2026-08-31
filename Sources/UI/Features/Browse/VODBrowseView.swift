@@ -17,8 +17,7 @@ struct VODBrowseView: View {
                 if let model {
                     grid(model)
                 } else {
-                    ProgressView().controlSize(.large)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    LibraryLoadingPlaceholder()
                 }
             }
             .appThemeBackground()

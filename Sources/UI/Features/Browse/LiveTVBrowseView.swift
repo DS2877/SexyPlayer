@@ -113,8 +113,7 @@ struct LiveTVBrowseView: View {
                 if let model {
                     content(model)
                 } else {
-                    ProgressView().controlSize(.large)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    LibraryLoadingPlaceholder()
                 }
             }
             .appThemeBackground()
