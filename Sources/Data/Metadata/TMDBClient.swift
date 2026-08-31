@@ -138,6 +138,45 @@ public struct TMDBClient: Sendable {
         )
     }
 
+    public struct EpisodeStill: Sendable, Equatable {
+        public let episodeNumber: Int
+        public let stillURL: URL?
+        public let name: String?
+        public let overview: String?
+    }
+
+    /// Per-episode stills + text for one season of a known TV id.
+    public func season(tvID: Int, seasonNumber: Int) async throws -> [EpisodeStill] {
+        let path = "tv/\(tvID)/season/\(seasonNumber)"
+        var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !isBearerToken {
+            components.queryItems = [URLQueryItem(name: "api_key", value: apiKey)]
+        }
+        guard let url = components.url else { return [] }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        if isBearerToken {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            throw TMDBError.badResponse(status: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+
+        let decoded = try JSONDecoder().decode(SeasonResponse.self, from: data)
+        return (decoded.episodes ?? []).compactMap { ep in
+            guard let number = ep.episode_number else { return nil }
+            return EpisodeStill(
+                episodeNumber: number,
+                stillURL: ep.still_path.flatMap { URL(string: "https://image.tmdb.org/t/p/w300" + $0) },
+                name: ep.name?.isEmpty == false ? ep.name : nil,
+                overview: ep.overview?.isEmpty == false ? ep.overview : nil
+            )
+        }
+    }
+
     // MARK: - Matching
 
     private static func pick(_ results: [Result], title: String, year: Int?) -> Result? {
@@ -184,6 +223,16 @@ public struct TMDBClient: Sendable {
         let genres: [NamedID]?
         let credits: Credits?
         let vote_count: Int?
+    }
+
+    private struct SeasonResponse: Decodable {
+        struct Ep: Decodable {
+            let episode_number: Int?
+            let still_path: String?
+            let name: String?
+            let overview: String?
+        }
+        let episodes: [Ep]?
     }
 
     private struct Result: Decodable {

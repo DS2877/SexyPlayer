@@ -11,6 +11,7 @@ struct SeriesDetailView: View {
     @State private var playback: PlaybackItem?
     @State private var enriched: EnrichedMetadata?
     @State private var related: [RelatedItem] = []
+    @State private var episodeStills: [Int: URL] = [:]
 
     var body: some View {
         Group {
@@ -53,6 +54,10 @@ struct SeriesDetailView: View {
             ) { id, kind, position, duration in
                 env.recordProgress(id: id, kind: kind, position: position, duration: duration)
             }
+        }
+        .task(id: stillsKey) {
+            guard let tmdbID = enriched?.tmdbID, tmdbID > 0, let season = selectedSeason else { return }
+            episodeStills = await env.metadata.episodeStills(seriesTMDBID: tmdbID, season: season)
         }
         .onChange(of: playback) { previous, current in
             // Auto-play the next episode when one just finished.
@@ -201,6 +206,10 @@ struct SeriesDetailView: View {
         }
     }
 
+    /// Refetch episode stills whenever the matched series or the visible season
+    /// changes.
+    private var stillsKey: String { "\(enriched?.tmdbID ?? 0)-\(selectedSeason ?? 0)" }
+
     private func creditRow(_ label: String, _ names: [String]) -> some View {
         HStack(alignment: .top, spacing: Metrics.space2) {
             Text(label).font(.dsCaption).foregroundStyle(Palette.textTertiary)
@@ -228,13 +237,14 @@ struct SeriesDetailView: View {
 
     private func episodeRow(_ episode: Episode, seriesTitle: String) -> some View {
         let progress = env.watchProgress.progress(for: episode.id)
+        let still = episodeStills[episode.episodeNumber] ?? episode.stillURL
 
         return Button {
             playback = env.playback(forEpisode: episode, seriesTitle: seriesTitle)
         } label: {
             HStack(spacing: Metrics.space3) {
                 ZStack {
-                    ArtworkView(url: episode.stillURL, title: episode.title, aspect: 16.0 / 9.0, style: .backdrop)
+                    ArtworkView(url: still, title: episode.title, aspect: 16.0 / 9.0, style: .backdrop)
                         .frame(width: 260, height: 146)
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
                     Image(systemName: "play.circle.fill")

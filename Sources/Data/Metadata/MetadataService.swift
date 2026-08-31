@@ -52,6 +52,8 @@ public actor MetadataService {
     private var byID: [String: EnrichedMetadata] = [:]
     private var inFlight: [String: Task<EnrichedMetadata?, Never>] = [:]
     private var detailsInFlight: [String: Task<EnrichedMetadata?, Never>] = [:]
+    private var seasonStills: [String: [Int: URL]] = [:]           // "tvID-season" -> [episodeNumber: still]
+    private var seasonInFlight: [String: Task<[Int: URL], Never>] = [:]
     private var client: TMDBClient?
     private var lastRequestAt = Date.distantPast
     private var dirty = false
@@ -129,6 +131,37 @@ public actor MetadataService {
         let result = await task.value
         detailsInFlight[key] = nil
         return result
+    }
+
+    /// Per-episode still images for one season, keyed by episode number.
+    /// In-memory only (one request per season the user opens).
+    public func episodeStills(seriesTMDBID: Int, season: Int) async -> [Int: URL] {
+        let key = "\(seriesTMDBID)-\(season)"
+        if let cached = seasonStills[key] { return cached }
+        guard client != nil else { return [:] }
+        if let running = seasonInFlight[key] { return await running.value }
+
+        let task = Task<[Int: URL], Never> { [weak self] in
+            await self?.fetchSeasonStills(key: key, tmdbID: seriesTMDBID, season: season) ?? [:]
+        }
+        seasonInFlight[key] = task
+        let result = await task.value
+        seasonInFlight[key] = nil
+        return result
+    }
+
+    private func fetchSeasonStills(key: String, tmdbID: Int, season: Int) async -> [Int: URL] {
+        guard let client else { return [:] }
+        await throttle()
+        let episodes: [TMDBClient.EpisodeStill]
+        do { episodes = try await client.season(tvID: tmdbID, seasonNumber: season) }
+        catch { return [:] }
+        var map: [Int: URL] = [:]
+        for episode in episodes {
+            if let url = episode.stillURL { map[episode.episodeNumber] = url }
+        }
+        seasonStills[key] = map
+        return map
     }
 
     /// Crawl the library filling in artwork without waiting for the user to
