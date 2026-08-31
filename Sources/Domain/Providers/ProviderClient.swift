@@ -20,6 +20,15 @@ public struct ProviderDescriptor: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+/// One slice of a staged catalog fetch. Emitting these in order
+/// (`channels` → `vod` → `guide`) lets the app become interactive before the
+/// whole library has finished downloading.
+public enum RawStage: Sendable {
+    case channels([RawChannel])
+    case vod(movies: [RawVODItem], shells: [RawSeriesShell], episodes: [RawSeriesEpisode])
+    case guide([RawEPGEvent])
+}
+
 /// The single seam every IPTV source implements. Everything above the
 /// normalization layer depends only on this protocol, never on M3U/Xtream.
 public protocol ProviderClient: Sendable {
@@ -31,6 +40,15 @@ public protocol ProviderClient: Sendable {
     /// Series may come back as shells (no episodes) when episode listings are
     /// expensive — episodes are then loaded on demand via `fetchEpisodes`.
     func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog
+
+    /// Fetch the catalog in stages, calling `emit` as each slice is ready.
+    /// Default: run `fetchRawCatalog` and replay it in three stages. Providers
+    /// override this to emit channels the moment they land, well before the
+    /// (usually much larger) VOD list and EPG have downloaded.
+    func fetchStaged(
+        progress: ImportProgressReporter,
+        emit: @Sendable (RawStage) async -> Void
+    ) async throws
 
     /// Resolve a playable URL for an item. For some providers this is a cheap
     /// passthrough; for others it hits the API. Called at playback time only.
@@ -47,5 +65,15 @@ public extension ProviderClient {
     /// Convenience for callers that don't need progress.
     func fetchRawCatalog() async throws -> RawCatalog {
         try await fetchRawCatalog(progress: .ignore)
+    }
+
+    func fetchStaged(
+        progress: ImportProgressReporter,
+        emit: @Sendable (RawStage) async -> Void
+    ) async throws {
+        let raw = try await fetchRawCatalog(progress: progress)
+        await emit(.channels(raw.channels))
+        await emit(.vod(movies: raw.vod, shells: raw.seriesShells, episodes: raw.seriesEpisodes))
+        await emit(.guide(raw.epg))
     }
 }

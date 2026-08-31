@@ -22,22 +22,40 @@ public struct XtreamProviderClient: ProviderClient {
     // MARK: - Bulk catalog
 
     public func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog {
+        var channels: [RawChannel] = []
+        var movies: [RawVODItem] = []
+        var shells: [RawSeriesShell] = []
+        var epg: [RawEPGEvent] = []
+        try await fetchStaged(progress: progress) { stage in
+            switch stage {
+            case .channels(let c): channels = c
+            case .vod(let m, let s, _): movies = m; shells = s
+            case .guide(let e): epg = e
+            }
+        }
+        return RawCatalog(providerID: descriptor.id, channels: channels, vod: movies,
+                          seriesEpisodes: [], seriesShells: shells, epg: epg)
+    }
+
+    /// Staged: emit channels as soon as the live list lands (small, fast), then
+    /// VOD + series, then the EPG (often the largest single request).
+    public func fetchStaged(
+        progress: ImportProgressReporter,
+        emit: @Sendable (RawStage) async -> Void
+    ) async throws {
         progress.reached(.connecting)
         try await verifyAuth()
 
-        async let liveCats = categories(.liveCategories)
-        async let vodCats = categories(.vodCategories)
-        async let seriesCats = categories(.seriesCategories)
-        async let liveRaw = fetch([XtreamDTO.LiveStream].self, .liveStreams)
-        async let vodRaw = fetch([XtreamDTO.VODStream].self, .vodStreams)
-        async let seriesRaw = fetch([XtreamDTO.SeriesListItem].self, .series)
+        async let liveCatsF = categories(.liveCategories)
+        async let vodCatsF = categories(.vodCategories)
+        async let seriesCatsF = categories(.seriesCategories)
+        async let liveRawF = fetch([XtreamDTO.LiveStream].self, .liveStreams)
+        async let vodRawF = fetch([XtreamDTO.VODStream].self, .vodStreams)
+        async let seriesRawF = fetch([XtreamDTO.SeriesListItem].self, .series)
 
-        let (liveCategories, vodCategories, seriesCategories) = await (liveCats, vodCats, seriesCats)
-
-        let live = try await liveRaw;   progress.reached(.channels)
-        let vod = try await vodRaw;     progress.reached(.movies)
-        let series = try await seriesRaw; progress.reached(.series)
-
+        // Stage 1 — channels.
+        let liveCategories = await liveCatsF
+        let live = try await liveRawF
         let channels: [RawChannel] = live.enumerated().compactMap { index, s in
             guard let id = s.stream_id, let name = s.name else { return nil }
             return RawChannel(
@@ -50,7 +68,12 @@ public struct XtreamProviderClient: ProviderClient {
                 channelNumber: s.num ?? (index + 1)
             )
         }
+        progress.reached(.channels)
+        await emit(.channels(channels))
 
+        // Stage 2 — VOD + series shells.
+        let (vodCategories, seriesCategories) = await (vodCatsF, seriesCatsF)
+        let vod = try await vodRawF
         let movies: [RawVODItem] = vod.compactMap { v in
             guard let id = v.stream_id, let name = v.name else { return nil }
             return RawVODItem(
@@ -68,7 +91,9 @@ public struct XtreamProviderClient: ProviderClient {
                 addedAt: Self.unixDate(v.added)
             )
         }
-
+        progress.reached(.movies)
+        // A missing/!broken series endpoint shouldn't sink the whole import.
+        let series = (try? await seriesRawF) ?? []
         let shells: [RawSeriesShell] = series.compactMap { s in
             guard let id = s.series_id, let name = s.name else { return nil }
             return RawSeriesShell(
@@ -84,18 +109,20 @@ public struct XtreamProviderClient: ProviderClient {
                 addedAt: Self.unixDate(s.last_modified)
             )
         }
+        progress.reached(.series)
+        await emit(.vod(movies: movies, shells: shells, episodes: []))
 
         guard !channels.isEmpty || !movies.isEmpty || !shells.isEmpty else {
             AppLog.provider.error("Xtream import: authenticated but every list came back empty.")
             throw ProviderError.emptyLibrary
         }
 
+        // Stage 3 — EPG.
         progress.reached(.guide)
         let epg = (try? await fetchEPG()) ?? []
+        await emit(.guide(epg))
 
         AppLog.provider.info("Xtream import: \(channels.count) channels, \(movies.count) movies, \(shells.count) series.")
-        return RawCatalog(providerID: descriptor.id, channels: channels, vod: movies,
-                          seriesEpisodes: [], seriesShells: shells, epg: epg)
     }
 
     // MARK: - On demand

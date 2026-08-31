@@ -198,6 +198,10 @@ public actor InMemoryCatalogRepository: CatalogRepository {
 
     public func snapshot() -> Catalog { catalog }
 
+    /// The full, unfiltered catalog — for persisting to the on-disk cache after
+    /// a staged import.
+    public func exportCatalog() -> Catalog { source }
+
     /// Seeds for the background TMDB enrichment sweep — most recently added
     /// first, since that's what the user browses before anything else.
     public func artworkSeeds(movieLimit: Int, seriesLimit: Int) -> [ArtworkSeed] {

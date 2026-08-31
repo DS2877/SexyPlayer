@@ -42,6 +42,31 @@ public struct Normalizer: Sendable {
         return Catalog(channels: c, movies: m, series: s, epg: e)
     }
 
+    // MARK: - Staged normalization (one section at a time, off the main actor)
+
+    public func normalizeChannels(_ raw: [RawChannel], providerID: String) async -> [Channel] {
+        let n = self
+        return await raw.concurrentMap { n.normalizeChannel($0, providerID: providerID) }
+    }
+
+    public func normalizeVOD(
+        movies rawMovies: [RawVODItem],
+        shells rawShells: [RawSeriesShell],
+        episodes rawEpisodes: [RawSeriesEpisode],
+        providerID: String
+    ) async -> (movies: [Movie], series: [Series]) {
+        let n = self
+        async let movies = rawMovies.concurrentMap { n.normalizeMovie($0, providerID: providerID) }
+        async let shells = rawShells.concurrentMap { n.normalizeShell($0, providerID: providerID) }
+        let reconstructed = normalizeSeries(rawEpisodes, providerID: providerID)
+        return (await movies, reconstructed + (await shells))
+    }
+
+    public func normalizeGuide(_ raw: [RawEPGEvent]) async -> [EPGEvent] {
+        let n = self
+        return await raw.concurrentMap { n.normalizeEPG($0) }
+    }
+
     /// Normalize an on-demand batch of episodes for one already-known series.
     public func seasons(
         forEpisodes rawEpisodes: [RawSeriesEpisode],

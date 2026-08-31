@@ -21,26 +21,47 @@ public struct M3UProviderClient: ProviderClient {
     }
 
     public func fetchRawCatalog(progress: ImportProgressReporter) async throws -> RawCatalog {
+        var out = RawCatalog(providerID: descriptor.id)
+        try await fetchStaged(progress: progress) { stage in
+            switch stage {
+            case .channels(let c): out.channels = c
+            case .vod(let m, let s, let e):
+                out.vod = m; out.seriesShells = s; out.seriesEpisodes = e
+            case .guide(let g): out.epg = g
+            }
+        }
+        return out
+    }
+
+    /// Staged: the playlist is one download, but the (often large) XMLTV EPG is
+    /// a separate request — defer it so the app is usable while it loads.
+    public func fetchStaged(
+        progress: ImportProgressReporter,
+        emit: @Sendable (RawStage) async -> Void
+    ) async throws {
         progress.reached(.connecting)
         let data = try await http.data(from: playlistURL)
-        var catalog = try M3UParser.parse(data, providerID: descriptor.id)
+        let catalog = try M3UParser.parse(data, providerID: descriptor.id)
         guard !catalog.channels.isEmpty || !catalog.vod.isEmpty || !catalog.seriesEpisodes.isEmpty else {
             AppLog.provider.error("M3U import: playlist parsed but contained no entries.")
             throw ProviderError.emptyLibrary
         }
         progress.reached(.channels)
+        await emit(.channels(catalog.channels))
         progress.reached(.movies)
         progress.reached(.series)
+        await emit(.vod(movies: catalog.vod, shells: catalog.seriesShells,
+                        episodes: catalog.seriesEpisodes))
 
         progress.reached(.guide)
-        if let epgURL {
-            if let epgData = try? await http.data(from: epgURL),
-               let events = try? XMLTVParser.parse(epgData) {
-                catalog.epg = events
-            }
+        var epg: [RawEPGEvent] = []
+        if let epgURL,
+           let epgData = try? await http.data(from: epgURL),
+           let events = try? XMLTVParser.parse(epgData) {
+            epg = events
         }
+        await emit(.guide(epg))
         AppLog.provider.info("M3U import: \(catalog.channels.count) channels, \(catalog.vod.count) movies, \(catalog.seriesEpisodes.count) episodes.")
-        return catalog
     }
 
     public func resolveStreamURL(for providerItemKey: String, kind _: ContentKind) async throws -> URL {

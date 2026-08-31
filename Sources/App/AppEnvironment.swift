@@ -175,7 +175,9 @@ public final class AppEnvironment {
             return
         }
 
-        // Slow path: full import with the progress checklist.
+        // Slow path: staged cold import. The app becomes interactive the moment
+        // the channels land; movies/series and then the EPG stream in behind it,
+        // exactly like the cached fast path above.
         reachedPhases = []
         catalogComplete = false
         loadState = .loading
@@ -184,26 +186,75 @@ public final class AppEnvironment {
         }
         do {
             let importStart = Date()
-            let catalog = try await importCatalog(client: client, reporter: reporter)
-            markPhase(.finalizing)                       // normalize done; now indexing
-            await repository.load(catalog)
-            await applyPreferences()
-            let forVocab = catalog
-            vocabulary = await Task.detached { SearchVocabulary.from(catalog: forVocab) }.value
-            loadState = .ready                           // app is usable now
-            hasLoadedOnce = true
+
+            try await client.fetchStaged(progress: reporter) { [weak self] stage in
+                guard let self else { return }
+                await self.ingest(stage, providerID: providerID)
+            }
+            guard providers.activeConfiguration?.id == providerID else { return }
+
+            let assembled = await repository.exportCatalog()
+            guard !assembled.isEmpty else {
+                loadState = .failed(.emptyLibrary)
+                AppLog.provider.error("Staged import produced an empty catalog.")
+                return
+            }
+
+            // A VOD-only provider never fires a channels stage — go ready now.
+            if loadState != .ready {
+                await applyPreferences()
+                loadState = .ready
+                hasLoadedOnce = true
+            }
+            markPhase(.finalizing)
             catalogComplete = true
             catalogRevision += 1
+            vocabulary = await Task.detached { SearchVocabulary.from(catalog: assembled) }.value
+
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
-            AppLog.app.info("Catalog ready in \(elapsed)s — \(RuntimeStats.catalogSummary(catalog)).")
-            // The app is already usable; persist so the next launch is instant.
-            // Awaited (not fire-and-forget) so it isn't killed if the user leaves.
-            await cache.save(catalog, providerID: providerID)
+            AppLog.app.info("Catalog ready (staged) in \(elapsed)s — \(RuntimeStats.catalogSummary(assembled)).")
+            await cache.save(assembled, providerID: providerID)
             startMetadataWarmUp()
         } catch {
-            let providerError = ProviderError.from(error)
-            loadState = .failed(providerError)
-            AppLog.provider.error("Bootstrap failed: \(String(describing: providerError))")
+            if loadState == .ready {
+                // The user already has a working app — keep the partial catalog
+                // rather than throwing them back to an error screen.
+                catalogComplete = true
+                AppLog.provider.notice("Import stage failed after going interactive; keeping partial catalog.")
+            } else {
+                let providerError = ProviderError.from(error)
+                loadState = .failed(providerError)
+                AppLog.provider.error("Bootstrap failed: \(String(describing: providerError))")
+            }
+        }
+    }
+
+    /// Fold one staged fetch slice into the live repository. `@MainActor` (class
+    /// default) so it can update published state directly.
+    private func ingest(_ stage: RawStage, providerID: String) async {
+        // The user may have switched providers while this import was in flight.
+        guard providers.activeConfiguration?.id == providerID else { return }
+        switch stage {
+        case .channels(let raw):
+            let channels = await normalizer.normalizeChannels(raw, providerID: providerID)
+            await repository.loadChannelsOnly(channels)
+            await applyPreferences()
+            loadState = .ready
+            hasLoadedOnce = true
+        case .vod(let movies, let shells, let episodes):
+            let result = await normalizer.normalizeVOD(
+                movies: movies, shells: shells, episodes: episodes, providerID: providerID
+            )
+            await repository.mergeVOD(movies: result.movies, series: result.series)
+            catalogRevision += 1
+        case .guide(let raw):
+            let now = Date()
+            let lower = now.addingTimeInterval(-Self.epgWindowPast)
+            let upper = now.addingTimeInterval(Self.epgWindowFuture)
+            let windowed = raw.filter { $0.stop > lower && $0.start < upper }
+            let events = await normalizer.normalizeGuide(windowed)
+            await repository.mergeEPG(events)
+            catalogRevision += 1
         }
     }
 
