@@ -34,9 +34,14 @@ targets:
     type: application
     platform: tvOS
     sources:
+      # The whole TopShelf dir belongs to the extension target — pulling it into
+      # the app also copies the extension's generated Info.plist as a resource,
+      # which collides with the app's own Info.plist ("multiple commands
+      # produce Aeria.app/Info.plist"). Only the shared payload type is shared.
       - path: Sources
         excludes:
-          - "TopShelf/ContentProvider.swift"
+          - "TopShelf/**"
+      - path: Sources/TopShelf/TopShelfPayload.swift
       - path: Resources
     dependencies:
       - package: VLCKitSPM
