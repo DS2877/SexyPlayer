@@ -1,4 +1,5 @@
 import Foundation
+import MediaPlayer
 import Observation
 import UIKit
 import VLCKitSPM
@@ -39,6 +40,7 @@ public final class VLCPlayerModel {
     @ObservationIgnored private var hasAppliedPreferredTracks = false
     @ObservationIgnored private var started = false
     @ObservationIgnored private var loadTimeout: Task<Void, Never>?
+    @ObservationIgnored private var lastNowPlayingPush = Date.distantPast
 
     @ObservationIgnored
     private let onProgress: @MainActor (_ item: PlaybackItem, _ position: Double, _ duration: Double) -> Void
@@ -139,12 +141,35 @@ public final class VLCPlayerModel {
         loadTimeout?.cancel()
         player.delegate = nil
         player.stop()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    /// VLC playback has no `AVPlayerViewController`, so the system "What's
+    /// playing" surface only reflects what we push here.
+    private func updateNowPlaying() {
+        guard !item.isLive else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            return
+        }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: item.title,
+            MPNowPlayingInfoPropertyPlaybackRate: player.isPlaying ? 1.0 : 0.0,
+        ]
+        if let subtitle = item.subtitle, !subtitle.isEmpty {
+            info[MPMediaItemPropertyArtist] = subtitle
+        }
+        if duration > 0 {
+            info[MPMediaItemPropertyPlaybackDuration] = duration
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = position
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
     // MARK: - Delegate callbacks (hopped to MainActor)
 
     fileprivate func stateChanged() {
         refreshTracks()
+        updateNowPlaying()
         // `isPlaying` is an unambiguous Bool — prefer it over matching the state
         // enum, whose case names shift between VLCKit builds.
         if player.isPlaying {
@@ -207,6 +232,10 @@ public final class VLCPlayerModel {
     private func reportProgress() {
         guard !item.isLive, duration > 0, position > 0 else { return }
         onProgress(item, position, duration)
+        if Date().timeIntervalSince(lastNowPlayingPush) > 5 {
+            lastNowPlayingPush = Date()
+            updateNowPlaying()
+        }
     }
 
     private func handleEnded() {

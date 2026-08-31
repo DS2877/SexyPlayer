@@ -1,6 +1,5 @@
 import Foundation
 import AVFoundation
-import MediaPlayer
 import Observation
 
 /// Owns the `AVPlayer` lifecycle for one `PlaybackItem`: start/resume, periodic
@@ -83,6 +82,10 @@ public final class PlayerModel {
 
     private func configure() {
         guard let currentItem = player.currentItem else { return }
+
+        // Populate the tvOS Info panel / "What's playing" — AVPlayerViewController
+        // reads this off the item, so it never fights our values.
+        currentItem.externalMetadata = externalMetadata()
 
         statusObservation = currentItem.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
             let status = observedItem.status
@@ -179,7 +182,6 @@ public final class PlayerModel {
             applyLanguagePreferencesIfNeeded()
             state = .playing
             player.play()
-            updateNowPlaying()
         case .failed:
             fail(with: player.currentItem?.error)
         case .unknown:
@@ -246,31 +248,23 @@ public final class PlayerModel {
         let duration = resolvedDuration()
         guard position.isFinite, position > 0, duration > 0 else { return }
         onProgress(activeItem, position, duration)
-        updateNowPlaying()
     }
 
-    // MARK: - Now Playing (tvOS info panel / Control Center)
-
-    private func updateNowPlaying() {
-        guard !activeItem.isLive else { clearNowPlaying(); return }
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: activeItem.title,
-            MPNowPlayingInfoPropertyPlaybackRate: player.rate,
-        ]
+    /// Title / description shown in the tvOS Info panel. IPTV streams rarely
+    /// carry their own metadata, so we supply the catalog's.
+    private func externalMetadata() -> [AVMetadataItem] {
+        func entry(_ identifier: AVMetadataIdentifier, _ value: String) -> AVMetadataItem {
+            let item = AVMutableMetadataItem()
+            item.identifier = identifier
+            item.value = value as NSString
+            item.extendedLanguageTag = "und"
+            return item
+        }
+        var items = [entry(.commonIdentifierTitle, activeItem.title)]
         if let subtitle = activeItem.subtitle, !subtitle.isEmpty {
-            info[MPMediaItemPropertyArtist] = subtitle
+            items.append(entry(.commonIdentifierDescription, subtitle))
         }
-        let duration = resolvedDuration()
-        if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
-        let elapsed = player.currentTime().seconds
-        if elapsed.isFinite, elapsed >= 0 {
-            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
-        }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-    }
-
-    private func clearNowPlaying() {
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        return items
     }
 
     private func resolvedDuration() -> Double {
@@ -284,6 +278,5 @@ public final class PlayerModel {
         reportProgress()
         player.pause()
         removeObservers()
-        clearNowPlaying()
     }
 }
