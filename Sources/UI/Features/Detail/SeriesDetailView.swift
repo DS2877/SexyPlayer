@@ -113,7 +113,7 @@ struct SeriesDetailView: View {
         let backdrop = series.backdropURL ?? enriched?.backdropURL ?? series.posterURL ?? enriched?.posterURL
 
         DetailScaffold(title: series.title, backdropURL: backdrop) {
-            header(series)
+            titleBlock(series)
             actions(series)
             info(series)
             if let credits = enriched?.castCredits, !credits.isEmpty {
@@ -125,6 +125,23 @@ struct SeriesDetailView: View {
     }
 
     // MARK: - Sections
+
+    /// Poster thumbnail beside the title block — the Apple TV+ detail signature.
+    @ViewBuilder
+    private func titleBlock(_ series: Series) -> some View {
+        HStack(alignment: .bottom, spacing: Metrics.space4) {
+            EnrichedArtwork(
+                ref: ArtworkRef(id: series.id, title: series.title, year: series.year, isSeries: true),
+                providerURL: series.posterURL, aspect: 2.0 / 3.0, style: .poster
+            )
+            .frame(width: 220, height: 330)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+            .accessibilityHidden(true)
+
+            header(series)
+        }
+    }
 
     @ViewBuilder
     private func header(_ series: Series) -> some View {
