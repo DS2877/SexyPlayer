@@ -12,6 +12,12 @@ public final class SearchViewModel {
     public private(set) var hasSearched = false
     public private(set) var interpretedFrom = ""
 
+    /// The last handful of queries the viewer actually ran, newest first.
+    public private(set) var recentQueries: [String] = []
+    private let recentKey = "search.recent.v1"
+    private let recentLimit = 6
+    private let defaults = UserDefaults.standard
+
     public struct Chip: Identifiable {
         public let id: String
         public let label: String
@@ -28,6 +34,7 @@ public final class SearchViewModel {
         self.repository = repository
         self.engine = engine
         self.ai = ai
+        if let saved = defaults.stringArray(forKey: recentKey) { recentQueries = saved }
     }
 
     public func search(vocabulary: SearchVocabulary) async {
@@ -40,6 +47,24 @@ public final class SearchViewModel {
         interpretedFrom = trimmed
         await runEngine()
         hasSearched = true
+        rememberRecent(trimmed)
+    }
+
+    public func runRecent(_ text: String, vocabulary: SearchVocabulary) async {
+        query = text
+        await search(vocabulary: vocabulary)
+    }
+
+    public func clearRecents() {
+        recentQueries = []
+        defaults.removeObject(forKey: recentKey)
+    }
+
+    private func rememberRecent(_ text: String) {
+        var next = recentQueries.filter { $0.caseInsensitiveCompare(text) != .orderedSame }
+        next.insert(text, at: 0)
+        recentQueries = Array(next.prefix(recentLimit))
+        defaults.set(recentQueries, forKey: recentKey)
     }
 
     public func removeChip(_ chip: Chip) {

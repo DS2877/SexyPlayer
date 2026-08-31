@@ -115,21 +115,49 @@ struct SearchView: View {
     }
 
     private func exampleQueries(_ model: SearchViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Metrics.space2) {
-            Text("Try asking for…").font(.dsSectionHeader)
-            ForEach(examples, id: \.self) { example in
-                Button {
-                    model.query = example
-                    Task { await model.search(vocabulary: env.vocabulary) }
-                } label: {
-                    HStack(spacing: Metrics.space2) {
-                        Image(systemName: "sparkle").foregroundStyle(Palette.accent)
-                        Text(example).font(.dsBody).foregroundStyle(Palette.textPrimary)
+        VStack(alignment: .leading, spacing: Metrics.space4) {
+            if !model.recentQueries.isEmpty {
+                VStack(alignment: .leading, spacing: Metrics.space2) {
+                    HStack {
+                        Text("Recent").font(.dsSectionHeader)
                         Spacer()
+                        Button("Clear") { model.clearRecents() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                    ForEach(model.recentQueries, id: \.self) { recent in
+                        Button {
+                            Task { await model.runRecent(recent, vocabulary: env.vocabulary) }
+                        } label: {
+                            HStack(spacing: Metrics.space2) {
+                                Image(systemName: "clock.arrow.circlepath").foregroundStyle(Palette.textTertiary)
+                                Text(recent).font(.dsBody).foregroundStyle(Palette.textPrimary)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        .accessibilityLabel("Search again: \(recent)")
                     }
                 }
-                .buttonStyle(RowButtonStyle())
-                .accessibilityLabel("Search: \(example)")
+                .focusSection()
+            }
+
+            VStack(alignment: .leading, spacing: Metrics.space2) {
+                Text("Try asking for…").font(.dsSectionHeader)
+                ForEach(examples, id: \.self) { example in
+                    Button {
+                        model.query = example
+                        Task { await model.search(vocabulary: env.vocabulary) }
+                    } label: {
+                        HStack(spacing: Metrics.space2) {
+                            Image(systemName: "sparkle").foregroundStyle(Palette.accent)
+                            Text(example).font(.dsBody).foregroundStyle(Palette.textPrimary)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    .accessibilityLabel("Search: \(example)")
+                }
             }
         }
         .frame(maxWidth: 900, alignment: .leading)
