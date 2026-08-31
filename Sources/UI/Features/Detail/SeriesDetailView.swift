@@ -223,6 +223,7 @@ struct SeriesDetailView: View {
                 env.favorites.toggle(id: series.id, kind: .series)
             } label: {
                 Image(systemName: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
+                    .symbolEffect(.bounce, value: env.favorites.isFavorite(series.id))
             }
             .buttonStyle(SecondaryButtonStyle())
             .accessibilityLabel(env.favorites.isFavorite(series.id) ? "Remove from Favorites" : "Add to Favorites")

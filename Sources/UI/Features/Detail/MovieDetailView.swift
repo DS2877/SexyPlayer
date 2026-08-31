@@ -139,6 +139,7 @@ struct MovieDetailView: View {
                     env.favorites.toggle(id: movie.id, kind: .movie)
                 } label: {
                     Image(systemName: env.favorites.isFavorite(movie.id) ? "heart.fill" : "heart")
+                        .symbolEffect(.bounce, value: env.favorites.isFavorite(movie.id))
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .accessibilityLabel(env.favorites.isFavorite(movie.id) ? "Remove from Favorites" : "Add to Favorites")

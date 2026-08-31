@@ -115,6 +115,7 @@ struct ChannelDetailView: View {
                 env.favorites.toggle(id: channel.id, kind: .liveChannel)
             } label: {
                 Image(systemName: env.favorites.isFavorite(channel.id) ? "heart.fill" : "heart")
+                    .symbolEffect(.bounce, value: env.favorites.isFavorite(channel.id))
             }
             .buttonStyle(SecondaryButtonStyle())
             .accessibilityLabel(env.favorites.isFavorite(channel.id) ? "Remove from Favorites" : "Add to Favorites")
