@@ -7,9 +7,10 @@ straight into `Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets/
 ## The mark
 
 Warm beige field · rich charcoal squircle (Apple superellipse) with a subtle top
-bevel and soft contact shadow · an off-white play mark with a gently concave
-trailing edge (reads as motion, and keeps the silhouette custom rather than a
-generic play button).
+bevel and soft contact shadow · an off-white geometric capital **"A"** (an upward
+wedge that reads as the letter, as ascent/air for *Aeria*, and — rotated — still
+nods to a play triangle). Built as a compound `fill-rule="evenodd"` path in
+`markPath()`; tune `H` / `W` / `barY` / `apexDrop` / `innerW` there.
 
 Palette lives at the top of the script (`BEIGE`, `INK`, …).
 

@@ -30,23 +30,33 @@ function squirclePath(cx, cy, size, n = 4.6, steps = 96) {
   return d + "Z";
 }
 
-// A play mark with a gently concave trailing edge — reads as motion, and gives
-// the icon a custom silhouette rather than a generic play button. Corners are
-// rounded via a matched round-join stroke.
-function triPath(cx, cy, h) {
-  const triH = h * 0.43;
-  const triW = triH * 0.90;
-  const nudge = h * 0.018;
-  const x0 = cx - triW / 2 + nudge;
-  const xT = x0 + triW;
-  const yTop = cy - triH / 2, yBot = cy + triH / 2;
-  const bow = triW * 0.10;            // how far the back edge curves inward
-  const d =
-    `M ${x0} ${yTop} ` +
-    `L ${xT} ${cy} ` +
-    `L ${x0} ${yBot} ` +
-    `Q ${x0 + bow} ${cy} ${x0} ${yTop} Z`;
-  return { d, round: h * 0.06 };
+// The "Aeria" mark: a bold geometric capital A — an upward wedge that reads as
+// the letter, as ascent/air, and (rotated) still nods to a play triangle. Built
+// as a compound path (solid outer A minus the counter above the crossbar) with
+// `fill-rule="evenodd"`; corners are softened by a matched round-join stroke.
+function markPath(cx, cy, h) {
+  const H  = h * 0.235;              // half-height of the A
+  const W  = h * 0.210;              // half-width at the base (outer)
+  const barY = cy + H * 0.40;        // bottom of the counter = top of the crossbar
+  const apexDrop = h * 0.072;        // inner apex sits below the outer apex
+  const innerW = h * 0.085;          // half-width of the counter at the crossbar
+
+  const topY = cy - H, botY = cy + H;
+
+  const outer =
+    `M ${cx.toFixed(2)} ${topY.toFixed(2)} ` +
+    `L ${(cx + W).toFixed(2)} ${botY.toFixed(2)} ` +
+    `L ${(cx - W).toFixed(2)} ${botY.toFixed(2)} Z`;
+
+  // Counter (the triangular hole) — only the part above the crossbar.
+  const counter =
+    `M ${cx.toFixed(2)} ${(topY + apexDrop).toFixed(2)} ` +
+    `L ${(cx + innerW).toFixed(2)} ${barY.toFixed(2)} ` +
+    `L ${(cx - innerW).toFixed(2)} ${barY.toFixed(2)} Z`;
+
+  // Small round-join stroke just to soften the points — thin enough that it
+  // doesn't close the counter.
+  return { d: `${outer} ${counter}`, round: h * 0.022 };
 }
 
 // ---- one layer ----------------------------------------------------------------
@@ -55,7 +65,7 @@ function svg(w, h, layer, { cxFrac = 0.5, cyFrac = 0.5, tile = 0.76 } = {}) {
   const cx = w * cxFrac, cy = h * cyFrac;
   const size = h * tile;
   const sq = squirclePath(cx, cy, size);
-  const t = triPath(cx, cy, h);
+  const t = markPath(cx, cy, h);
 
   const defs = `
     <radialGradient id="bg" cx="${(cx / w) * 100}%" cy="${(cy / h) * 42}%" r="80%">
@@ -82,15 +92,15 @@ function svg(w, h, layer, { cxFrac = 0.5, cyFrac = 0.5, tile = 0.76 } = {}) {
     parts.push(`<path d="${sq}" fill="url(#tile)"/>`);
     // faint top rim light
     parts.push(`<path d="${sq}" fill="none" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="${h * 0.012}"/>`);
-    // triangle contact shadow lives here so it stays put during parallax
-    parts.push(`<g opacity="0.28"><path d="${t.d}" fill="#000" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
+    // mark contact shadow lives here so it stays put during parallax
+    parts.push(`<g opacity="0.28"><path d="${t.d}" fill="#000" fill-rule="evenodd" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
   }
 
   if (has("front")) {
     if (layer === "flat") {
-      parts.push(`<g opacity="0.24"><path d="${t.d}" fill="#000" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
+      parts.push(`<g opacity="0.24"><path d="${t.d}" fill="#000" fill-rule="evenodd" filter="url(#sh)" transform="translate(${h * 0.006} ${h * 0.016})"/></g>`);
     }
-    parts.push(`<path d="${t.d}" fill="${BEIGE_HI}" stroke="${BEIGE_HI}" stroke-width="${t.round}" stroke-linejoin="round"/>`);
+    parts.push(`<path d="${t.d}" fill="${BEIGE_HI}" fill-rule="evenodd" stroke="${BEIGE_HI}" stroke-width="${t.round}" stroke-linejoin="round"/>`);
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
