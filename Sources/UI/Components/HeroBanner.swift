@@ -6,6 +6,7 @@ import SwiftUI
 /// put so focus is never dropped mid-rotation.
 struct HeroBanner: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let heroes: [HomeCard]
     let onSelect: (HomeCard) -> Void
@@ -60,7 +61,7 @@ struct HeroBanner: View {
         .clipped()
         .id(hero.id)
         .transition(.opacity)
-        .animation(.easeInOut(duration: 0.6), value: hero.id)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: hero.id)
         .overlay(
             LinearGradient(
                 stops: [
@@ -106,8 +107,8 @@ struct HeroBanner: View {
             }
             .id(hero.id)
             .transition(.opacity)
-            .animation(.easeInOut(duration: 0.5), value: hero.id)
-            .animation(.easeInOut(duration: 0.3), value: overview)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: hero.id)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: overview)
             .accessibilityElement(children: .combine)
 
             HStack(alignment: .center, spacing: Metrics.space2) {
@@ -150,7 +151,8 @@ struct HeroBanner: View {
     }
 
     private func rotate() async {
-        guard heroes.count > 1 else { return }
+        // Reduce Motion: hold on the top title, no auto-advance.
+        guard heroes.count > 1, !reduceMotion else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: interval)
             guard !Task.isCancelled, !buttonFocused else { continue }

@@ -86,6 +86,7 @@ public struct ErrorStateView: View {
 public struct SkeletonBox: View {
     var cornerRadius: CGFloat
     @State private var sweep: CGFloat = -1
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(cornerRadius: CGFloat = Metrics.cardCornerRadius) {
         self.cornerRadius = cornerRadius
@@ -102,10 +103,12 @@ public struct SkeletonBox: View {
                     )
                     .frame(width: geo.size.width * 0.55)
                     .offset(x: sweep * geo.size.width * 1.4)
+                    .opacity(reduceMotion ? 0 : 1)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                     sweep = 1
                 }
