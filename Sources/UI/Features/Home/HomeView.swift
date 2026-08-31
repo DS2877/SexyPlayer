@@ -158,6 +158,19 @@ struct HomeView: View {
                 progress: card.progress,
                 action: { navigate(card) }
             )
+            .contextMenu {
+                if let itemID = card.resumeItemID {
+                    Button {
+                        environment.markWatched(id: itemID, kind: card.kind == .series ? .series : .movie)
+                        Task { await model?.rebuild() }
+                    } label: { Label("Mark as Watched", systemImage: "checkmark.circle") }
+
+                    Button(role: .destructive) {
+                        environment.removeFromContinueWatching(id: itemID)
+                        Task { await model?.rebuild() }
+                    } label: { Label("Remove", systemImage: "minus.circle") }
+                }
+            }
         }
     }
 

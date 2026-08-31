@@ -14,8 +14,12 @@ public struct HomeCard: Identifiable, Sendable {
     public let progress: Double?
     /// Small uppercase line above the title (hero only): "2024 · Sci-Fi · 4K".
     public let eyebrow: String?
+    /// For Continue Watching cards: the item that actually plays / gets marked
+    /// watched (an episode or movie id), distinct from `id` (the container the
+    /// card taps through to). `nil` for every other card.
+    public let resumeItemID: CatalogID?
 
-    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil) {
+    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, eyebrow: String? = nil, resumeItemID: CatalogID? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -25,6 +29,7 @@ public struct HomeCard: Identifiable, Sendable {
         self.badge = badge
         self.progress = progress
         self.eyebrow = eyebrow
+        self.resumeItemID = resumeItemID
     }
 
     /// A TMDB match reference for movie / series cards (nil for channels).

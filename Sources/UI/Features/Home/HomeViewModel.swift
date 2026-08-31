@@ -181,7 +181,8 @@ public final class HomeViewModel {
         UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12).map { point in
             HomeCard(id: point.containerID, kind: point.isSeries ? .series : .movie,
                      title: point.primaryTitle, subtitle: point.secondaryText,
-                     artworkURL: point.artworkURL, progress: point.fraction > 0 ? point.fraction : nil)
+                     artworkURL: point.artworkURL, progress: point.fraction > 0 ? point.fraction : nil,
+                     resumeItemID: point.itemID)
         }
     }
 

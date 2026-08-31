@@ -474,6 +474,20 @@ public final class AppEnvironment {
         scheduleTopShelfWrite()
     }
 
+    /// "Mark as Watched" from a Continue Watching card — records a finished entry
+    /// so the item drops out (a series advances to its next episode).
+    public func markWatched(id: CatalogID, kind: ContentKind) {
+        let duration = watchProgress.progress(for: id)?.durationSeconds ?? 1
+        watchProgress.record(id: id, kind: kind, positionSeconds: duration, durationSeconds: duration)
+        Task { await writeTopShelfSnapshot() }
+    }
+
+    /// "Remove" from a Continue Watching card.
+    public func removeFromContinueWatching(id: CatalogID) {
+        watchProgress.clear(id: id)
+        Task { await writeTopShelfSnapshot() }
+    }
+
     // MARK: - Deep links (Top Shelf)
 
     /// Handle an `aeria://…` URL opened from the Top Shelf. Shown as a cover over
