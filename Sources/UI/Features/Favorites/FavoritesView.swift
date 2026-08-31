@@ -35,7 +35,7 @@ struct FavoritesView: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
-                            Text("Favorites").font(.dsHero)
+                            Text("Favorites").font(.dsTitle)
                                 .accessibilityAddTraits(.isHeader)
                                 .padding(.horizontal, Metrics.screenMargin)
                                 .padding(.top, Metrics.space4)

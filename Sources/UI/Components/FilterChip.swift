@@ -34,8 +34,11 @@ public struct FilterChip: View {
             .padding(.horizontal, Metrics.space2)
             .padding(.vertical, Metrics.space1 + 2)
             .background(background, in: Capsule())
-            .overlay(Capsule().strokeBorder(isSelected ? Palette.accent : Palette.hairline, lineWidth: 2))
-            .foregroundStyle(isSelected ? Palette.textPrimary : Palette.textSecondary)
+            .overlay(Capsule().strokeBorder(borderColor, lineWidth: 2))
+            .foregroundStyle(isFocused || isSelected ? Palette.textPrimary : Palette.textSecondary)
+            .scaleEffect(isFocused ? 1.06 : 1)
+            .shadow(color: .black.opacity(isFocused ? 0.35 : 0), radius: isFocused ? 16 : 0, y: isFocused ? 8 : 0)
+            .animation(Metrics.focusAnimation, value: isFocused)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(showsRemoveIcon ? "Remove filter: \(label)" : label)
@@ -43,7 +46,12 @@ public struct FilterChip: View {
     }
 
     private var background: Color {
-        if isFocused { return Palette.surfaceElevated }
+        if isFocused { return Palette.focusFill.opacity(0.16) }
         return isSelected ? Palette.accentSoft : Palette.surface
+    }
+
+    private var borderColor: Color {
+        if isFocused { return Palette.accent }
+        return isSelected ? Palette.accent : Palette.hairline
     }
 }
