@@ -70,8 +70,9 @@ struct PlayerScreen: View {
                     )
                     .ignoresSafeArea()
 
-                    if model.state == .loading {
+                    if model.state == .loading || model.isStalling {
                         ProgressView().controlSize(.large).tint(.white)
+                            .accessibilityLabel(model.isStalling ? "Buffering" : "Loading")
                     }
 
                     if let info = banner {

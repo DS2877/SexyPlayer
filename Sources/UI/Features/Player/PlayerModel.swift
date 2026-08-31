@@ -18,6 +18,9 @@ public final class PlayerModel {
     }
 
     public private(set) var state: State = .loading
+    /// `true` when playback has started but the buffer ran dry — the UI shows a
+    /// spinner over the paused picture rather than a hard error.
+    public private(set) var isStalling = false
 
     @ObservationIgnored public let player: AVPlayer
     /// The item playback started with.
@@ -26,6 +29,7 @@ public final class PlayerModel {
     public private(set) var activeItem: PlaybackItem
 
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
+    @ObservationIgnored private var timeControlObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeObserverToken: Any?
     @ObservationIgnored private var failureObserver: NSObjectProtocol?
     @ObservationIgnored private var endObserver: NSObjectProtocol?
@@ -90,6 +94,14 @@ public final class PlayerModel {
         statusObservation = currentItem.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
             let status = observedItem.status
             Task { @MainActor in self?.handleStatusChange(status) }
+        }
+
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] observedPlayer, _ in
+            let waiting = observedPlayer.timeControlStatus == .waitingToPlayAtSpecifiedRate
+            Task { @MainActor in
+                guard let self else { return }
+                self.isStalling = waiting && self.state == .playing
+            }
         }
 
         failureObserver = NotificationCenter.default.addObserver(
@@ -159,6 +171,9 @@ public final class PlayerModel {
         timeObserverToken = nil
         statusObservation?.invalidate()
         statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
+        isStalling = false
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         failureObserver = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
