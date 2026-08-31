@@ -170,6 +170,10 @@ struct SystemPlayerView: UIViewControllerRepresentable {
         controller.player = player
         controller.videoGravity = .resizeAspect
         controller.showsPlaybackControls = true
+        // Match the Apple TV's output mode (refresh rate / dynamic range) to the
+        // stream, and surface the title we set as external metadata.
+        controller.appliesPreferredDisplayCriteriaAutomatically = true
+        controller.transportBarIncludesTitleView = true
 
         if channelActions != nil {
             let coordinator = context.coordinator
