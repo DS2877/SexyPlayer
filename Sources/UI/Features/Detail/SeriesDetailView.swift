@@ -283,6 +283,8 @@ struct SeriesDetailView: View {
         let progress = env.watchProgress.progress(for: episode.id)
         let still = episodeStills[episode.episodeNumber] ?? episode.stillURL
 
+        let watched = progress?.isFinished == true
+
         return Button {
             playback = env.playback(forEpisode: episode, seriesTitle: seriesTitle)
         } label: {
@@ -291,9 +293,10 @@ struct SeriesDetailView: View {
                     ArtworkView(url: still, title: episode.title, aspect: 16.0 / 9.0, style: .backdrop)
                         .frame(width: 260, height: 146)
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                    Image(systemName: "play.circle.fill")
+                        .opacity(watched ? 0.55 : 1)
+                    Image(systemName: watched ? "checkmark.circle.fill" : "play.circle.fill")
                         .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.92))
+                        .foregroundStyle(watched ? Palette.accent : .white.opacity(0.92))
                         .shadow(radius: 8)
                 }
 
@@ -302,6 +305,16 @@ struct SeriesDetailView: View {
                         .font(.dsCardTitle)
                         .foregroundStyle(Palette.textPrimary)
                         .lineLimit(1)
+
+                    HStack(spacing: Metrics.space2) {
+                        if let mins = episode.durationMinutes, mins > 0 {
+                            Text("\(mins) min").font(.dsTag).foregroundStyle(Palette.textTertiary)
+                        }
+                        if watched {
+                            Text("Watched").font(.dsTag).foregroundStyle(Palette.accent)
+                        }
+                    }
+
                     if let overview = episode.overview {
                         Text(overview)
                             .font(.dsCaption)
@@ -318,5 +331,6 @@ struct SeriesDetailView: View {
             }
         }
         .buttonStyle(RowButtonStyle())
+        .accessibilityLabel("\(episode.code), \(episode.title)\(watched ? ", watched" : "")")
     }
 }
