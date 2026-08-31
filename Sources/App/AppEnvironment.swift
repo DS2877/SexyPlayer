@@ -236,29 +236,54 @@ public final class AppEnvironment {
         guard providers.activeConfiguration?.id == providerID else { return }
         switch stage {
         case .channels(let raw):
+            let started = Date()
             let channels = await normalizer.normalizeChannels(raw, providerID: providerID)
+            guard providers.activeConfiguration?.id == providerID else { return }
             await repository.loadChannelsOnly(channels)
             await applyPreferences()
             loadState = .ready
             hasLoadedOnce = true
             Task { await cache.saveChannels(channels, providerID: providerID) }
+            AppLog.app.info("Channels stage: \(channels.count) in \(Int(Date().timeIntervalSince(started) * 1000)) ms — app interactive.")
         case .vod(let movies, let shells, let episodes):
+            let started = Date()
+            // Newest first, and merge that slice before the rest so the shelves
+            // the user actually looks at (Recently Added, hero, Top Rated)
+            // populate a beat sooner on a big library.
+            let sortedMovies = movies.sorted {
+                ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast)
+            }
+            if sortedMovies.count > Self.vodFirstChunk {
+                let head = Array(sortedMovies.prefix(Self.vodFirstChunk))
+                let first = await normalizer.normalizeVOD(
+                    movies: head, shells: [], episodes: [], providerID: providerID
+                )
+                guard providers.activeConfiguration?.id == providerID else { return }
+                await repository.mergeVOD(movies: first.movies, series: first.series)
+                catalogRevision += 1
+            }
+
             let result = await normalizer.normalizeVOD(
-                movies: movies, shells: shells, episodes: episodes, providerID: providerID
+                movies: sortedMovies, shells: shells, episodes: episodes, providerID: providerID
             )
+            guard providers.activeConfiguration?.id == providerID else { return }
             await repository.mergeVOD(movies: result.movies, series: result.series)
             catalogRevision += 1
             let (m, s) = (result.movies, result.series)
             Task { await cache.saveVOD(movies: m, series: s, providerID: providerID) }
+            AppLog.app.info("VOD stage: \(m.count) movies · \(s.count) series in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
         case .guide(let raw):
+            let started = Date()
             let now = Date()
             let lower = now.addingTimeInterval(-Self.epgWindowPast)
             let upper = now.addingTimeInterval(Self.epgWindowFuture)
             let windowed = raw.filter { $0.stop > lower && $0.start < upper }
             let events = await normalizer.normalizeGuide(windowed)
+            guard providers.activeConfiguration?.id == providerID else { return }
             await repository.mergeEPG(events)
             catalogRevision += 1
             Task { await cache.saveEPG(events, providerID: providerID) }
+            AppLog.app.info("Guide stage: \(events.count) of \(raw.count) events in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
         }
     }
 
@@ -268,6 +293,10 @@ public final class AppEnvironment {
         startBackgroundRefresh(client: client, providerID: providerID)
         await refreshTask?.value
     }
+
+    /// On a cold import, merge this many newest movies before the full set so
+    /// the Home shelves fill in without waiting on the whole library.
+    private static let vodFirstChunk = 800
 
     /// EPG kept in memory: enough for "now", tonight, and a week-ahead guide.
     /// A real provider's full XMLTV can be millions of events — never hold it all.
