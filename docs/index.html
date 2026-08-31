@@ -13,21 +13,16 @@
     background: radial-gradient(60% 45% at 50% 32%, #16181d 0%, #0a0b0d 60%, #060607 100%);
     min-height: 100vh;
   }
-  .mark {
-    width: 132px; height: 132px; margin: 0 auto 28px; border-radius: 30px;
-    background: linear-gradient(180deg, #101216 0%, #060608 100%);
-    box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
-    display: flex; align-items: center; justify-content: center;
-  }
-  .mark svg { width: 92px; height: 92px; }
   .eyebrow {
     font-size: 13px; letter-spacing: .22em; font-weight: 700;
-    color: #5CACFF; margin-bottom: 6px;
+    color: #5CACFF; margin-bottom: 10px;
   }
-  h1 {
-    font-size: 40px; font-weight: 700; margin: 0 0 16px;
-    background: linear-gradient(180deg, #ffffff 0%, #c8ccd2 45%, #ffffff 100%);
+  h1.wordmark {
+    font: 800 84px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: -.015em; margin: 0 0 20px;
+    background: linear-gradient(180deg, #F8F9FB 0%, #ADB2BA 38%, #767C86 50%, #EEF0F3 57%, #C2C6CD 78%, #9DA2AA 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 18px rgba(0,0,0,.5));
   }
   p { max-width: 500px; margin: 12px auto; color: #b9bcc2; }
   .fine { font-size: 14px; color: #7c7f86; margin-top: 22px; }
@@ -36,26 +31,8 @@
 </style>
 </head>
 <body>
-  <div class="mark">
-    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="l" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#F6F7F9"/><stop offset="100%" stop-color="#DDDFE3"/>
-        </linearGradient>
-      </defs>
-      <!-- A: mitred legs + crossbar, optical centre ~46 -->
-      <path d="M28 76 L46 24 L64 76" fill="none" stroke="url(#l)" stroke-width="12"
-            stroke-linejoin="miter" stroke-miterlimit="6"/>
-      <path d="M35 55 h22 v9 h-22 Z" fill="url(#l)"/>
-      <!-- raised + -->
-      <g fill="#3B9EFF">
-        <rect x="62" y="30.5" width="15" height="7" rx="3"/>
-        <rect x="66" y="26.5" width="7" height="15" rx="3"/>
-      </g>
-    </svg>
-  </div>
   <div class="eyebrow">PREMIUM IPTV PLAYER</div>
-  <h1>Aeria+</h1>
+  <h1 class="wordmark">Aeria+</h1>
   <p>Built for picture, for sound, and for the silence between them.<br>
      We provide the player. You choose what to watch.</p>
   <p class="fine">
