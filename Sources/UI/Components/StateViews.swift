@@ -81,11 +81,43 @@ public struct ErrorStateView: View {
     }
 }
 
-/// Shimmer placeholder rail shown while a catalog loads.
+/// A single placeholder block with a moving highlight sweep. The building
+/// block for every loading skeleton in the app.
+public struct SkeletonBox: View {
+    var cornerRadius: CGFloat
+    @State private var sweep: CGFloat = -1
+
+    public init(cornerRadius: CGFloat = Metrics.cardCornerRadius) {
+        self.cornerRadius = cornerRadius
+    }
+
+    public var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Palette.surface)
+            .overlay {
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [.clear, Palette.textPrimary.opacity(0.06), .clear],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 0.55)
+                    .offset(x: sweep * geo.size.width * 1.4)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    sweep = 1
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+/// Placeholder poster rail shown while a catalog loads.
 public struct SkeletonShelf: View {
     let cardWidth: CGFloat
     let cardHeight: CGFloat
-    @State private var shimmer = false
 
     public init(cardWidth: CGFloat = Metrics.posterWidth, cardHeight: CGFloat = Metrics.posterHeight) {
         self.cardWidth = cardWidth
@@ -94,23 +126,15 @@ public struct SkeletonShelf: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
-            RoundedRectangle(cornerRadius: 6).fill(Palette.surface)
-                .frame(width: 280, height: 30)
+            SkeletonBox(cornerRadius: 6)
+                .frame(width: 260, height: 26)
                 .padding(.horizontal, Metrics.screenMargin)
             HStack(spacing: Metrics.cardSpacing) {
                 ForEach(0..<6, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous)
-                        .fill(Palette.surface)
-                        .frame(width: cardWidth, height: cardHeight)
-                        .opacity(shimmer ? 0.45 : 0.85)
+                    SkeletonBox().frame(width: cardWidth, height: cardHeight)
                 }
             }
             .padding(.horizontal, Metrics.screenMargin)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                shimmer = true
-            }
         }
         .accessibilityHidden(true)
     }

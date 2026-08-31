@@ -73,8 +73,18 @@ struct HomeView: View {
     private var loadingView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metrics.shelfSpacing) {
-                RoundedRectangle(cornerRadius: 0).fill(Palette.surface)
-                    .frame(height: 640).opacity(0.6)
+                SkeletonBox(cornerRadius: 0)
+                    .frame(height: 620)
+                    .overlay(alignment: .bottomLeading) {
+                        VStack(alignment: .leading, spacing: Metrics.space2) {
+                            SkeletonBox(cornerRadius: 8).frame(width: 460, height: 56)
+                            SkeletonBox(cornerRadius: 6).frame(width: 620, height: 24)
+                            SkeletonBox(cornerRadius: 12).frame(width: 190, height: 54)
+                                .padding(.top, Metrics.space2)
+                        }
+                        .padding(.horizontal, Metrics.screenMargin)
+                        .padding(.bottom, Metrics.space5)
+                    }
                 SkeletonShelf()
                 SkeletonShelf()
                 SkeletonShelf()
