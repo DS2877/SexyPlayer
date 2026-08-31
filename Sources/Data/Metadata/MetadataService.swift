@@ -15,6 +15,7 @@ public struct EnrichedMetadata: Codable, Sendable, Equatable {
     public var tagline: String?
     public var genres: [String]?
     public var cast: [String]?
+    public var castCredits: [TMDBClient.CastCredit]?
     public var runtime: Int?          // minutes
     public var voteCount: Int?
     public var detailsFetchedAt: Date?
@@ -25,6 +26,7 @@ public struct EnrichedMetadata: Codable, Sendable, Equatable {
     public init(tmdbID: Int, posterURL: URL?, backdropURL: URL?, overview: String?,
                 rating: Double?, fetchedAt: Date,
                 tagline: String? = nil, genres: [String]? = nil, cast: [String]? = nil,
+                castCredits: [TMDBClient.CastCredit]? = nil,
                 runtime: Int? = nil, voteCount: Int? = nil, detailsFetchedAt: Date? = nil) {
         self.tmdbID = tmdbID
         self.posterURL = posterURL
@@ -35,6 +37,7 @@ public struct EnrichedMetadata: Codable, Sendable, Equatable {
         self.tagline = tagline
         self.genres = genres
         self.cast = cast
+        self.castCredits = castCredits
         self.runtime = runtime
         self.voteCount = voteCount
         self.detailsFetchedAt = detailsFetchedAt
@@ -106,8 +109,12 @@ public actor MetadataService {
     public func details(for id: CatalogID, title: String, year: Int?, isSeries: Bool) async -> EnrichedMetadata? {
         let key = id.rawValue
 
-        // Cached with details already? Done.
-        if let existing = byID[key], existing.matched, existing.hasDetails { return existing }
+        // Cached with details already? Done. (`castCredits == nil` means the
+        // record predates cast-photo support — refetch it once.)
+        if let existing = byID[key], existing.matched, existing.hasDetails,
+           existing.castCredits != nil {
+            return existing
+        }
         guard client != nil else { return byID[key]?.matched == true ? byID[key] : nil }
 
         if let running = detailsInFlight[key] { return await running.value }
@@ -196,6 +203,7 @@ public actor MetadataService {
         updated.tagline = details?.tagline
         updated.genres = details?.genres
         updated.cast = details?.cast
+        updated.castCredits = details?.castCredits
         updated.runtime = details?.runtime
         updated.voteCount = details?.voteCount
         updated.detailsFetchedAt = Date()

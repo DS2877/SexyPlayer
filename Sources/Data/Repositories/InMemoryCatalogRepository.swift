@@ -202,6 +202,36 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     /// a staged import.
     public func exportCatalog() -> Catalog { source }
 
+    // MARK: - "More Like This"
+
+    public func similarMovies(to id: CatalogID, genres: [Genre], limit: Int) -> [Movie] {
+        guard !genres.isEmpty else { return [] }
+        let want = Set(genres)
+        return catalog.movies
+            .filter { $0.id != id && !want.isDisjoint(with: $0.genres) }
+            .sorted { lhs, rhs in
+                let l = want.intersection(lhs.genres).count
+                let r = want.intersection(rhs.genres).count
+                if l != r { return l > r }
+                return (lhs.addedAt ?? .distantPast) > (rhs.addedAt ?? .distantPast)
+            }
+            .prefix(limit).map { $0 }
+    }
+
+    public func similarSeries(to id: CatalogID, genres: [Genre], limit: Int) -> [Series] {
+        guard !genres.isEmpty else { return [] }
+        let want = Set(genres)
+        return catalog.series
+            .filter { $0.id != id && !want.isDisjoint(with: $0.genres) }
+            .sorted { lhs, rhs in
+                let l = want.intersection(lhs.genres).count
+                let r = want.intersection(rhs.genres).count
+                if l != r { return l > r }
+                return (lhs.addedAt ?? .distantPast) > (rhs.addedAt ?? .distantPast)
+            }
+            .prefix(limit).map { $0 }
+    }
+
     /// Seeds for the background TMDB enrichment sweep — most recently added
     /// first, since that's what the user browses before anything else.
     public func artworkSeeds(movieLimit: Int, seriesLimit: Int) -> [ArtworkSeed] {

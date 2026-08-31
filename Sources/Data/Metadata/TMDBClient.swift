@@ -17,13 +17,24 @@ public struct TMDBClient: Sendable {
         public let year: Int?
     }
 
+    public struct CastCredit: Sendable, Equatable, Codable {
+        public let name: String
+        public let character: String?
+        public let profilePath: String?
+
+        public var imageURL: URL? {
+            profilePath.flatMap { URL(string: "https://image.tmdb.org/t/p/w185" + $0) }
+        }
+    }
+
     /// Second-call payload: the richer fields that only `/movie/{id}` or
     /// `/tv/{id}` return (with `append_to_response=credits`).
     public struct Details: Sendable, Equatable {
         public let tagline: String?
         public let genres: [String]
         public let runtime: Int?        // minutes
-        public let cast: [String]       // top-billed, in order
+        public let cast: [String]       // top-billed names, in order
+        public let castCredits: [CastCredit]
         public let voteCount: Int?
     }
 
@@ -108,14 +119,21 @@ public struct TMDBClient: Sendable {
 
         let decoded = try JSONDecoder().decode(DetailResponse.self, from: data)
         let runtime = decoded.runtime ?? decoded.episode_run_time?.first
+        let billed = (decoded.credits?.cast ?? [])
+            .sorted { ($0.order ?? 999) < ($1.order ?? 999) }
+            .prefix(14)
+            .compactMap { member -> CastCredit? in
+                guard let name = member.name, !name.isEmpty else { return nil }
+                return CastCredit(name: name,
+                                  character: member.character?.isEmpty == false ? member.character : nil,
+                                  profilePath: member.profile_path)
+            }
         return Details(
             tagline: decoded.tagline?.isEmpty == false ? decoded.tagline : nil,
             genres: decoded.genres?.compactMap(\.name) ?? [],
             runtime: (runtime ?? 0) > 0 ? runtime : nil,
-            cast: (decoded.credits?.cast ?? [])
-                .sorted { ($0.order ?? 999) < ($1.order ?? 999) }
-                .prefix(12)
-                .compactMap { $0.name?.isEmpty == false ? $0.name : nil },
+            cast: billed.map(\.name),
+            castCredits: Array(billed),
             voteCount: decoded.vote_count
         )
     }
@@ -152,7 +170,12 @@ public struct TMDBClient: Sendable {
     private struct DetailResponse: Decodable {
         struct NamedID: Decodable { let name: String? }
         struct Credits: Decodable {
-            struct Member: Decodable { let name: String?; let order: Int? }
+            struct Member: Decodable {
+                let name: String?
+                let character: String?
+                let order: Int?
+                let profile_path: String?
+            }
             let cast: [Member]?
         }
         let tagline: String?

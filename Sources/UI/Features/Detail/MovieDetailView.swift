@@ -8,6 +8,7 @@ struct MovieDetailView: View {
     @State private var notFound = false
     @State private var playback: PlaybackItem?
     @State private var enriched: EnrichedMetadata?
+    @State private var related: [RelatedItem] = []
 
     var body: some View {
         Group {
@@ -25,6 +26,10 @@ struct MovieDetailView: View {
             movie = await env.repository.movie(id: movieID)
             notFound = movie == nil
             guard let movie else { return }
+            related = await env.repository
+                .similarMovies(to: movie.id, genres: movie.genres, limit: 18)
+                .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                                   posterURL: $0.posterURL, isSeries: false) }
             enriched = await env.metadata.details(
                 for: movie.id, title: movie.title, year: movie.year, isSeries: false
             )
@@ -44,12 +49,26 @@ struct MovieDetailView: View {
     private func loaded(_ movie: Movie) -> some View {
         let progress = env.watchProgress.progress(for: movie.id)
         let backdrop = movie.backdropURL ?? enriched?.backdropURL ?? movie.posterURL ?? enriched?.posterURL
-        let runtime = movie.durationMinutes ?? enriched?.runtime
-        let genre = movie.genres.first?.displayName ?? enriched?.genres?.first
-        let synopsis = movie.synopsis ?? enriched?.overview
-        let cast = movie.cast.isEmpty ? (enriched?.cast ?? []) : movie.cast
 
         DetailScaffold(title: movie.title, backdropURL: backdrop) {
+            header(movie)
+            actions(movie, progress: progress)
+            info(movie)
+            if let credits = enriched?.castCredits, !credits.isEmpty {
+                CastRail(credits: credits)
+            }
+            RelatedRail(title: "More Like This", items: related)
+        }
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder
+    private func header(_ movie: Movie) -> some View {
+        let runtime = movie.durationMinutes ?? enriched?.runtime
+        let genre = movie.genres.first?.displayName ?? enriched?.genres?.first
+
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             Text(movie.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
             HStack(spacing: Metrics.space2) {
@@ -69,7 +88,12 @@ struct MovieDetailView: View {
                     .font(.dsBody.italic())
                     .foregroundStyle(Palette.textTertiary)
             }
+        }
+    }
 
+    @ViewBuilder
+    private func actions(_ movie: Movie, progress: WatchProgress?) -> some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             HStack(spacing: Metrics.space2) {
                 Button {
                     Task { playback = await env.playback(forMovie: movie.id) }
@@ -95,7 +119,16 @@ struct MovieDetailView: View {
                 .tint(Palette.accent)
                 .frame(maxWidth: 600)
             }
+        }
+    }
 
+    @ViewBuilder
+    private func info(_ movie: Movie) -> some View {
+        let synopsis = movie.synopsis ?? enriched?.overview
+        let textCast = movie.cast.isEmpty ? (enriched?.cast ?? []) : movie.cast
+        let showTextCast = (enriched?.castCredits?.isEmpty ?? true) && !textCast.isEmpty
+
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             LanguageSummary(audio: movie.audioLanguages, subtitles: movie.subtitleLanguages)
 
             if let synopsis {
@@ -108,8 +141,8 @@ struct MovieDetailView: View {
             if !movie.directors.isEmpty {
                 creditRow("Director", movie.directors)
             }
-            if !cast.isEmpty {
-                creditRow("Cast", cast)
+            if showTextCast {
+                creditRow("Cast", textCast)
             }
         }
     }

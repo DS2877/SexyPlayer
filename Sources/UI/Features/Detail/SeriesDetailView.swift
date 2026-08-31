@@ -10,6 +10,7 @@ struct SeriesDetailView: View {
     @State private var selectedSeason: Int?
     @State private var playback: PlaybackItem?
     @State private var enriched: EnrichedMetadata?
+    @State private var related: [RelatedItem] = []
 
     var body: some View {
         Group {
@@ -35,6 +36,10 @@ struct SeriesDetailView: View {
             selectedSeason = resumeEpisode(in: series)?.seasonNumber
                 ?? series?.seasons.first?.number
             if let series {
+                related = await env.repository
+                    .similarSeries(to: series.id, genres: series.genres, limit: 18)
+                    .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                                       posterURL: $0.posterURL, isSeries: true) }
                 enriched = await env.metadata.details(
                     for: series.id, title: series.title, year: series.year, isSeries: true
                 )
@@ -89,10 +94,24 @@ struct SeriesDetailView: View {
         let season = series.seasons.first { $0.number == selectedSeason } ?? series.seasons.first
 
         let backdrop = series.backdropURL ?? enriched?.backdropURL ?? series.posterURL ?? enriched?.posterURL
-        let synopsis = series.synopsis ?? enriched?.overview
-        let cast = enriched?.cast ?? []
 
         DetailScaffold(title: series.title, backdropURL: backdrop) {
+            header(series)
+            actions(series)
+            info(series)
+            if let credits = enriched?.castCredits, !credits.isEmpty {
+                CastRail(credits: credits)
+            }
+            episodes(series, season: season)
+            RelatedRail(title: "More Like This", items: related)
+        }
+    }
+
+    // MARK: - Sections
+
+    @ViewBuilder
+    private func header(_ series: Series) -> some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             Text(series.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
             HStack(spacing: Metrics.space2) {
@@ -112,26 +131,38 @@ struct SeriesDetailView: View {
                     .font(.dsBody.italic())
                     .foregroundStyle(Palette.textTertiary)
             }
+        }
+    }
 
-            HStack(spacing: Metrics.space2) {
-                if let resume = resumeEpisode(in: series) {
-                    Button {
-                        playback = env.playback(forEpisode: resume, seriesTitle: series.title)
-                    } label: {
-                        Label("Resume \(resume.code)", systemImage: "play.fill")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                }
-
+    @ViewBuilder
+    private func actions(_ series: Series) -> some View {
+        HStack(spacing: Metrics.space2) {
+            if let resume = resumeEpisode(in: series) {
                 Button {
-                    env.favorites.toggle(id: series.id, kind: .series)
+                    playback = env.playback(forEpisode: resume, seriesTitle: series.title)
                 } label: {
-                    Label(env.favorites.isFavorite(series.id) ? "In Favorites" : "Add to Favorites",
-                          systemImage: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
+                    Label("Resume \(resume.code)", systemImage: "play.fill")
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle())
             }
 
+            Button {
+                env.favorites.toggle(id: series.id, kind: .series)
+            } label: {
+                Label(env.favorites.isFavorite(series.id) ? "In Favorites" : "Add to Favorites",
+                      systemImage: env.favorites.isFavorite(series.id) ? "heart.fill" : "heart")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+    }
+
+    @ViewBuilder
+    private func info(_ series: Series) -> some View {
+        let synopsis = series.synopsis ?? enriched?.overview
+        let textCast = enriched?.cast ?? []
+        let showTextCast = (enriched?.castCredits?.isEmpty ?? true) && !textCast.isEmpty
+
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             LanguageSummary(audio: series.audioLanguages, subtitles: series.subtitleLanguages)
 
             if let synopsis {
@@ -139,10 +170,15 @@ struct SeriesDetailView: View {
                     .frame(maxWidth: 1100, alignment: .leading)
             }
 
-            if !cast.isEmpty {
-                creditRow("Cast", cast)
+            if showTextCast {
+                creditRow("Cast", textCast)
             }
+        }
+    }
 
+    @ViewBuilder
+    private func episodes(_ series: Series, season: Season?) -> some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
             if series.seasons.count > 1 {
                 seasonPicker(series)
             }
@@ -158,10 +194,8 @@ struct SeriesDetailView: View {
             }
 
             if let season {
-                VStack(alignment: .leading, spacing: Metrics.space2) {
-                    ForEach(season.episodes) { episode in
-                        episodeRow(episode, seriesTitle: series.title)
-                    }
+                ForEach(season.episodes) { episode in
+                    episodeRow(episode, seriesTitle: series.title)
                 }
             }
         }
