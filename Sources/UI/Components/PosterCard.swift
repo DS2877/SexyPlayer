@@ -35,6 +35,13 @@ public struct PosterCard: View {
 
     private var clampedProgress: Double { Swift.min(1, Swift.max(0, progress ?? 0)) }
 
+    private var accessibilityLabel: String {
+        var parts = [title]
+        if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
+        if progress != nil { parts.append("\(Int((clampedProgress * 100).rounded()))% watched") }
+        return parts.joined(separator: ", ")
+    }
+
     private var captionLine: String {
         if let subtitle, !subtitle.isEmpty { return subtitle }
         return showsRealImage ? title : ""
@@ -111,7 +118,7 @@ public struct PosterCard: View {
         .frame(width: Metrics.posterWidth, alignment: .leading)
         .onAppear { if artworkURL != nil { showsRealImage = true } }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(subtitle.map { "\(title), \($0)" } ?? title))
+        .accessibilityLabel(Text(accessibilityLabel))
         .accessibilityAddTraits(.isButton)
     }
 

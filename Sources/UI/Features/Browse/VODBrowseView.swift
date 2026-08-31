@@ -111,6 +111,7 @@ struct VODBrowseView: View {
                                 }
                             }
                         }
+                        .accessibilityLabel("Jump to \(anchor.letter)")
                     }
                 }
                 .padding(.vertical, Metrics.space1)

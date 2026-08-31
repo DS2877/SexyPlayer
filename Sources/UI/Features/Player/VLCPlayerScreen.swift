@@ -53,6 +53,10 @@ struct VLCPlayerScreen: View {
         }
         .focusable()
         .focused($surfaceFocused)
+        .accessibilityLabel(item.title)
+        .accessibilityValue(accessibilityStatus)
+        .accessibilityHint("Swipe left or right to seek. Press play-pause to pause or resume. Press Menu to exit.")
+        .accessibilityAddTraits(.startsMediaSession)
         .onPlayPauseCommand { model?.togglePlayPause(); flashControls() }
         .onMoveCommand { direction in
             flashControls()
@@ -94,6 +98,20 @@ struct VLCPlayerScreen: View {
 
     private var hasTracks: Bool {
         (model?.subtitleTracks.count ?? 0) > 1 || (model?.audioTracks.count ?? 0) > 1
+    }
+
+    /// Spoken status for VoiceOver — the custom transport has no focusable
+    /// controls of its own.
+    private var accessibilityStatus: String {
+        guard let model else { return "Loading" }
+        switch model.state {
+        case .loading: return "Loading"
+        case .failed:  return "Playback failed"
+        case .paused:  return "Paused"
+        case .playing:
+            guard model.duration > 0 else { return item.isLive ? "Live" : "Playing" }
+            return "\(timecode(model.position)) of \(timecode(model.duration))"
+        }
     }
 
     /// Accumulate a seek. Quick repeated presses grow the step (10s → 30s → 60s).

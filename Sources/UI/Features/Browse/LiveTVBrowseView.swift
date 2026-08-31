@@ -219,6 +219,7 @@ struct LiveTVBrowseView: View {
                                     }
                                 }
                             }
+                            .accessibilityLabel("Jump to \(anchor.letter)")
                         }
                     }
                     .padding(.vertical, Metrics.space1)

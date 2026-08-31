@@ -133,5 +133,7 @@ struct ChannelZapPanel: View {
             }
         }
         .buttonStyle(RowButtonStyle())
+        .accessibilityLabel(channel.name + (nowByID[channel.id].map { ", now playing \($0)" } ?? ""))
+        .accessibilityAddTraits(channel.id == lineup.currentID ? [.isButton, .isSelected] : .isButton)
     }
 }
