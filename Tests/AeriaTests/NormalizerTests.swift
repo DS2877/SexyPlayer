@@ -23,12 +23,12 @@ final class NormalizerTests: XCTestCase {
 
     func testMoviesGetTitleYearGenre() {
         let catalog = makeCatalog()
-        guard let sicario = catalog.movies.first(where: { $0.title == "Sicario" }) else {
-            return XCTFail("Sicario not normalized")
+        guard let notld = catalog.movies.first(where: { $0.title == "Night of the Living Dead" }) else {
+            return XCTFail("Night of the Living Dead not normalized")
         }
-        XCTAssertEqual(sicario.year, 2015)
-        XCTAssertTrue(sicario.genres.contains(.thriller))
-        XCTAssertEqual(sicario.durationMinutes, 121)
+        XCTAssertEqual(notld.year, 1968)
+        XCTAssertTrue(notld.genres.contains(.horror))
+        XCTAssertEqual(notld.durationMinutes, 96)
     }
 
     func testHorrorMoviesWithSwedishSubtitles() {
@@ -36,25 +36,25 @@ final class NormalizerTests: XCTestCase {
         let horrorSwe = catalog.movies.filter {
             $0.genres.contains(.horror) && $0.subtitleLanguages.contains(.swedish)
         }
-        // Hereditary, The Conjuring, The Babadook in the mock set.
+        // Caligari, Häxan, Carnival of Souls carry a Swedish subtitle tag.
         XCTAssertGreaterThanOrEqual(horrorSwe.count, 3)
     }
 
     func testSeriesReconstructedFromEpisodeNames() {
         let catalog = makeCatalog()
-        guard let got = catalog.series.first(where: { $0.title == "Game of Thrones" }) else {
-            return XCTFail("Game of Thrones not reconstructed")
+        guard let holmes = catalog.series.first(where: { $0.title == "Sherlock Holmes" }) else {
+            return XCTFail("Sherlock Holmes not reconstructed")
         }
-        XCTAssertEqual(got.seasons.map(\.number), [1, 2])
-        let season1 = got.seasons.first { $0.number == 1 }
-        XCTAssertEqual(season1?.episodes.map(\.episodeNumber), [1, 2])
+        XCTAssertEqual(holmes.seasons.map(\.number), [1])
+        let season1 = holmes.seasons.first { $0.number == 1 }
+        XCTAssertEqual(season1?.episodes.map(\.episodeNumber), [1, 2, 3])
     }
 
-    func testTheLastOfUsSpansTwoSeasons() {
+    func testCiscoKidSpansTwoSeasons() {
         let catalog = makeCatalog()
-        let tlou = catalog.series.first { $0.title == "The Last of Us" }
-        XCTAssertEqual(tlou?.seasons.count, 2)
-        XCTAssertEqual(tlou?.episodeCount, 4)
+        let cisco = catalog.series.first { $0.title == "The Cisco Kid" }
+        XCTAssertEqual(cisco?.seasons.count, 2)
+        XCTAssertEqual(cisco?.episodeCount, 3)
     }
 
     func testEPGNormalized() {

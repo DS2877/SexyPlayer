@@ -14,7 +14,7 @@ final class CatalogCacheTests: XCTestCase {
                        original.series.flatMap { $0.seasons.flatMap(\.episodes) }.map(\.id))
     }
 
-    func testSaveAndLoad() async throws {
+    func testSaveAndLoadThreeFileSplit() async throws {
         let cache = CatalogCache()
         let providerID = "test-\(UUID().uuidString)"
         defer { Task { await cache.clear(providerID: providerID) } }
@@ -22,15 +22,18 @@ final class CatalogCacheTests: XCTestCase {
         let catalog = Normalizer().normalize(MockCatalogData.rawCatalog())
         await cache.save(catalog, providerID: providerID)
 
-        let entry = await cache.load(providerID: providerID)
-        XCTAssertNotNil(entry)
-        XCTAssertEqual(entry?.catalog.movies.count, catalog.movies.count)
-        XCTAssertLessThan(entry?.age ?? .infinity, 5)
+        let channels = await cache.loadChannels(providerID: providerID)
+        XCTAssertEqual(channels?.channels.count, catalog.channels.count)
+        XCTAssertLessThan(channels?.age ?? .infinity, 5)
+
+        let vod = await cache.loadVOD(providerID: providerID)
+        XCTAssertEqual(vod.movies.count, catalog.movies.count)
+        XCTAssertEqual(vod.series.count, catalog.series.count)
     }
 
     func testMissingProviderReturnsNil() async {
         let cache = CatalogCache()
-        let entry = await cache.load(providerID: "definitely-not-saved-\(UUID().uuidString)")
+        let entry = await cache.loadChannels(providerID: "definitely-not-saved-\(UUID().uuidString)")
         XCTAssertNil(entry)
     }
 
@@ -48,7 +51,7 @@ final class CatalogCacheTests: XCTestCase {
                      start: now.addingTimeInterval(-600), stop: now.addingTimeInterval(3000)),
         ])
         await cache.save(catalog, providerID: providerID)
-        let entry = await cache.load(providerID: providerID)
-        XCTAssertEqual(entry?.catalog.epg.map(\.title), ["NowIsh"])
+        let events = await cache.loadEPG(providerID: providerID)
+        XCTAssertEqual(events.map(\.title), ["NowIsh"])
     }
 }

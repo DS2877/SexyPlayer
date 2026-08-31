@@ -18,28 +18,28 @@ final class SearchEngineTests: XCTestCase {
     }
 
     func testFreeTextRanksExactTitleFirst() {
-        let intent = SearchIntent(freeText: "sicario")
+        let intent = SearchIntent(freeText: "nosferatu")
         let results = engine.search(intent, in: catalog)
-        XCTAssertEqual(results.first?.title, "Sicario")
+        XCTAssertEqual(results.first?.title, "Nosferatu")
     }
 
     func testYearConstraint() {
-        let intent = SearchIntent(kinds: [.movie], minYear: 2019)
+        let intent = SearchIntent(kinds: [.movie], minYear: 1960)
         let results = engine.search(intent, in: catalog)
         for r in results {
             guard case .movie(let m) = r.item else { continue }
-            XCTAssertGreaterThanOrEqual(m.year ?? 0, 2019)
+            XCTAssertGreaterThanOrEqual(m.year ?? 0, 1960)
         }
-        XCTAssertTrue(results.contains { $0.title == "Dune Part Two" })
-        XCTAssertFalse(results.contains { $0.title == "Sicario" })
+        XCTAssertTrue(results.contains { $0.title == "Night of the Living Dead" })
+        XCTAssertFalse(results.contains { $0.title == "Metropolis" })
     }
 
     func testDurationConstraint() {
-        let intent = SearchIntent(kinds: [.movie], maxDurationMinutes: 95)
+        let intent = SearchIntent(kinds: [.movie], maxDurationMinutes: 70)
         let results = engine.search(intent, in: catalog)
         for r in results {
             guard case .movie(let m) = r.item, let d = m.durationMinutes else { continue }
-            XCTAssertLessThanOrEqual(d, 95)
+            XCTAssertLessThanOrEqual(d, 70)
         }
     }
 
