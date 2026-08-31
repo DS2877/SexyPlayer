@@ -78,8 +78,7 @@ struct SeriesDetailView: View {
     private func firstEpisode(in series: Series) -> Episode? {
         series.seasons
             .sorted { $0.number < $1.number }
-            .lazy
-            .compactMap { $0.episodes.min { $0.episodeNumber < $1.episodeNumber } }
+            .compactMap { $0.episodes.min(by: { $0.episodeNumber < $1.episodeNumber }) }
             .first
     }
 

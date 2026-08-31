@@ -157,7 +157,9 @@ public final class HomeViewModel {
 
         // Float "Top Rated" then "Because You Watched" up just below Continue
         // Watching (neither has a saved position to sort by).
-        for floatID in [HomeRowKind.topRated.rawValue, becauseRow?.id].compactMap({ $0 }) {
+        var floatIDs = [HomeRowKind.topRated.rawValue]
+        if let becauseID = becauseRow?.id { floatIDs.append(becauseID) }
+        for floatID in floatIDs {
             guard let idx = rows.firstIndex(where: { $0.id == floatID }) else { continue }
             let row = rows.remove(at: idx)
             let insertAt = rows.lastIndex { $0.id == HomeRowKind.continueWatching.rawValue
@@ -177,19 +179,23 @@ public final class HomeViewModel {
         // Featured heroes — highest TMDB rating first, then newest, drawn from
         // both movies and series. The banner resolves the real backdrop +
         // synopsis from TMDB itself.
-        let heroPool: [(card: HomeCard, score: Double, added: Date)] =
+        let heroMovies: [(card: HomeCard, score: Double, added: Date)] =
             moviesByRecency.prefix(120).map { m in
-                (HomeCard(id: m.id, kind: .movie, title: m.title, subtitle: m.synopsis,
-                          artworkURL: m.backdropURL ?? m.posterURL, year: m.year,
-                          eyebrow: metadataSubtitle(for: m)),
-                 ratings[m.id.rawValue] ?? 0, m.addedAt ?? .distantPast)
+                (card: HomeCard(id: m.id, kind: .movie, title: m.title, subtitle: m.synopsis,
+                                artworkURL: m.backdropURL ?? m.posterURL, year: m.year,
+                                eyebrow: metadataSubtitle(for: m)),
+                 score: ratings[m.id.rawValue] ?? 0,
+                 added: m.addedAt ?? .distantPast)
             }
-            + seriesByRecency.prefix(40).map { s in
-                (HomeCard(id: s.id, kind: .series, title: s.title, subtitle: s.synopsis,
-                          artworkURL: s.backdropURL ?? s.posterURL, year: s.year,
-                          eyebrow: heroEyebrow(for: s)),
-                 ratings[s.id.rawValue] ?? 0, s.addedAt ?? .distantPast)
+        let heroSeries: [(card: HomeCard, score: Double, added: Date)] =
+            seriesByRecency.prefix(40).map { s in
+                (card: HomeCard(id: s.id, kind: .series, title: s.title, subtitle: s.synopsis,
+                                artworkURL: s.backdropURL ?? s.posterURL, year: s.year,
+                                eyebrow: heroEyebrow(for: s)),
+                 score: ratings[s.id.rawValue] ?? 0,
+                 added: s.addedAt ?? .distantPast)
             }
+        let heroPool = heroMovies + heroSeries
         let heroes: [HomeCard] = heroPool
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
@@ -258,9 +264,13 @@ public final class HomeViewModel {
         for entry in progress.sorted(by: { $0.updatedAt > $1.updatedAt }) {
             switch entry.kind {
             case .movie:
-                if let m = moviesByID[entry.itemID], !m.genres.isEmpty { return (m.id, m.title, m.genres) }
+                if let m = moviesByID[entry.itemID], !m.genres.isEmpty {
+                    return (id: m.id, title: m.title, genres: m.genres)
+                }
             case .series:
-                if let s = seriesByEpisode[entry.itemID], !s.genres.isEmpty { return (s.id, s.title, s.genres) }
+                if let s = seriesByEpisode[entry.itemID], !s.genres.isEmpty {
+                    return (id: s.id, title: s.title, genres: s.genres)
+                }
             case .liveChannel:
                 break
             }
@@ -280,10 +290,10 @@ public final class HomeViewModel {
 
         var scored: [(card: HomeCard, score: Int)] = []
         for m in movies where m.id != excludeID {
-            let o = overlap(m.genres); if o > 0 { scored.append((card(for: m), o)) }
+            let o = overlap(m.genres); if o > 0 { scored.append((card: card(for: m), score: o)) }
         }
         for s in series where s.id != excludeID {
-            let o = overlap(s.genres); if o > 0 { scored.append((card(for: s), o)) }
+            let o = overlap(s.genres); if o > 0 { scored.append((card: card(for: s), score: o)) }
         }
         return scored.sorted { $0.score > $1.score }.prefix(limit).map(\.card)
     }

@@ -130,6 +130,7 @@ private struct MenuReturnsToSidebar: ViewModifier {
     let enabled: Bool
     let action: () -> Void
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if enabled {
             content.onExitCommand(perform: action)
