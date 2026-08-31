@@ -11,9 +11,12 @@ struct HeroBanner: View {
     let heroes: [HomeCard]
     let onSelect: (HomeCard) -> Void
 
+    private enum Control: Hashable { case play, info }
+
     @State private var index = 0
     @State private var overview: String?
-    @FocusState private var buttonFocused: Bool
+    @State private var playback: PlaybackItem?
+    @FocusState private var focusedControl: Control?
 
     private let interval: Duration = .seconds(9)
     private let height: CGFloat = 620
@@ -40,6 +43,15 @@ struct HeroBanner: View {
             .task(id: heroKey) {
                 if index >= heroes.count { index = 0 }
                 await rotate()
+            }
+            .fullScreenCover(item: $playback) { item in
+                PlayerScreen(
+                    item: item,
+                    preferredAudio: env.preferences.preferences.preferredAudioLanguages,
+                    preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
+                ) { id, kind, position, duration in
+                    env.recordProgress(id: id, kind: kind, position: position, duration: duration)
+                }
             }
         }
     }
@@ -112,12 +124,30 @@ struct HeroBanner: View {
             .accessibilityElement(children: .combine)
 
             HStack(alignment: .center, spacing: Metrics.space2) {
-                Button { onSelect(hero) } label: {
-                    Label("More Info", systemImage: "info.circle")
+                if hero.kind == .movie {
+                    Button {
+                        Task { playback = await env.playback(forMovie: hero.id) }
+                    } label: {
+                        Label("Play", systemImage: "play.fill")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .focused($focusedControl, equals: .play)
+                    .accessibilityLabel("Play \(hero.title)")
+
+                    Button { onSelect(hero) } label: {
+                        Label("More Info", systemImage: "info.circle")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .focused($focusedControl, equals: .info)
+                    .accessibilityLabel("More Info, \(hero.title)")
+                } else {
+                    Button { onSelect(hero) } label: {
+                        Label("More Info", systemImage: "info.circle")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .focused($focusedControl, equals: .info)
+                    .accessibilityLabel("More Info, \(hero.title)")
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .focused($buttonFocused)
-                .accessibilityLabel("More Info, \(hero.title)")
 
                 if heroes.count > 1 { pageDots }
             }
@@ -155,7 +185,7 @@ struct HeroBanner: View {
         guard heroes.count > 1, !reduceMotion else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: interval)
-            guard !Task.isCancelled, !buttonFocused else { continue }
+            guard !Task.isCancelled, focusedControl == nil, playback == nil else { continue }
             withAnimation(.easeInOut(duration: 0.6)) {
                 index = (index + 1) % heroes.count
             }
