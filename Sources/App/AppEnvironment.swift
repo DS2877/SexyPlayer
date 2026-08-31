@@ -436,9 +436,10 @@ public final class AppEnvironment {
     // MARK: - Playback
 
     /// Build a `PlaybackItem` for a movie, applying any saved resume position.
-    public func playback(forMovie id: CatalogID) async -> PlaybackItem? {
+    /// `fromStart` ignores the resume point so the viewer can restart the film.
+    public func playback(forMovie id: CatalogID, fromStart: Bool = false) async -> PlaybackItem? {
         guard let movie = await repository.movie(id: id) else { return nil }
-        let resume = watchProgress.progress(for: id)
+        let resume = fromStart ? nil : watchProgress.progress(for: id)
         return PlaybackItem(
             id: movie.id,
             kind: .movie,

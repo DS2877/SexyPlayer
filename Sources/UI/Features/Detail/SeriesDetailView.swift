@@ -74,6 +74,15 @@ struct SeriesDetailView: View {
         )
     }
 
+    /// The very first episode — first season by number, first episode by number.
+    private func firstEpisode(in series: Series) -> Episode? {
+        series.seasons
+            .sorted { $0.number < $1.number }
+            .lazy
+            .compactMap { $0.episodes.min { $0.episodeNumber < $1.episodeNumber } }
+            .first
+    }
+
     private func nextEpisode(in series: Series, after episodeID: CatalogID) -> Episode? {
         let ordered = series.seasons
             .sorted { $0.number < $1.number }
@@ -150,6 +159,22 @@ struct SeriesDetailView: View {
                     playback = env.playback(forEpisode: resume, seriesTitle: series.title)
                 } label: {
                     Label("Resume \(resume.code)", systemImage: "play.fill")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                if let first = firstEpisode(in: series), first.id != resume.id {
+                    Button {
+                        playback = env.playback(forEpisode: first, seriesTitle: series.title)
+                    } label: {
+                        Label("From Start", systemImage: "gobackward")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+            } else if let first = firstEpisode(in: series) {
+                Button {
+                    playback = env.playback(forEpisode: first, seriesTitle: series.title)
+                } label: {
+                    Label("Play \(first.code)", systemImage: "play.fill")
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }

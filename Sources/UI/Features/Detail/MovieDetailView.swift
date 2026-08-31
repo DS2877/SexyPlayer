@@ -109,6 +109,15 @@ struct MovieDetailView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle())
 
+                if progress?.isResumable == true {
+                    Button {
+                        Task { playback = await env.playback(forMovie: movie.id, fromStart: true) }
+                    } label: {
+                        Label("From Start", systemImage: "gobackward")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                }
+
                 Button {
                     env.favorites.toggle(id: movie.id, kind: .movie)
                 } label: {
