@@ -142,13 +142,16 @@ After Pages builds (~1 min), open all three URLs in a browser and confirm they r
 > user-supplied content.
 >
 > **Reviewing without credentials:** on the first screen, choose **"Try the demo"**.
-> This loads a built-in sample library of **public-domain films** (Night of the
-> Living Dead, Nosferatu, Metropolis, His Girl Friday, The Stranger, …) with
-> playback backed by Apple's public HLS reference streams. It exercises every
-> screen — Home with the rotating hero and shelves, Movies/Series browsing with
-> genre filters and an A–Z index, Live TV, the TV guide, natural-language search
-> with visible filter chips, detail pages with a cast rail and "More Like This",
-> the channel schedule screen, Watch History, Favorites, Personalize, Settings —
+> This loads a built-in sample library whose titles and metadata are **public-domain
+> films** (Night of the Living Dead, Nosferatu, Metropolis, His Girl Friday, The
+> Stranger, …), with poster/backdrop/cast data from The Movie Database. When you
+> press Play, the stream is one of **Apple's public HLS reference clips** (the
+> "BipBop" test pattern) — this is deliberate: the demo is for exercising the app,
+> not for distributing films. It covers every screen — Home with the rotating hero
+> and shelves, Movies/Series browsing with genre filters and an A–Z index, Live TV,
+> the TV guide, natural-language search with visible filter chips, detail pages
+> with a cast rail and "More Like This", the channel schedule screen, Watch
+> History, Favorites, Personalize, Settings —
 > and plays content end to end via both the native player and the bundled decoder.
 >
 > **Privacy:** no account is required or offered. We operate no servers; nothing is
