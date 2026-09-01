@@ -32,12 +32,7 @@ public final class VODBrowseViewModel {
     }
 
     public func start() async {
-        async let g = repository.availableGenres()
-        async let a = repository.availableAudioLanguages()
-        async let s = repository.availableSubtitleLanguages()
-        availableGenres = await g
-        availableAudio = await a
-        availableSubtitles = await s
+        // Cards first — the facets fill the chip row in behind them.
         await reload()
     }
 
@@ -46,8 +41,10 @@ public final class VODBrowseViewModel {
     }
 
     /// Debounced — the filter UI calls this on every chip tap; only the settled
-    /// filter runs a query.
+    /// filter runs a query. Also the catalog-revision path, so facets get a
+    /// refresh on the next pass.
     public func scheduleReload() {
+        facetsAreStale = true
         reloadTask?.cancel()
         reloadTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(280))
@@ -56,21 +53,40 @@ public final class VODBrowseViewModel {
         }
     }
 
+    /// The first page is the only thing between the viewer and a populated
+    /// grid, so it goes first. The count, the A–Z rail and the filter facets
+    /// are all *decorations around* that grid — they land a beat later without
+    /// anyone waiting on them.
+    ///
+    /// This matters most on a big library: the A–Z rail needs every matching
+    /// title in sort order (tens of thousands of rows), which is far more work
+    /// than the 60 cards actually on screen.
     public func reload() async {
         isLoading = true
         page = 0
         canLoadMore = true
-        // Facets grow while a staged import is still running.
-        availableGenres = await repository.availableGenres()
-        availableAudio = await repository.availableAudioLanguages()
-        availableSubtitles = await repository.availableSubtitleLanguages()
         let snapshotFilter = filter
 
+        // 1. Paint.
+        await loadPage(replacing: true, filter: snapshotFilter)
+        isLoading = false
+        guard !Task.isCancelled, filter == snapshotFilter else { return }
+
+        // 2. Decorate.
+        decorationTask?.cancel()
+        decorationTask = Task { [weak self] in
+            await self?.loadDecorations(for: snapshotFilter)
+        }
+    }
+
+    /// Count, A–Z anchors and filter facets — everything the grid itself
+    /// doesn't need in order to render.
+    private func loadDecorations(for snapshotFilter: CatalogFilter) async {
         switch kind {
         case .movies: total = await repository.moviesCount(filter: snapshotFilter)
         case .series: total = await repository.seriesCount(filter: snapshotFilter)
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, filter == snapshotFilter else { return }
 
         if snapshotFilter.sort == .titleAscending {
             switch kind {
@@ -80,12 +96,21 @@ public final class VODBrowseViewModel {
         } else {
             anchors = []
         }
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, filter == snapshotFilter else { return }
 
-        cards = []
-        await loadPage(replacing: true, filter: snapshotFilter)
-        isLoading = false
+        // Facets describe the whole library, not the current filter, so they
+        // only need refreshing while an import is still adding to it.
+        if availableGenres.isEmpty || facetsAreStale {
+            availableGenres = await repository.availableGenres()
+            availableAudio = await repository.availableAudioLanguages()
+            availableSubtitles = await repository.availableSubtitleLanguages()
+            facetsAreStale = false
+        }
     }
+
+    /// Set when the catalog revision bumps — the next reload refreshes facets.
+    private var facetsAreStale = true
+    private var decorationTask: Task<Void, Never>?
 
     /// Load pages until the item at `anchor.index` is in `cards`, then return
     /// its id so the view can scroll to it. Pages are O(1) slices of a cached

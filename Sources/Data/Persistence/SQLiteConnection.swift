@@ -67,6 +67,8 @@ final class SQLiteConnection: @unchecked Sendable {
     }
 
     deinit {
+        for (_, statement) in statementCache { statement.finalize() }
+        statementCache.removeAll()
         if handle != nil { sqlite3_close_v2(handle) }
     }
 
@@ -95,15 +97,55 @@ final class SQLiteConnection: @unchecked Sendable {
         return SQLiteStatement(handle: statement, connection: self)
     }
 
+    // MARK: - Prepared-statement cache
+
+    /// Compiled statements, keyed by SQL. Re-compiling a statement costs more
+    /// than running it for the small, repeated queries the browse screens fire,
+    /// so each one is compiled once and then reset+rebound. Bounded so a query
+    /// built with an `IN (?,?,…)` list of varying width can't grow it forever.
+    private var statementCache: [String: SQLiteStatement] = [:]
+    /// SQL currently being stepped — a nested call on the same text must not
+    /// reuse (and reset) the statement the outer loop is walking.
+    private var checkedOut: Set<String> = []
+    private static let statementCacheLimit = 64
+
+    /// Run `body` against a compiled statement for `sql`, reusing a cached one
+    /// where possible.
+    private func withStatement<T>(_ sql: String, _ body: (SQLiteStatement) throws -> T) throws -> T {
+        if let cached = statementCache[sql], !checkedOut.contains(sql) {
+            checkedOut.insert(sql)
+            defer { checkedOut.remove(sql); sqlite3_reset(cached.handle) }
+            return try body(cached)
+        }
+        // Not cached (or already in use further up the stack) — compile a fresh
+        // one. Only the un-nested case is worth keeping.
+        let statement = try prepare(sql)
+        if !checkedOut.contains(sql), statementCache.count < Self.statementCacheLimit {
+            statementCache[sql] = statement
+            checkedOut.insert(sql)
+            defer { checkedOut.remove(sql); sqlite3_reset(statement.handle) }
+            return try body(statement)
+        }
+        defer { statement.finalize() }
+        return try body(statement)
+    }
+
+    /// Drop every cached statement. Call before the schema changes underneath
+    /// them (migrations) — a compiled statement over a dropped table is invalid.
+    func clearStatementCache() {
+        for (_, statement) in statementCache { statement.finalize() }
+        statementCache.removeAll()
+    }
+
     /// Prepare, bind, and step an INSERT/UPDATE/DELETE to completion.
     /// Returns the number of rows changed.
     @discardableResult
     func run(_ sql: String, _ parameters: [SQLiteValue] = []) throws -> Int {
-        let statement = try prepare(sql)
-        defer { statement.finalize() }
-        try statement.bind(parameters)
-        try statement.stepToCompletion()
-        return Int(sqlite3_changes(handle))
+        try withStatement(sql) { statement in
+            try statement.bind(parameters)
+            try statement.stepToCompletion()
+            return Int(sqlite3_changes(handle))
+        }
     }
 
     /// Prepare one statement and run it once per row of `parameterRows`. Far
@@ -111,11 +153,11 @@ final class SQLiteConnection: @unchecked Sendable {
     /// Wrap the call in `transaction` for a bulk insert.
     func executeMany(_ sql: String, _ parameterRows: [[SQLiteValue]]) throws {
         guard !parameterRows.isEmpty else { return }
-        let statement = try prepare(sql)
-        defer { statement.finalize() }
-        for row in parameterRows {
-            try statement.bind(row)
-            try statement.stepToCompletion()
+        try withStatement(sql) { statement in
+            for row in parameterRows {
+                try statement.bind(row)
+                try statement.stepToCompletion()
+            }
         }
     }
 
@@ -125,14 +167,14 @@ final class SQLiteConnection: @unchecked Sendable {
         _ parameters: [SQLiteValue] = [],
         _ decode: (SQLiteRow) throws -> T
     ) throws -> [T] {
-        let statement = try prepare(sql)
-        defer { statement.finalize() }
-        try statement.bind(parameters)
-        var rows: [T] = []
-        while try statement.step() {
-            rows.append(try decode(SQLiteRow(statement)))
+        try withStatement(sql) { statement in
+            try statement.bind(parameters)
+            var rows: [T] = []
+            while try statement.step() {
+                rows.append(try decode(SQLiteRow(statement)))
+            }
+            return rows
         }
-        return rows
     }
 
     /// The first result row, or `nil` when the query returned nothing.
@@ -141,10 +183,10 @@ final class SQLiteConnection: @unchecked Sendable {
         _ parameters: [SQLiteValue] = [],
         _ decode: (SQLiteRow) throws -> T
     ) throws -> T? {
-        let statement = try prepare(sql)
-        defer { statement.finalize() }
-        try statement.bind(parameters)
-        return try statement.step() ? try decode(SQLiteRow(statement)) : nil
+        try withStatement(sql) { statement in
+            try statement.bind(parameters)
+            return try statement.step() ? try decode(SQLiteRow(statement)) : nil
+        }
     }
 
     /// A single integer scalar (`SELECT count(*) …`). `0` when there is no row.

@@ -1,8 +1,11 @@
 import Foundation
 
 /// A single card's worth of data on the Home screen, kind-agnostic.
-public struct HomeCard: Identifiable, Sendable {
-    public enum Kind: Sendable { case movie, series, channel }
+///
+/// `Codable` so the whole shaped screen can be cached to disk and re-shown
+/// instantly on the next launch (see `HomeSnapshotStore`).
+public struct HomeCard: Identifiable, Sendable, Codable {
+    public enum Kind: String, Sendable, Codable { case movie, series, channel }
 
     public let id: CatalogID
     public let kind: Kind
@@ -45,28 +48,53 @@ public struct HomeCard: Identifiable, Sendable {
     }
 }
 
-public struct HomeRow: Identifiable, Sendable {
+public struct HomeRow: Identifiable, Sendable, Codable {
     public let id: String
     public let title: String
     public let subtitle: String?
     public let cards: [HomeCard]
+
+    public init(id: String, title: String, subtitle: String?, cards: [HomeCard]) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.cards = cards
+    }
 }
 
-public struct TonightItem: Identifiable, Sendable {
+public struct TonightItem: Identifiable, Sendable, Codable {
     public let id: String
     public let channelID: CatalogID
     public let time: String
     public let programTitle: String
     public let channelName: String
     public let isLiveNow: Bool
+
+    public init(id: String, channelID: CatalogID, time: String, programTitle: String,
+                channelName: String, isLiveNow: Bool) {
+        self.id = id
+        self.channelID = channelID
+        self.time = time
+        self.programTitle = programTitle
+        self.channelName = channelName
+        self.isLiveNow = isLiveNow
+    }
 }
 
-public struct HomeContent: Sendable {
+public struct HomeContent: Sendable, Codable {
     public var heroes: [HomeCard]
     public var rows: [HomeRow]
     public var tonight: [TonightItem]
 
+    public init(heroes: [HomeCard], rows: [HomeRow], tonight: [TonightItem]) {
+        self.heroes = heroes
+        self.rows = rows
+        self.tonight = tonight
+    }
+
     public var hero: HomeCard? { heroes.first }
+
+    public var isEmpty: Bool { heroes.isEmpty && rows.isEmpty }
 
     public static let empty = HomeContent(heroes: [], rows: [], tonight: [])
 }

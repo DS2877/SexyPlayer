@@ -288,6 +288,50 @@ final class CatalogDatabaseTests: XCTestCase {
         XCTAssertLessThan(elapsed, 0.5, "count + a deep page over 20k rows took \(elapsed)s")
     }
 
+    func testCardProjectionKeepsWhatACardShows() async throws {
+        let full = Movie(
+            id: .init(rawValue: "m1"), title: "Heat", year: 1995, genres: [.crime, .thriller],
+            durationMinutes: 170, audioLanguages: [.english], subtitleLanguages: [.swedish],
+            quality: .fhd, countryCode: "US",
+            posterURL: URL(string: "https://example.test/p.jpg"),
+            synopsis: "A crew and the detective chasing them.",
+            cast: ["Al Pacino", "Robert De Niro"], directors: ["Michael Mann"],
+            streamURL: stream, addedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try await database.insertMovies([full])
+
+        // The card path drops cast / directors / stream url…
+        let card = try await database.recentlyAddedMovies(limit: 1, .unfiltered).first
+        XCTAssertEqual(card?.title, "Heat")
+        XCTAssertEqual(card?.year, 1995)
+        XCTAssertEqual(card?.genres, [.crime, .thriller])
+        XCTAssertEqual(card?.durationMinutes, 170)
+        XCTAssertEqual(card?.quality, .fhd)
+        XCTAssertEqual(card?.posterURL?.absoluteString, "https://example.test/p.jpg")
+        XCTAssertEqual(card?.synopsis, "A crew and the detective chasing them.")
+        XCTAssertTrue(card?.cast.isEmpty ?? false)
+        XCTAssertTrue(card?.directors.isEmpty ?? false)
+
+        // …and the by-id fetch the detail screen uses still returns everything.
+        let detail = try await database.movie(id: .init(rawValue: "m1"))
+        XCTAssertEqual(detail?.cast, ["Al Pacino", "Robert De Niro"])
+        XCTAssertEqual(detail?.directors, ["Michael Mann"])
+        XCTAssertEqual(detail?.streamURL, stream)
+    }
+
+    func testRepeatedQueriesReuseTheirCompiledStatement() async throws {
+        try await database.insertMovies((0..<2_000).map { movie("m\($0)", "Title \($0)") })
+
+        // 300 point lookups: with a statement cache this is dominated by the
+        // lookups themselves, not by re-compiling the same SQL 300 times.
+        let start = Date()
+        for i in 0 ..< 300 {
+            _ = try await database.movie(id: .init(rawValue: "m\(i % 2_000)"))
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 1.0, "300 cached point lookups took \(elapsed)s")
+    }
+
     func testReadsRunWhileAWriteIsInFlight() async throws {
         try await database.insertMovies((0..<500).map { movie("seed\($0)", "Seed \($0)") })
 

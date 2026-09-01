@@ -31,13 +31,32 @@ public final class HomeViewModel {
         self.channelHistory = channelHistory
     }
 
+    /// The provider whose snapshot this screen belongs to — set by the view so
+    /// a cached screen is never shown for a different provider's library.
+    private var snapshotProviderID: String?
+
+    /// Paint the last shaped screen from disk. Returns `true` when something was
+    /// restored, so the caller knows the first frame is already populated.
+    @discardableResult
+    public func restoreSnapshot(providerID: String) -> Bool {
+        snapshotProviderID = providerID
+        guard content.isEmpty, let cached = HomeSnapshotStore.load(providerID: providerID) else { return false }
+        content = cached
+        return true
+    }
+
     /// Coalesced: rapid callers (import revisions, preference changes) collapse
-    /// into a single shaping pass ~300 ms after the last trigger. Only one runs
-    /// at a time.
+    /// into a single shaping pass ~300 ms after the last trigger.
+    ///
+    /// The **first** build skips the debounce entirely — on launch there is
+    /// nothing to coalesce, and 300 ms of dead time before the first query is
+    /// exactly the stall this screen must not have.
     public func rebuild(now: Date = .now) async {
         pendingRebuild?.cancel()
+        let immediate = !hasBuiltOnce
+        hasBuiltOnce = true
         let task = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            if !immediate { try? await Task.sleep(for: .milliseconds(300)) }
             guard !Task.isCancelled, let self else { return }
             await self.performRebuild(now: now)
         }
@@ -45,16 +64,28 @@ public final class HomeViewModel {
         await task.value
     }
 
-    /// How much of the library each shelf query pulls. These bound Home's
-    /// working set to a few thousand rows regardless of library size — the whole
-    /// reason for the SQLite store.
+    /// A restored snapshot doesn't count — the first *live* build still runs
+    /// without the debounce.
+    private var hasBuiltOnce = false
+
+    /// How much of the library each shelf query pulls.
+    ///
+    /// Split in two: the **fast** pass fetches only what the top of the screen
+    /// shows and paints it; the **full** pass tops up the shelves below the
+    /// fold. Both are bounded, so Home's working set never scales with the
+    /// library — the whole reason for the SQLite store.
     private enum Slice {
-        static let newestMovies = 500
-        static let newestSeries = 200
-        static let perGenreMovies = 24
-        static let perGenreSeries = 10
-        static let topGenres = 6
-        static let languageShelf = 30
+        /// Fast pass — the hero pool and the first shelves. `makeContent` only
+        /// ever renders `prefix(30)` of these, so anything more is wasted decode.
+        static let fastMovies = 90
+        static let fastSeries = 40
+        static let liveNow = 18
+
+        /// Full pass.
+        static let perGenreMovies = 20
+        static let perGenreSeries = 8
+        static let topGenres = 5
+        static let languageShelf = 24
         static let guideChannels = 60
     }
 
@@ -64,39 +95,55 @@ public final class HomeViewModel {
 
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
+        let recentChannelIDs = channelHistory.recent(limit: 16)
 
-        guard await repository.isReady() else { content = .empty; return }
+        guard await repository.isReady() else {
+            if content.isEmpty { content = .empty }
+            return
+        }
         guard !Task.isCancelled else { return }
 
-        // Bounded shelf queries — never the whole catalog. The store serialises
-        // its reads anyway, so these run in sequence.
-        var newestMovies = await repository.newestMovies(limit: Slice.newestMovies)
-        var newestSeries = await repository.newestSeries(limit: Slice.newestSeries)
-        let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
-        let guideChannels = await repository.guideChannels(limit: Slice.guideChannels)
+        // ── Fast pass ────────────────────────────────────────────────────────
+        // Five small queries, then paint. Everything visible without scrolling
+        // comes from here.
+        let newestMovies = await repository.newestMovies(limit: Slice.fastMovies)
+        let newestSeries = await repository.newestSeries(limit: Slice.fastSeries)
+        let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: Slice.liveNow)
+        guard !Task.isCancelled else { return }
+
+        let resume = await repository.resumePoints(progress: progress, limit: 12)
         let ratings = await metadata.ratingsSnapshot()
         guard !Task.isCancelled else { return }
 
-        // Resolve the containers Continue Watching / "Because You Watched" need.
-        let watchedMovies = await repository.movies(ids: progress.filter { $0.kind == .movie }.map(\.itemID))
-        var watchedEpisodes: [Episode] = []
-        for id in progress.filter({ $0.kind == .series }).map(\.itemID) {
-            if let episode = await repository.episode(id: id) { watchedEpisodes.append(episode) }
-        }
-        let watchedSeries = await repository.series(ids: Array(Set(watchedEpisodes.map(\.seriesID))))
+        // Only the Live Now strip needs "on now" for the first paint.
+        let nowWindow = DateInterval(start: now.addingTimeInterval(-3600),
+                                     end: now.addingTimeInterval(6 * 3600))
+        let liveEPG = await repository.epgIndex(forEPGIDs: liveNow.compactMap(\.epgID), in: nowWindow)
         guard !Task.isCancelled else { return }
 
-        // Genre shelves.
+        let fastCatalog = Catalog(channels: liveNow, movies: newestMovies, series: newestSeries,
+                                  epg: liveEPG.values.flatMap { $0 })
+        content = Self.makeContent(catalog: fastCatalog, epg: liveEPG, progress: progress,
+                                   prefs: prefs, ratings: ratings, liveNow: liveNow,
+                                   recentChannelIDs: recentChannelIDs, now: now,
+                                   resumePoints: resume)
+
+        // ── Full pass ────────────────────────────────────────────────────────
+        // Everything below the fold. The screen is already interactive; this
+        // only ever adds rows.
+        guard !Task.isCancelled else { return }
+
+        let guideChannels = await repository.guideChannels(limit: Slice.guideChannels)
+
         let topGenres = await repository.topGenres(limit: Slice.topGenres)
         var genreMovies: [Movie] = []
         var genreSeries: [Series] = []
         for genre in topGenres {
             genreMovies += await repository.moviesInGenre(genre, limit: Slice.perGenreMovies)
             genreSeries += await repository.seriesInGenre(genre, limit: Slice.perGenreSeries)
+            guard !Task.isCancelled else { return }
         }
-        guard !Task.isCancelled else { return }
 
-        // Language shelves.
         let langMovies = prefs.preferredAudioLanguages.isEmpty ? []
             : await repository.moviesInAudioLanguages(prefs.preferredAudioLanguages, limit: Slice.languageShelf)
         let subMovies: [Movie]
@@ -107,34 +154,60 @@ public final class HomeViewModel {
         }
         guard !Task.isCancelled else { return }
 
-        // "Because You Watched" — genre-similar to the newest played title.
-        // `watchedSeries` already carries its season tree from the store.
+        // "Because You Watched" — genre-similar to the newest played title. The
+        // resume points already name the container, so no extra lookup pass.
         var becauseMovies: [Movie] = []
         var becauseSeries: [Series] = []
-        if let anchor = Self.mostRecentWatched(
-            progress: progress, catalog: Catalog(movies: watchedMovies, series: watchedSeries)
-        ) {
+        if let anchor = await watchedAnchor(resume: resume) {
             becauseMovies = await repository.similarMovies(to: anchor.id, genres: anchor.genres, limit: 20)
             becauseSeries = await repository.similarSeries(to: anchor.id, genres: anchor.genres, limit: 12)
         }
         guard !Task.isCancelled else { return }
 
-        // Merge into one bounded catalog for the shaper, de-duplicated.
-        newestMovies = Self.uniqued(newestMovies + watchedMovies + genreMovies + langMovies + subMovies + becauseMovies)
-        newestSeries = Self.uniqued(newestSeries + watchedSeries + genreSeries + becauseSeries)
-        let channels = Self.uniqued(liveNow + guideChannels)
-
-        let window = DateInterval(start: now.addingTimeInterval(-3600), end: now.addingTimeInterval(18 * 3600))
-        let epg = await repository.epgIndex(forEPGIDs: channels.compactMap(\.epgID), in: window)
+        // Continue Watching containers, so the shaper can resolve their cards.
+        let resumeMovies = await repository.movies(ids: resume.filter { !$0.isSeries }.map(\.containerID))
+        let resumeSeries = await repository.series(ids: resume.filter(\.isSeries).map(\.containerID))
         guard !Task.isCancelled else { return }
 
-        let miniCatalog = Catalog(channels: channels, movies: newestMovies, series: newestSeries,
-                                  epg: epg.values.flatMap { $0 })
-        let recentChannelIDs = channelHistory.recent(limit: 16)
+        let allMovies = Self.uniqued(newestMovies + resumeMovies + genreMovies + langMovies + subMovies + becauseMovies)
+        let allSeries = Self.uniqued(newestSeries + resumeSeries + genreSeries + becauseSeries)
+        let channels = Self.uniqued(liveNow + guideChannels)
 
-        content = Self.makeContent(catalog: miniCatalog, epg: epg, progress: progress,
-                                   prefs: prefs, ratings: ratings, liveNow: liveNow,
-                                   recentChannelIDs: recentChannelIDs, now: now)
+        let fullWindow = DateInterval(start: now.addingTimeInterval(-3600), end: now.addingTimeInterval(18 * 3600))
+        let epg = await repository.epgIndex(forEPGIDs: channels.compactMap(\.epgID), in: fullWindow)
+        guard !Task.isCancelled else { return }
+
+        let fullCatalog = Catalog(channels: channels, movies: allMovies, series: allSeries,
+                                  epg: epg.values.flatMap { $0 })
+        let shaped = Self.makeContent(catalog: fullCatalog, epg: epg, progress: progress,
+                                      prefs: prefs, ratings: ratings, liveNow: liveNow,
+                                      recentChannelIDs: recentChannelIDs, now: now,
+                                      resumePoints: resume)
+        guard !Task.isCancelled else { return }
+        content = shaped
+
+        // Cache the finished screen for the next launch.
+        if let providerID = snapshotProviderID {
+            let toCache = shaped
+            Task.detached(priority: .background) {
+                HomeSnapshotStore.save(toCache, providerID: providerID)
+            }
+        }
+    }
+
+    /// The newest played title that still carries genre tags — the "Because You
+    /// Watched" anchor, resolved from the resume points the store already built.
+    private func watchedAnchor(resume: [ResumePoint]) async -> (id: CatalogID, genres: [Genre])? {
+        for point in resume.sorted(by: { $0.lastWatched > $1.lastWatched }) {
+            if point.isSeries {
+                if let show = await repository.series(id: point.containerID), !show.genres.isEmpty {
+                    return (id: show.id, genres: show.genres)
+                }
+            } else if let movie = await repository.movie(id: point.containerID), !movie.genres.isEmpty {
+                return (id: movie.id, genres: movie.genres)
+            }
+        }
+        return nil
     }
 
     /// De-dupe by id, keeping first-seen order.
@@ -145,10 +218,14 @@ public final class HomeViewModel {
 
     // MARK: - Pure builder (runs off the main actor)
 
+    /// `resumePoints` lets the caller pass points the store already resolved
+    /// (the app path). When `nil` they're derived from `catalog` + `progress`,
+    /// which is what the tests and any in-memory caller do.
     nonisolated static func makeContent(
         catalog: Catalog, epg: EPGIndex, progress: [WatchProgress],
         prefs: UserPreferences, ratings: [String: Double], liveNow: [Channel],
-        recentChannelIDs: [CatalogID] = [], now: Date
+        recentChannelIDs: [CatalogID] = [], now: Date,
+        resumePoints: [ResumePoint]? = nil
     ) -> HomeContent {
         let enabled = Set(prefs.homeRows)
         var rows: [HomeRow] = []
@@ -165,7 +242,8 @@ public final class HomeViewModel {
             return (lhs.year ?? 0) > (rhs.year ?? 0)
         }
 
-        add(.continueWatching, "Continue Watching", continueWatchingCards(catalog: catalog, progress: progress))
+        let points = resumePoints ?? UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12)
+        add(.continueWatching, "Continue Watching", continueWatchingCards(points))
 
         let liveCards = liveNow.prefix(16).map { channelCard($0, epg: epg, now: now) }
         add(.liveNow, "Live Now", Array(liveCards))
@@ -317,8 +395,8 @@ public final class HomeViewModel {
         return HomeContent(heroes: heroes, rows: rows.filter { !$0.cards.isEmpty }, tonight: tonight)
     }
 
-    nonisolated private static func continueWatchingCards(catalog: Catalog, progress: [WatchProgress]) -> [HomeCard] {
-        UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12).map { point in
+    nonisolated private static func continueWatchingCards(_ points: [ResumePoint]) -> [HomeCard] {
+        points.map { point in
             HomeCard(id: point.containerID, kind: point.isSeries ? .series : .movie,
                      title: point.primaryTitle, subtitle: point.secondaryText,
                      artworkURL: point.artworkURL, progress: point.fraction > 0 ? point.fraction : nil,

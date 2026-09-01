@@ -33,7 +33,7 @@ public final class LiveTVBrowseViewModel {
     }
 
     public func start() async {
-        categories = await repository.allChannelCategories()
+        // Channels first; the category chips and the count fill in behind them.
         await reload()
     }
 
@@ -48,19 +48,39 @@ public final class LiveTVBrowseViewModel {
         }
     }
 
+    /// First page of channels first; the count, the A–Z rail and the category
+    /// chips follow. The rail in particular needs every matching channel name in
+    /// sort order, which on a 15k-channel provider dwarfs the 90 rows on screen.
     public func reload() async {
         isLoading = true
         page = 0
         canLoadMore = true
         let category = selectedCategory
         let sort = self.sort
-        total = await repository.channelsCount(in: category)
-        anchors = sort == .nameAsc ? await repository.channelTitleAnchors(in: category) : []
-        guard !Task.isCancelled else { return }
-        rows = []
+
         await loadPage(replacing: true, category: category, sort: sort)
         isLoading = false
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
+
+        decorationTask?.cancel()
+        decorationTask = Task { [weak self] in
+            await self?.loadDecorations(category: category, sort: sort)
+        }
     }
+
+    private func loadDecorations(category: String, sort: ChannelSort) async {
+        total = await repository.channelsCount(in: category)
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
+
+        anchors = sort == .nameAsc ? await repository.channelTitleAnchors(in: category) : []
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
+
+        if categories.count <= 1 {
+            categories = await repository.allChannelCategories()
+        }
+    }
+
+    private var decorationTask: Task<Void, Never>?
 
     public func loadMoreIfNeeded(currentItem: LiveChannelRow) async {
         guard canLoadMore, !isLoading,
@@ -89,20 +109,22 @@ public final class LiveTVBrowseViewModel {
         let channels = await repository.channels(in: category, sort: sort, page: page, pageSize: pageSize)
         guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
 
+        // One windowed query for the whole page, not one per channel — a page is
+        // 90 channels, and 90 round-trips to the store is what made paging feel
+        // heavy no matter how fast each individual lookup was.
         let now = Date()
-        var built: [LiveChannelRow] = []
-        for channel in channels {
-            var nowTitle: String?
-            var nowProgress: Double?
-            if let epgID = channel.epgID,
-               let event = await repository.nowPlaying(forEPGID: epgID, at: now) {
-                nowTitle = event.title
-                nowProgress = event.progress(at: now)
-            }
-            built.append(LiveChannelRow(
+        let window = DateInterval(start: now.addingTimeInterval(-4 * 3600),
+                                  end: now.addingTimeInterval(4 * 3600))
+        let epg = await repository.epgIndex(forEPGIDs: channels.compactMap(\.epgID), in: window)
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
+
+        let built: [LiveChannelRow] = channels.map { channel in
+            let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
+            return LiveChannelRow(
                 id: channel.id, name: channel.name, logoURL: channel.logoURL,
-                quality: channel.quality, nowTitle: nowTitle, nowProgress: nowProgress
-            ))
+                quality: channel.quality, nowTitle: event?.title,
+                nowProgress: event?.progress(at: now)
+            )
         }
         guard category == selectedCategory else { return }
         if replacing { rows = built } else { rows.append(contentsOf: built) }

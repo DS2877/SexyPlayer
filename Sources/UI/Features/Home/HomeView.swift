@@ -8,34 +8,48 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                switch environment.loadState {
-                case .idle, .loading:
-                    loadingView
-                case .failed(let error):
+                // A restored snapshot outranks the load state: if we have real
+                // content to show, show it — even while the library is still
+                // loading behind it.
+                if let model, !model.content.rows.isEmpty {
+                    readyView(model: model)
+                } else if case .failed(let error) = environment.loadState {
                     ErrorStateView(error: error, onRetry: {
                         Task { await environment.bootstrap(forceReload: true) }
                     })
-                case .ready:
-                    if let model, !(model.content.rows.isEmpty && !environment.catalogComplete) {
-                        readyView(model: model)
-                    } else {
-                        loadingView
-                    }
+                } else if environment.catalogComplete, model?.isBuilding == false {
+                    // Loaded, built, and genuinely nothing to show.
+                    EmptyStateView(
+                        icon: "tv",
+                        title: "Nothing to show yet",
+                        message: "Your library loaded but came back empty. Check your provider in Settings."
+                    )
+                } else {
+                    loadingView
                 }
             }
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task(id: environment.loadState) {
-            guard case .ready = environment.loadState else { return }
-            let model = model ?? HomeViewModel(
+        // Runs once, before the library is ready: build the model and paint the
+        // cached screen from the last session. This is the "instant" frame.
+        .task {
+            guard model == nil else { return }
+            let model = HomeViewModel(
                 repository: environment.repository,
                 watchProgress: environment.watchProgress,
                 preferences: environment.preferences,
                 metadata: environment.metadata,
                 channelHistory: environment.channelHistory
             )
+            if let providerID = environment.activeProvider?.id {
+                model.restoreSnapshot(providerID: providerID)
+            }
             self.model = model
+            if !model.content.rows.isEmpty { prefetchArtwork(model) }
+        }
+        .task(id: environment.loadState) {
+            guard case .ready = environment.loadState, let model else { return }
             await model.rebuild()
             prefetchArtwork(model)
             consumePendingRoute()

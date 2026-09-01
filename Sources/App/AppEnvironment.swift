@@ -157,6 +157,8 @@ public final class AppEnvironment {
         let homeRegions = RelevanceFilter.homeRegions(for: preferences.preferences.preferredAudioLanguages)
 
         // Fast path: a completed import for this provider is already on disk.
+        // Nothing here may block the first frame — flip the app ready, then do
+        // the rest (vocabulary, Top Shelf, staleness check) in the background.
         if !forceReload, await database.isReady(providerID: providerID) {
             await applyPreferences()
             loadState = .ready
@@ -164,13 +166,18 @@ public final class AppEnvironment {
             catalogComplete = true
             reachedPhases = Set(ImportPhase.allCases)
             catalogRevision += 1
-            vocabulary = await repository.searchVocabulary()
-            startMetadataWarmUp()
-            await writeTopShelfSnapshot()
+            AppLog.app.info("Catalog already on disk — ready without an import.")
 
-            let age = await database.importedAt().map { Date().timeIntervalSince($0) } ?? .infinity
-            if age > staleAfter {
-                startBackgroundRefresh(client: client, providerID: providerID, homeRegions: homeRegions)
+            Task { [weak self] in
+                guard let self else { return }
+                self.vocabulary = await self.repository.searchVocabulary()
+                self.startMetadataWarmUp()
+                await self.writeTopShelfSnapshot()
+
+                let age = await self.database.importedAt().map { Date().timeIntervalSince($0) } ?? .infinity
+                if age > self.staleAfter {
+                    self.startBackgroundRefresh(client: client, providerID: providerID, homeRegions: homeRegions)
+                }
             }
             return
         }
@@ -303,6 +310,7 @@ public final class AppEnvironment {
         refreshTask?.cancel()
         refreshTask = nil
         await metadata.cancelWarmUp()
+        HomeSnapshotStore.clear()   // the cached screen belongs to the old library
         providers.setActive(config.id)
         loadState = .idle
         hasLoadedOnce = false
@@ -316,6 +324,7 @@ public final class AppEnvironment {
         let wasLoaded = await database.loadedProviderID() == id
         providers.remove(id)
         if wasLoaded || !providers.hasAnyProvider {
+            HomeSnapshotStore.clear()
             try? await database.clearCatalog()
             try? await database.setMeta(CatalogDatabase.MetaKey.providerID, nil)
             try? await database.setMeta(CatalogDatabase.MetaKey.importComplete, "0")

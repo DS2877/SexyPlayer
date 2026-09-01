@@ -55,15 +55,33 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
     public func setHideAdult(_ hide: Bool) async { hideAdult = hide }
     public func setRegionLimit(_ limited: Bool) async { regionLimited = limited }
 
+    /// Both of these rewrite a column across the whole `channel` table, so they
+    /// are gated on the value actually changing — otherwise every launch pays a
+    /// full-table scan for nothing. The last-applied values live in `meta`, so
+    /// the gate survives a relaunch, not just this process.
     public func setHomeRegions(_ regions: Set<String>) async {
         guard regions != homeRegions else { return }
         homeRegions = regions
+        let stamp = regions.sorted().joined(separator: ",")
+        let applied = (try? await database.metaValue(Self.homeRegionsKey)) ?? nil
+        guard applied != stamp else { return }
         try? await database.updateRegionPriorities(homeRegions: regions)
+        try? await database.setMeta(Self.homeRegionsKey, stamp)
     }
 
     public func setRecentChannels(_ ids: [CatalogID]) async {
+        let stamp = ids.map(\.rawValue).joined(separator: ",")
+        guard stamp != lastRecentStamp else { return }
+        lastRecentStamp = stamp
+        let applied = (try? await database.metaValue(Self.recentChannelsKey)) ?? nil
+        guard applied != stamp else { return }
         try? await database.updateRecentChannels(ids)
+        try? await database.setMeta(Self.recentChannelsKey, stamp)
     }
+
+    private var lastRecentStamp: String?
+    private static let homeRegionsKey = "applied_home_regions"
+    private static let recentChannelsKey = "applied_recent_channels"
 
     // MARK: - Channels
 

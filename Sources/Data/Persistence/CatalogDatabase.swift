@@ -151,6 +151,17 @@ public final class CatalogDatabase: @unchecked Sendable {
     country_code, poster_url, backdrop_url, synopsis, cast_list, directors, stream_url, added_at, is_adult
     """
 
+    /// Same shape as `movieColumns` — so `decodeMovie` is unchanged — but the
+    /// three fat, card-irrelevant columns come back empty. Cast lists and plots
+    /// are the bulk of a movie row; a shelf card shows none of them, and the
+    /// detail screen re-fetches the full row by id anyway. Used by every Home /
+    /// shelf query, which is where the launch cost lives.
+    private static let movieCardColumns = """
+    id, title, year, duration_min, audio_langs, sub_langs, genres, quality, \
+    country_code, poster_url, backdrop_url, synopsis, '' AS cast_list, '' AS directors, \
+    '' AS stream_url, added_at, is_adult
+    """
+
     private static let seriesColumns = """
     id, title, year, audio_langs, sub_langs, genres, quality, country_code, \
     poster_url, backdrop_url, synopsis, provider_key, added_at, is_adult
@@ -308,10 +319,13 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     // MARK: - Paged lists
 
+    /// A page of the browse grid. Uses the card projection — the grid shows a
+    /// poster, title, year and genre, and the detail screen re-fetches the full
+    /// row by id when you open one.
     public func movies(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) async throws -> [Movie] {
         try await read { conn in
             let (where_, params) = Self.movieWhere(filter, scope)
-            let sql = "SELECT \(Self.movieColumns) FROM movie WHERE \(where_) " +
+            let sql = "SELECT \(Self.movieCardColumns) FROM movie WHERE \(where_) " +
                       "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
             return try conn.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))], Self.decodeMovie)
         }
@@ -469,7 +483,7 @@ public final class CatalogDatabase: @unchecked Sendable {
         try await read { conn in
             let (clause, params) = Self.scopeClause(scope)
             return try conn.query(
-                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                "SELECT \(Self.movieCardColumns) FROM movie WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
                 params + [.integer(Int64(limit))], Self.decodeMovie
             )
         }
@@ -515,7 +529,7 @@ public final class CatalogDatabase: @unchecked Sendable {
         try await read { conn in
             let (clause, params) = Self.scopeClause(scope)
             return try conn.query("""
-            SELECT \(Self.movieColumns) FROM movie
+            SELECT \(Self.movieCardColumns) FROM movie
             WHERE \(clause) AND id IN (SELECT movie_id FROM movie_genre WHERE genre = ?)
             ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
             """, params + [.text(genre.rawValue), .integer(Int64(limit))], Self.decodeMovie)
@@ -539,7 +553,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             let (clause, params) = Self.scopeClause(scope)
             let langClause = languages.map { _ in "instr(audio_langs, ?) > 0" }.joined(separator: " OR ")
             return try conn.query(
-                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND (\(langClause)) " +
+                "SELECT \(Self.movieCardColumns) FROM movie WHERE \(clause) AND (\(langClause)) " +
                 "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
                 params + languages.map { SQLiteValue.text(CatalogValues.needle($0)) } + [.integer(Int64(limit))],
                 Self.decodeMovie
@@ -551,7 +565,7 @@ public final class CatalogDatabase: @unchecked Sendable {
         try await read { conn in
             let (clause, params) = Self.scopeClause(scope)
             return try conn.query(
-                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND instr(sub_langs, ?) > 0 " +
+                "SELECT \(Self.movieCardColumns) FROM movie WHERE \(clause) AND instr(sub_langs, ?) > 0 " +
                 "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
                 params + [.text(CatalogValues.needle(language)), .integer(Int64(limit))], Self.decodeMovie
             )
@@ -614,7 +628,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             let (clause, params) = Self.scopeClause(scope)
             let ph = Array(repeating: "?", count: genres.count).joined(separator: ",")
             let sql = """
-            SELECT \(Self.movieColumns), \
+            SELECT \(Self.movieCardColumns), \
             (SELECT count(*) FROM movie_genre g WHERE g.movie_id = movie.id AND g.genre IN (\(ph))) AS shared
             FROM movie WHERE \(clause) AND id <> ? AND shared > 0
             ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
