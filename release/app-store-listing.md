@@ -115,7 +115,7 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 
 ## Required URLs — GitHub Pages
 
-Hosting is the repo's `docs/` folder on GitHub Pages (see `docs/SUBMIT.md` step 1).
+Hosting is the repo's `docs/` folder on GitHub Pages (see `release/SUBMIT.md` step 1).
 **Rename the repo `SexyPlayer` → `aeria` first** (Settings → General → Repository name;
 GitHub keeps the old URL redirecting, and the git remote keeps working). Then:
 

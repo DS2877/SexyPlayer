@@ -35,25 +35,28 @@ failure`, `internal inconsistency`), quit Xcode and
 
 | Area | Status |
 |---|---|
-| Provider import — Xtream Codes, M3U, XMLTV EPG | ✅ |
-| Normalization — name cleanup, SxxExx, language/subtitle/quality/genre/adult detection | ✅ |
-| Disk cache — instant relaunch, background refresh | ✅ |
+| Provider import — Xtream Codes, M3U, XMLTV EPG · staged so the app is usable in ~1s | ✅ |
+| Normalization — name cleanup, SxxExx reconstruction, language/subtitle/quality/genre/adult detection | ✅ |
+| Disk cache (3-phase) + on-disk image cache — instant relaunch, background refresh | ✅ |
 | Onboarding — add provider → import checklist → personalize (never blocks) | ✅ |
-| Sidebar navigation | ✅ |
-| Home — hero, Continue Watching, Tonight, configurable rows | ✅ |
-| Movies / Series / Live TV browse + composable filters | ✅ |
+| Sidebar navigation with two-column focus, Menu-to-sidebar | ✅ |
+| Home — rotating hero, Continue Watching, Because You Watched, Top Rated, genre shelves, Live/Recently-Watched channels, Tonight | ✅ |
+| Movies / Series / Live TV browse — composable filters, A–Z jump, region relevance | ✅ |
 | TV Guide — per-channel programme strips | ✅ |
-| Search — natural language → structured filters (on-device) | ✅ |
-| Favorites | ✅ |
-| Detail screens + resume + autoplay-next-episode | ✅ |
-| Native AVKit player — subtitle/audio tracks, unsupported-stream detection | ✅ |
-| Personalize — languages, subtitles, adult filter, Home rows, AI toggle | ✅ |
-| App icon + top-shelf art | ✅ |
-| Claude-backed search parser | ⬜ (needs API-key decision; on-device parser ships) |
-| Reminders, Top Shelf extension, metadata enrichment | ⬜ |
+| Channel detail — now/next + a "Later today" EPG schedule | ✅ |
+| Search — natural language → structured filters (on-device; optional Claude parser with your own key) | ✅ |
+| Favorites · Watch History with management | ✅ |
+| Detail screens + resume + "next unwatched episode" + autoplay-next | ✅ |
+| Native AVKit player + bundled VLCKit for MKV/AVI/TS/RTMP · track selection · channel zapping · Now Playing · buffering state | ✅ |
+| TMDB metadata enrichment — posters, backdrops, ratings, cast, "More Like This", episode stills | ✅ |
+| Top Shelf extension + `aeria://` deep links | ✅ |
+| Personalize — languages, subtitles, adult filter + Parental PIN, Home rows, AI toggle | ✅ |
+| Accessibility — VoiceOver labels, Reduce Motion, focus order | ✅ |
+| App icon + top-shelf art (chrome "Aeria+" wordmark) | ✅ |
+| Reminders | ⬜ (deferred) |
 
-See **[LAUNCH.md](LAUNCH.md)** for the launch checklist and
-**[docs/app-store-listing.md](docs/app-store-listing.md)** for the store draft.
+See **[LAUNCH.md](LAUNCH.md)** and, to submit to the App Store,
+**[release/SUBMIT.md](release/SUBMIT.md)** + **[release/app-store-listing.md](release/app-store-listing.md)**.
 
 ---
 
@@ -69,8 +72,11 @@ See **[LAUNCH.md](LAUNCH.md)** for the launch checklist and
 - **UI** — `DesignSystem` tokens, reusable focusable components, feature screens.
 
 Concurrency: `async/await`, actors for the import pipeline, `@Observable` +
-`@MainActor` for view models. No Combine. One dependency planned (GRDB, for when
-libraries outgrow the in-memory store).
+`@MainActor` for view models. No Combine.
+
+Dependencies: one — **VLCKitSPM** (bundled media decoder for containers AVPlayer
+can't open). The catalog is held in memory; a SQLite backing is a ready seam if a
+library ever outgrows it.
 
 Toolchain: tvOS 18 deployment, built with the tvOS 26 SDK, Swift 5 language mode
 (code is written Swift-6-clean).
@@ -92,6 +98,7 @@ Sources/
     Navigation/     SidebarShell, AppRoute
     Features/       Home, Browse, Guide, Search, Favorites, Detail, Player, Setup, Settings
 Tests/AeriaTests/   parsing, normalization, search, cache, preferences, compatibility
-Tools/brand/             icon generator
-docs/                    privacy policy, support, store listing (host via GitHub Pages)
+Tools/brand/        icon generator
+docs/               the public site — privacy policy, support, landing (GitHub Pages)
+release/            submission runbook, store-listing copy, changelog
 ```

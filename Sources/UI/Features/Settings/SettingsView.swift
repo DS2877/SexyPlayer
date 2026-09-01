@@ -60,6 +60,8 @@ struct SettingsView: View {
             Text("Enrichment is on by default. You can supply your own free themoviedb.org key here if you prefer. Only the title and year of what you browse are ever sent.")
                 .font(.dsCaption).foregroundStyle(Palette.textTertiary)
                 .frame(maxWidth: 900, alignment: .leading)
+            Text("This product uses the TMDB API but is not endorsed or certified by TMDB.")
+                .font(.dsTag).foregroundStyle(Palette.textTertiary)
         }
     }
 

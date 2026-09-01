@@ -1,7 +1,7 @@
 # Aeria+ — App Store submission runbook
 
 Do the steps in order. Everything you paste into App Store Connect is in
-`docs/app-store-listing.md`. Bundle ID is **`com.aeriaplus.appletv`** and is
+`release/app-store-listing.md`. Bundle ID is **`com.aeriaplus.appletv`** and is
 **permanent** once the first build is uploaded.
 
 Legend: **Terminal** = the macOS Terminal app · **Xcode** / **portal** / **ASC** =
@@ -21,6 +21,26 @@ click there. Keyboard shortcuts are written like `⇧⌘K`.
       at <https://www.themoviedb.org/settings/api> (create account → "Developer" →
       copy the long "API Read Access Token"). Without it the app still works but
       shows far fewer posters/backdrops, and the screenshots look bare.
+
+---
+
+## Step 0 — Branch
+
+All the real code lives on **`import-progress-checklist`** (`main` is stale at the
+M6 milestone). Just build from where you are:
+
+```bash
+cd ~/Developer/SexyPlayer
+git checkout import-progress-checklist
+git pull
+```
+
+*Optional, if you want the release to come from `main`:*
+```bash
+git checkout main && git merge import-progress-checklist && git push origin main
+git checkout import-progress-checklist
+```
+Not required — the build is byte-identical either way.
 
 ---
 
@@ -44,7 +64,9 @@ are already written in `docs/`.
 
 2. **Enable Pages:** GitHub → repo → **Settings** → **Pages** →
    *Build and deployment* → **Source: Deploy from a branch** →
-   **Branch: `main`**, **Folder: `/docs`** → **Save**.
+   **Branch: `import-progress-checklist`** (that's where the current `docs/`
+   folder is — or `main` if you did the optional merge in Step 0),
+   **Folder: `/docs`** → **Save**.
 
 3. Wait ~1 minute, then open all three in a browser and confirm they render:
    - <https://ds2877.github.io/aeria/>
@@ -95,7 +117,7 @@ open Aeria.xcodeproj
 - Press **⇧⌘K** (Clean Build Folder), then **⌘B** (Build).
 - If it builds: press **⌘U** to run the test suite (should be all green).
 - **If there are red build errors, stop and send them to me.** There were ~35
-  commits since your last build (see `docs/CHANGELOG-since-last-build.md`); a
+  commits since your last build (see `release/CHANGELOG-since-last-build.md`); a
   couple of new APIs are un-compiled here.
 
 ---
@@ -192,7 +214,7 @@ Anything broken → send it to me.
 
 ## Step 7 — Fill in the listing (App Store Connect)
 
-Open `docs/app-store-listing.md` alongside ASC and copy each block:
+Open `release/app-store-listing.md` alongside ASC and copy each block:
 
 - **App Information:** Category = Entertainment; Content Rights = "does not
   contain third-party content" (the app ships none); Age Rating → run the
