@@ -10,6 +10,11 @@ There's no Swift toolchain on the machine these were written on, so a couple of
 newer APIs are un-compiled. If `⌘B` shows red, send me the errors — the likely
 suspects are flagged with ⚠ below.
 
+**Biggest single build risk: the `AeriaTopShelf` extension** (`ContentProvider.swift`,
+TVServices APIs, never compiled here). `release/SUBMIT.md` has a 2-minute recipe to
+ship v1.0 *without* it if it fights you. Rewritten this session to the most
+conservative form (completion-handler API, not the async override).
+
 ---
 
 ## Detail screens

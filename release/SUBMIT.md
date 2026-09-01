@@ -116,9 +116,32 @@ open Aeria.xcodeproj
   archiving, or your **Apple TV** for a device test.
 - Press **⇧⌘K** (Clean Build Folder), then **⌘B** (Build).
 - If it builds: press **⌘U** to run the test suite (should be all green).
-- **If there are red build errors, stop and send them to me.** There were ~35
-  commits since your last build (see `release/CHANGELOG-since-last-build.md`); a
-  couple of new APIs are un-compiled here.
+- **If there are red build errors, send them to me** — 32 commits since your last
+  build (see `release/CHANGELOG-since-last-build.md`), written without a compiler.
+
+### If the Top Shelf extension won't compile
+
+The `AeriaTopShelf` target uses TVServices APIs that have never been compiled here.
+It's a nice-to-have, **not** a launch blocker. If `ContentProvider.swift` throws
+errors you can't quickly fix, ship v1.0 without it:
+
+In `project.yml`, delete (or comment out with `#`):
+1. under `targets: Aeria: dependencies:` → the line `- target: AeriaTopShelf`
+2. the entire `AeriaTopShelf:` target block
+3. under `schemes: Aeria: build: targets:` → nothing to change (it only lists
+   `Aeria` and `AeriaTests`)
+
+Then `xcodegen generate` and build again. The app keeps working — it just won't
+put a row on the tvOS home screen. Add the extension back in v1.1.
+
+### Privacy manifest check
+
+After `xcodegen generate`, in Xcode select the **Aeria** target → **Build
+Phases** → **Copy Bundle Resources** and confirm **`PrivacyInfo.xcprivacy`** is
+listed. Do the same for **AeriaTopShelf** (if you kept it). If it's missing, drag
+`Resources/PrivacyInfo.xcprivacy` (or `Sources/TopShelf/PrivacyInfo.xcprivacy`)
+into that phase. Without it you'll get an email about `NSPrivacyAccessedAPI...`
+after upload — not a hard block for a first submission, but tidy to fix.
 
 ---
 
