@@ -1,10 +1,42 @@
 # Changes since your last verified build
 
-**32 commits, `36a636e` → `0b3fce3`.** All additive or contained swaps — no
-refactors, no build-setting changes. New files require `xcodegen generate`:
+**~45 commits, `36a636e` → HEAD.** All additive or contained swaps — no
+build-setting changes. New files require `xcodegen generate`:
 
 - `Sources/Data/Stores/NetworkMonitor.swift`
+- `Sources/Domain/Models/EPGWindow.swift`
 - `Tests/AeriaTests/HomeViewModelTests.swift`
+
+---
+
+## ⚠️ THE MEMORY CRASH FIX — read this first
+
+The "terminated by the OS for using too much memory" was the **EPG import path**.
+`URLSession.data(from:)` pulled the whole decompressed XMLTV into RAM, then the
+parser built a struct for *every* programme (a real provider's is millions →
+~1 GB), then it was windowed, then normalised — several GB-scale allocations at
+once → jetsam.
+
+Fixed at the source (commits after `847a643`):
+- `HTTPClient.downloadToFile(from:)` — streams the response to a temp file
+  (`URLSession` gzip-inflates into it); nothing large is ever in memory.
+- `XMLTVParser.parse(fileURL:within:)` — `XMLParser(stream:)` off disk, and
+  **skips any programme outside the guide window** so they're never allocated.
+  Memory is now flat regardless of feed size. One reusable `DateFormatter`.
+- New `EPGWindow` (−2 h / +32 h) — single source of truth for Xtream, M3U,
+  `AppEnvironment`, `CatalogCache`.
+- Repository id-maps hold `Int` indices, not struct copies (−~30 MB).
+- Decoded-image `NSCache` 140 → 80 MB, decode cap 1400 → 1200 px (−~60 MB).
+
+**To verify:** import your real provider and watch **Debug navigator → Memory**
+in Xcode while it loads. It should settle well under ~400 MB and not spike into
+the GBs during the "guide" phase. If it still climbs, tell me the peak figure and
+the provider's rough size (channels / VOD count).
+
+Channels and VOD are naturally bounded (tens of MB); the EPG was the only part
+that scaled with the feed, and it's fixed. A SQLite-backed catalog is still an
+option if you want belt-and-braces for a pathologically huge VOD library —
+say the word.
 
 There's no Swift toolchain on the machine these were written on, so a couple of
 newer APIs are un-compiled. If `⌘B` shows red, send me the errors — the likely
