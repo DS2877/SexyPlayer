@@ -32,12 +32,8 @@ public final class LiveTVBrowseViewModel {
         self.repository = repository
     }
 
-    /// True once this model has loaded at least once, so re-entering the screen
-    /// can skip straight to the content it already holds.
-    public private(set) var hasStarted = false
-
+    /// Whether this screen still needs a load is tracked by `SectionModels`.
     public func start() async {
-        hasStarted = true
         // Channels first; the category chips and the count fill in behind them.
         await reload()
     }
@@ -163,10 +159,12 @@ struct LiveTVBrowseView: View {
             guard model == nil else { return }
             let shared = models.liveTV(env)
             model = shared
-            guard !shared.hasStarted else { return }
+            guard models.needsLoad(.liveTV, revision: env.catalogRevision) else { return }
+            models.markLoaded(.liveTV, revision: env.catalogRevision)
             await shared.start()
         }
-        .onChange(of: env.catalogRevision) { _, _ in
+        .onChange(of: env.catalogRevision) { _, revision in
+            models.markLoaded(.liveTV, revision: revision)
             model?.scheduleReload()
         }
     }

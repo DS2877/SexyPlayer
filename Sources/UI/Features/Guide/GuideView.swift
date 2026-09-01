@@ -23,9 +23,6 @@ final class GuideViewModel {
     private let repository: any CatalogQuerying
     private var pendingLoad: Task<Void, Never>?
 
-    /// True once loaded at least once — re-entering the Guide reuses the rows.
-    private(set) var hasLoaded = false
-
     init(repository: any CatalogQuerying) { self.repository = repository }
 
     /// Coalesced — the catalog revision bumps several times during a staged
@@ -64,7 +61,6 @@ final class GuideViewModel {
         }
         rows = built
         truncated = channels.count >= cap && built.count == channels.count
-        hasLoaded = true
     }
 }
 
@@ -93,10 +89,12 @@ struct GuideView: View {
             guard model == nil else { return }
             let shared = models.guide(env)
             model = shared
-            guard !shared.hasLoaded else { return }
+            guard models.needsLoad(.guide, revision: env.catalogRevision) else { return }
+            models.markLoaded(.guide, revision: env.catalogRevision)
             await shared.load()
         }
-        .onChange(of: env.catalogRevision) { _, _ in
+        .onChange(of: env.catalogRevision) { _, revision in
+            models.markLoaded(.guide, revision: revision)
             Task { await model?.load() }
         }
     }

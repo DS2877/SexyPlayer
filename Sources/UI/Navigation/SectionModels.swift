@@ -26,7 +26,27 @@ public final class SectionModels {
     private var guideModel: GuideViewModel?
     private var searchModel: SearchViewModel?
 
+    /// The `catalogRevision` each section's data was loaded at. Visiting a
+    /// screen early in an import and coming back after it finished must not
+    /// leave you looking at the partial library it saw the first time.
+    private var loadedRevision: [String: Int] = [:]
+
     public init() {}
+
+    /// `true` when this section has never loaded, or loaded against an older
+    /// catalog than the one on disk now.
+    func needsLoad(_ key: SectionKey, revision: Int) -> Bool {
+        loadedRevision[key.rawValue] != revision
+    }
+
+    /// Record that this section just loaded against `revision`.
+    func markLoaded(_ key: SectionKey, revision: Int) {
+        loadedRevision[key.rawValue] = revision
+    }
+
+    public enum SectionKey: String {
+        case home, liveTV, movies, series, guide
+    }
 
     func home(_ env: AppEnvironment) -> HomeViewModel {
         if let homeModel { return homeModel }
@@ -94,5 +114,6 @@ public final class SectionModels {
         seriesModel = nil
         guideModel = nil
         searchModel = nil
+        loadedRevision.removeAll()
     }
 }

@@ -71,8 +71,12 @@ struct PlayerScreen: View {
                     .ignoresSafeArea()
 
                     if model.state == .loading || model.isStalling {
-                        ProgressView().controlSize(.large).tint(.white)
-                            .accessibilityLabel(model.isStalling ? "Buffering" : "Loading")
+                        PlaybackLoadingOverlay(
+                            title: model.activeItem.title,
+                            subtitle: model.activeItem.subtitle,
+                            isStalling: model.isStalling
+                        )
+                        .transition(.opacity)
                     }
 
                     if let info = banner {
@@ -99,6 +103,8 @@ struct PlayerScreen: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: banner?.id)
+        .animation(.easeInOut(duration: 0.28), value: model?.state == .loading)
+        .animation(.easeInOut(duration: 0.28), value: model?.isStalling)
         .onAppear {
             currentLineup = lineup
             if model == nil {
@@ -142,6 +148,49 @@ struct PlayerScreen: View {
     private func canRetry(_ error: ProviderError) -> Bool {
         if case .streamNotSupported = error { return false }
         return true
+    }
+}
+
+/// What you look at while a stream opens. A bare spinner on black reads as
+/// "something is broken"; naming the thing you just chose reads as "it's
+/// coming". Doubles as the buffering state mid-playback.
+private struct PlaybackLoadingOverlay: View {
+    let title: String
+    let subtitle: String?
+    let isStalling: Bool
+
+    var body: some View {
+        VStack(spacing: Metrics.space3) {
+            ProgressView().controlSize(.large).tint(.white)
+
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.dsCardTitle)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.dsCaption)
+                        .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                }
+                Text(isStalling ? "Buffering…" : "Starting…")
+                    .font(.dsTag)
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.top, 2)
+            }
+            .frame(maxWidth: 900)
+            .multilineTextAlignment(.center)
+        }
+        .padding(Metrics.space5)
+        // A scrim only while the picture is still black; once frames are
+        // arriving (a stall) it stays light so you can see them resume.
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.black.opacity(isStalling ? 0.45 : 0))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isStalling ? "Buffering \(title)" : "Loading \(title)")
     }
 }
 

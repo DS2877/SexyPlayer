@@ -31,12 +31,9 @@ public final class VODBrowseViewModel {
         self.watchProgress = watchProgress
     }
 
-    /// True once this model has loaded at least once, so re-entering the screen
-    /// can skip straight to the content it already holds.
-    public private(set) var hasStarted = false
-
+    /// Whether this screen still needs a load is tracked by `SectionModels`
+    /// (which also knows the catalog revision it last loaded against).
     public func start() async {
-        hasStarted = true
         // Cards first — the facets fill the chip row in behind them.
         await reload()
     }

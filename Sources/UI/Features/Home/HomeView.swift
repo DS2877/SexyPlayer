@@ -51,9 +51,13 @@ struct HomeView: View {
             guard case .ready = environment.loadState else { return }
             let shared = models.home(environment)
             model = shared
-            // A rebuild is only needed the first time in, or when the catalog
-            // itself changed (handled by the catalogRevision hook below).
-            guard !shared.hasBuiltOnce else { consumePendingRoute(); return }
+            // Only rebuild if this screen hasn't been built against the catalog
+            // as it stands now — coming back to Home is otherwise free.
+            guard models.needsLoad(.home, revision: environment.catalogRevision) else {
+                consumePendingRoute()
+                return
+            }
+            models.markLoaded(.home, revision: environment.catalogRevision)
             await shared.rebuild()
             prefetchArtwork(shared)
             consumePendingRoute()
@@ -70,7 +74,8 @@ struct HomeView: View {
         .onChange(of: environment.preferences.preferences) { _, _ in
             Task { await model?.rebuild() }
         }
-        .onChange(of: environment.catalogRevision) { _, _ in
+        .onChange(of: environment.catalogRevision) { _, revision in
+            models.markLoaded(.home, revision: revision)
             Task {
                 await model?.rebuild()
                 if let model { prefetchArtwork(model) }

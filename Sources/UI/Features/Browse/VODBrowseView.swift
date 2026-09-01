@@ -28,8 +28,12 @@ struct VODBrowseView: View {
             guard model == nil else { return }
             let shared = models.vod(kind, env)
             model = shared
-            // Already populated from an earlier visit — don't re-query.
-            guard !shared.hasStarted else { return }
+            // Already populated from an earlier visit against this same catalog
+            // — don't re-query. (A visit made mid-import loaded a partial
+            // library, so a newer revision does need a refresh.)
+            let key: SectionModels.SectionKey = kind == .movies ? .movies : .series
+            guard models.needsLoad(key, revision: env.catalogRevision) else { return }
+            models.markLoaded(key, revision: env.catalogRevision)
             await shared.start()
             prefetchPosters(shared)
         }
@@ -38,8 +42,9 @@ struct VODBrowseView: View {
             // changed. Keep the grid — and the focus — exactly as it was.
             if atRoot { model?.refreshProgress() }
         }
-        .onChange(of: env.catalogRevision) { _, _ in
+        .onChange(of: env.catalogRevision) { _, revision in
             // Coalesced (280 ms) — the revision bumps repeatedly during import.
+            models.markLoaded(kind == .movies ? .movies : .series, revision: revision)
             model?.scheduleReload()
         }
     }

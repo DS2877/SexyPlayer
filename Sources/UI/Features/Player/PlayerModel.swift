@@ -241,8 +241,13 @@ public final class PlayerModel {
     private func seekToResumeIfNeeded() {
         guard !hasSeekedToResume, !activeItem.isLive, let resumeAt = activeItem.resumeAt, resumeAt > 1 else { return }
         hasSeekedToResume = true
+        // A ±1.5 s tolerance lets AVPlayer land on the nearest keyframe instead
+        // of decoding forward to an exact frame. Over a network stream that's
+        // the difference between resuming instantly and staring at a spinner
+        // for several seconds — and nobody can tell where a second went.
+        let tolerance = CMTime(seconds: 1.5, preferredTimescale: 600)
         player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
-                    toleranceBefore: .zero, toleranceAfter: .zero)
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
     }
 
     private func fail(with error: Error?) {

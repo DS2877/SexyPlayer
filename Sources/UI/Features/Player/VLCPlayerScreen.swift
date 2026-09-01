@@ -43,7 +43,27 @@ struct VLCPlayerScreen: View {
                     .background(Color.black.opacity(0.96))
                 } else {
                     if model.state == .loading {
-                        ProgressView().controlSize(.large).tint(.white)
+                        // Same identity-while-loading treatment as the native
+                        // player — MKV over the network is the slowest start in
+                        // the app, so this is where it matters most.
+                        VStack(spacing: Metrics.space3) {
+                            ProgressView().controlSize(.large).tint(.white)
+                            VStack(spacing: 6) {
+                                Text(item.title)
+                                    .font(.dsCardTitle).foregroundStyle(.white).lineLimit(1)
+                                if let subtitle = item.subtitle, !subtitle.isEmpty {
+                                    Text(subtitle)
+                                        .font(.dsCaption).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+                                }
+                                Text("Starting…")
+                                    .font(.dsTag).foregroundStyle(.white.opacity(0.45)).padding(.top, 2)
+                            }
+                            .frame(maxWidth: 900)
+                            .multilineTextAlignment(.center)
+                        }
+                        .transition(.opacity)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Loading \(item.title)")
                     }
                     if controlsVisible {
                         controls(model).transition(.opacity)
@@ -69,6 +89,7 @@ struct VLCPlayerScreen: View {
         }
         .onExitCommand { dismiss() }
         .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+        .animation(.easeInOut(duration: 0.28), value: model?.state == .loading)
         .fullScreenCover(isPresented: $showTracks) {
             if let model { VLCTrackSheet(model: model) }
         }
