@@ -67,14 +67,28 @@ public actor MetadataService {
 
     private let fileURL: URL
 
+    /// The on-disk cache is decoded on first use, not in `init`.
+    ///
+    /// `init` runs at the construction site — the main actor, during the first
+    /// view build — and after a warm-up sweep this file holds hundreds of
+    /// entries. Decoding it there stalled the very first frame. Deferring it
+    /// moves the work onto this actor's executor, off the main thread, and it
+    /// overlaps with the catalog queries that run at the same moment.
+    private var didLoadFromDisk = false
+
     public init() {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                  appropriateFor: nil, create: true)) ?? URL.temporaryDirectory
         self.fileURL = base.appendingPathComponent("tmdb-metadata.v1.json")
-        if let data = try? Data(contentsOf: fileURL),
-           let decoded = try? JSONDecoder().decode([String: EnrichedMetadata].self, from: data) {
-            byID = decoded
-        }
+    }
+
+    private func loadFromDiskIfNeeded() {
+        guard !didLoadFromDisk else { return }
+        didLoadFromDisk = true
+        guard let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode([String: EnrichedMetadata].self, from: data)
+        else { return }
+        byID = decoded
     }
 
     public func setKey(_ key: String?) {
@@ -87,6 +101,7 @@ public actor MetadataService {
     /// Cached value if present; otherwise fetch (deduped). Returns nil when no
     /// key is configured or nothing matched.
     public func metadata(for id: CatalogID, title: String, year: Int?, isSeries: Bool) async -> EnrichedMetadata? {
+        loadFromDiskIfNeeded()
         let key = id.rawValue
 
         if let existing = byID[key] {
@@ -109,6 +124,7 @@ public actor MetadataService {
     /// Full record including cast/genres/runtime/tagline. Does the base search
     /// first if needed, then a second `/movie/{id}` call. For detail screens.
     public func details(for id: CatalogID, title: String, year: Int?, isSeries: Bool) async -> EnrichedMetadata? {
+        loadFromDiskIfNeeded()
         let key = id.rawValue
 
         // Cached with details already? Done. (`castCredits == nil` means the
@@ -169,7 +185,11 @@ public actor MetadataService {
     /// `onBatch` fires periodically so the UI can refresh as data lands.
     public func warmUp(_ items: [ArtworkSeed], onBatch: @escaping @Sendable () -> Void = {}) {
         guard client != nil, sweepTask == nil else { return }
-        sweepTask = Task { [weak self] in
+        sweepTask = Task(priority: .background) { [weak self] in
+            // Let the first screen have the network to itself. The sweep is
+            // invisible work; the posters the viewer is looking at are not.
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
             var sinceRefresh = 0
             for item in items {
                 if Task.isCancelled { break }
@@ -273,6 +293,7 @@ public actor MetadataService {
     /// All known TMDB ratings, keyed by `CatalogID.rawValue`. For the Home
     /// "Top Rated" row — cheap, reads the in-memory map.
     public func ratingsSnapshot() -> [String: Double] {
+        loadFromDiskIfNeeded()
         var out: [String: Double] = [:]
         for (key, value) in byID where value.matched {
             if let rating = value.rating { out[key] = rating }
@@ -282,6 +303,7 @@ public actor MetadataService {
 
     public func clear() {
         byID.removeAll()
+        didLoadFromDisk = true      // nothing on disk worth reading any more
         cancelWarmUp()
         try? FileManager.default.removeItem(at: fileURL)
     }
