@@ -15,12 +15,12 @@ click there. Keyboard shortcuts are written like `⇧⌘K`.
 - [ ] Team ID `4YJN2S39Q4` is already in `project.yml`. — done
 - [ ] You can sign in to <https://developer.apple.com/account> and
       <https://appstoreconnect.apple.com>.
-- [ ] Node is installed on the Mac (`node --version`). If not:
-      `brew install node`
-- [ ] (Optional but recommended) a **TMDB API Read Access Token** — free, instant,
-      at <https://www.themoviedb.org/settings/api> (create account → "Developer" →
-      copy the long "API Read Access Token"). Without it the app still works but
-      shows far fewer posters/backdrops, and the screenshots look bare.
+- [ ] **TMDB API Read Access Token** — near-essential for a good first impression.
+      Free and instant at <https://www.themoviedb.org/settings/api> (create an
+      account → "Developer" → copy the long "API Read Access Token"). Without it
+      the app still works but shows far fewer posters/backdrops and the
+      screenshots look bare. *Check `Sources/App/TMDBDefaults.swift` on the Mac
+      first — if `readAccessToken` is already a long string, you're set.*
 
 ---
 
@@ -92,17 +92,17 @@ git pull
 ./Scripts/set-tmdb-token.sh "PASTE_YOUR_TMDB_READ_ACCESS_TOKEN_HERE"
 ```
 
-**Regenerate the app icon** (the wordmark art):
+**App icon:** the committed PNGs (the chrome "Aeria+" wordmark) are already valid
+— you can **skip regeneration for the first submission**. Only if you want to
+refresh them:
 
 ```bash
-cd Tools/brand
-npm install sharp
-node generate-icon.mjs
-cd ../..
+cd Tools/brand && npm install sharp && node generate-icon.mjs && cd ../..
 ```
 
-Open `docs/brand/icon-preview.png` to eyeball it. If the tile is blank, the SVG
-font didn't resolve — tell me and I'll switch the generator to a bundled TTF.
+Then open `docs/brand/icon-preview.png`. If the tile is blank the SVG font didn't
+resolve — `git checkout -- Resources/Assets.xcassets` to restore the committed
+icons and tell me; the build is fine with those.
 
 **Generate the Xcode project and open it:**
 
