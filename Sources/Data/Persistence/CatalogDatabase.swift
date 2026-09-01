@@ -14,6 +14,10 @@ public final class CatalogDatabase: @unchecked Sendable {
     private let reader: SQLiteConnection
     private let writerQueue = DispatchQueue(label: "se.aeriaplus.catalog.write")
     private let readerQueue = DispatchQueue(label: "se.aeriaplus.catalog.read")
+    /// True for the in-memory fallback store, where reader and writer are the
+    /// same connection — reads must then run on the writer's queue or the two
+    /// would touch one connection from two threads.
+    private let sharesConnection: Bool
 
     /// Adult / region visibility applied to a query as `WHERE` clauses.
     public struct Scope: Sendable, Equatable {
@@ -29,9 +33,13 @@ public final class CatalogDatabase: @unchecked Sendable {
     // MARK: - Lifecycle
 
     public init(path: URL) throws {
+        // `:memory:` is a private database per connection, so the reader has to
+        // share the writer's rather than open a second, empty one.
+        let isMemory = path.path == ":memory:"
+        sharesConnection = isMemory
         writer = try SQLiteConnection(path: path.path, role: .writer)
         try CatalogSchema.migrate(writer)
-        reader = try SQLiteConnection(path: path.path, role: .reader)
+        reader = isMemory ? writer : try SQLiteConnection(path: path.path, role: .reader)
     }
 
     /// Open (creating if needed) the catalog store in Application Support,
@@ -48,20 +56,29 @@ public final class CatalogDatabase: @unchecked Sendable {
 
         for url in candidates {
             if let database = try? CatalogDatabase(path: url) { return database }
+            // A corrupt file (or a half-written WAL) — drop it and try once more.
             for suffix in ["", "-wal", "-shm"] {
                 try? fm.removeItem(at: URL(fileURLWithPath: url.path + suffix))
             }
             if let database = try? CatalogDatabase(path: url) { return database }
         }
-        return try! CatalogDatabase(path: fm.temporaryDirectory
-            .appendingPathComponent("aeria-catalog-\(UUID().uuidString).sqlite3"))
+        if let scratch = try? CatalogDatabase(path: fm.temporaryDirectory
+            .appendingPathComponent("aeria-catalog-\(UUID().uuidString).sqlite3")) {
+            return scratch
+        }
+        // Every path on disk failed. An in-memory store can't persist between
+        // launches, but the app runs and re-imports — far better than refusing
+        // to start.
+        AppLog.app.error("No writable catalog store; falling back to memory.")
+        return try! CatalogDatabase(path: URL(fileURLWithPath: ":memory:"))
     }
 
     // MARK: - Queue plumbing
 
     private func read<T: Sendable>(_ body: @escaping @Sendable (SQLiteConnection) throws -> T) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            readerQueue.async {
+        let queue = sharesConnection ? writerQueue : readerQueue
+        return try await withCheckedThrowingContinuation { continuation in
+            queue.async {
                 do { continuation.resume(returning: try body(self.reader)) }
                 catch { continuation.resume(throwing: error) }
             }

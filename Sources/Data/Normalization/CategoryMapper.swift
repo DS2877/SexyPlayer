@@ -21,7 +21,7 @@ public enum CategoryMapper {
             return bucket
         }
         // Fall back to a tidied version of the provider's own group.
-        let tidied = groupTitle!
+        let tidied = (groupTitle ?? "")
             .replacingOccurrences(of: "|", with: " ")
             .collapsingWhitespace()
         return tidied.isEmpty ? "General" : tidied
