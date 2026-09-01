@@ -27,8 +27,13 @@ open Aeria.xcodeproj
 In Xcode: **⇧⌘K**, **⌘B**. If green, **⌘U** for the tests, then pick the Apple TV
 and **⌘R**.
 
-Paste any red build errors (with the file name). The riskiest edits are the
-concurrency around `AppEnvironment.bootstrap` and the `HomeViewModel` rewrite.
+Paste any red build errors (with the file name). Riskiest, in order:
+1. `withCheckedThrowingContinuation` in `CatalogDatabase` (the two-connection
+   plumbing) — if the compiler wants an `isolation:` argument or complains about
+   `sending`, that's a one-line fix.
+2. `@unchecked Sendable` on `SQLiteConnection` / `CatalogDatabase`.
+3. concurrency around `AppEnvironment.bootstrap` / `handleImportStage`.
+4. the `HomeViewModel.performRebuild` rewrite.
 
 ---
 
@@ -66,6 +71,14 @@ provider's rough size (channels / movies). Everything else, paste the symptom.
 
 ## What changed
 
+- **`CatalogDatabase` — two connections.** A writer (the import) and a reader
+  (every screen, `PRAGMA query_only`), each on its own serial queue. WAL lets the
+  reader serve queries while the import commits, so browsing stays smooth
+  mid-import instead of stalling behind each insert batch.
+- **Generation-stamped imports.** Every row an import writes carries a generation
+  number; `finish()` deletes whatever an earlier generation left behind
+  (titles the provider removed, aged-out EPG). A background refresh no longer
+  needs a destructive up-front wipe. (Schema is now v2 — the store rebuilds once.)
 - **`AppEnvironment`** — opens `CatalogDatabase`; imports through `CatalogWriter`
   (streamed, chunked); queries through `SQLiteCatalogRepository`. Fast path when a
   finished import is already on disk. `CatalogCache` deleted.
