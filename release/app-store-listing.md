@@ -172,8 +172,13 @@ After Pages builds (~1 min), open all three URLs in a browser and confirm they r
 
 Apple TV screenshots must be exactly **1920×1080** or **3840×2160** (landscape).
 Minimum 1; upload 5–8. Capture from the tvOS **Simulator** (menu **File → Save
-Screen** / ⌘S — saves to the Desktop at native resolution) with the **Demo
-Library** loaded and give TMDB ~30s to fill in artwork first:
+Screen** / ⌘S — saves to the Desktop at native resolution).
+
+**Prep for a full-looking Home:** load the **Demo Library**, wait ~30s for TMDB
+artwork, then **play 2–3 different titles** for a few seconds each (and start one
+series) so *Continue Watching*, *Because You Watched* and *Top Rated* all have
+content. The hero rotates every 9s — catch it on a title with a good backdrop
+(Metropolis, Nosferatu, The Stranger).
 
 1. **Home** — the rotating hero + "Top Rated" / genre shelves
 2. **Movie detail** — poster + backdrop, the cast rail, "More Like This"
