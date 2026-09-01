@@ -71,6 +71,7 @@ public enum XMLTVParser {
         init(window: DateInterval?) {
             self.windowStart = window?.start
             self.windowEnd = window?.end
+            super.init()
         }
 
         func parser(_ parser: XMLParser, didStartElement elementName: String,
