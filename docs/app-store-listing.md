@@ -62,16 +62,36 @@ Entertainment, primary language English.
 
 `iptv,m3u,xtream,player,playlist,epg,tv guide,live tv,stream,m3u8,xmltv`
 
+## Version / build
+
+`MARKETING_VERSION` = **1.0**, `CURRENT_PROJECT_VERSION` = **1** (both in `project.yml`).
+Every upload to App Store Connect needs a build number higher than the last one
+accepted — bump `CURRENT_PROJECT_VERSION` (`"2"`, `"3"`, …) and re-run `xcodegen`
+before re-archiving. `MARKETING_VERSION` only changes for a user-visible release.
+
+## "What's New in This Version" (release notes)
+
+> First release. Connect your IPTV service and watch it like a modern streaming app.
+
 ## Category
 
-Primary: **Entertainment**
+Primary: **Entertainment**. Leave the secondary category blank (or "Utilities").
 
 ## Age rating
 
-Answer the questionnaire honestly. The app itself has no mature content; it plays
-whatever the user's provider sends. "Unrestricted web access" = **No** (it only
-contacts the user-configured provider). Expect a 12+ or 17+ outcome because
-user-supplied streams are uncontrolled — that's fine and correct.
+Answer the questionnaire for the app itself (which ships no content):
+- All violence / sexual content / profanity / drugs / horror categories → **None**.
+- **Unrestricted Web Access → No.** It is not a browser; it only contacts the
+  IPTV service the user configures.
+- Gambling, contests, unrestricted access → **No**.
+- If asked whether the app can display user-generated or unmoderated content:
+  the streams come from the user's own subscription. Note the built-in
+  **"Hide adult categories"** filter (on by default) and the optional
+  **Parental PIN**.
+
+Expect Apple to land on **17+** for an IPTV player regardless — content the app
+plays isn't moderated by Apple. That's the correct and expected outcome; the
+parental controls back it up.
 
 ## App Privacy ("Data Not Collected")
 
@@ -93,56 +113,75 @@ Select **Data Not Collected**. Verify against the built binary before submitting
 Uses only standard HTTPS / system crypto → typically "No" to the custom-encryption
 question (`ITSAppUsesNonExemptEncryption = false`).
 
-## Required URLs
+## Required URLs — GitHub Pages
 
-Contact email is set to `info@aeriaplus.se` in both pages.
+Hosting is the repo's `docs/` folder on GitHub Pages (see `docs/SUBMIT.md` step 1).
+**Rename the repo `SexyPlayer` → `aeria` first** (Settings → General → Repository name;
+GitHub keeps the old URL redirecting, and the git remote keeps working). Then:
 
-You own **aeriaplus.se** — host the two pages there for a professional URL:
-- **Privacy Policy URL:** `https://aeriaplus.se/privacy` (or `/privacy-policy.html`)
-- **Support URL:** `https://aeriaplus.se/support`
+- **Privacy Policy URL:** `https://ds2877.github.io/aeria/privacy-policy.html`
+- **Support URL:** `https://ds2877.github.io/aeria/support.html`
+- **Marketing URL** (optional field): `https://ds2877.github.io/aeria/`
 
-The files to publish are `docs/privacy-policy.html` and `docs/support.html`
-(plus `docs/index.html` as the landing page at `https://aeriaplus.se`). Any static
-host works — a `docs/` folder on GitHub Pages with a CNAME to `aeriaplus.se`, Netlify,
-Cloudflare Pages, or plain web hosting.
+If you skip the rename, substitute `SexyPlayer` for `aeria` in those URLs — it works,
+it just reads oddly next to the app name. Later, point `aeriaplus.se` at Pages with a
+`docs/CNAME` file containing `aeriaplus.se` and the DNS records GitHub shows you.
 
-After publishing, open both URLs in a browser and confirm they render.
+Contact email in all three pages: `info@aeriaplus.se`.
+
+After Pages builds (~1 min), open all three URLs in a browser and confirm they render.
 
 ## App Review notes (paste into the review notes field)
 
-> This app is an IPTV **player only**. It does not provide, sell, host, bundle, or
-> recommend any channels, streams, or media. The user connects an IPTV service
-> they already subscribe to (Xtream Codes or an M3U playlist URL). It is
-> conceptually the same category as a web browser or a media player: the software
-> is neutral; the content is entirely user-supplied.
+> **What this app is:** an IPTV **player only**. It ships with no channels, no
+> playlists, no streams, and no content of any kind. It does not sell, host,
+> aggregate, or recommend media. The user brings an IPTV service they already
+> subscribe to (Xtream Codes credentials or an M3U playlist URL); the app fetches
+> that user's own list, tidies the naming, and plays it with a native interface.
+> It is the same category as a media player or a browser: neutral software,
+> user-supplied content.
 >
-> **To review without credentials:** on the first screen choose **"Try the demo"**.
-> This loads a built-in sample library backed by public-domain test streams (Apple
-> and Mux) so you can exercise every screen — Home, Movies/Series browsing and
-> filters, Live TV, the guide, natural-language search, detail pages with cast and
-> "More Like This", Watch History, Favorites, Settings — and play content end to end.
+> **Reviewing without credentials:** on the first screen, choose **"Try the demo"**.
+> This loads a built-in sample library of **public-domain films** (Night of the
+> Living Dead, Nosferatu, Metropolis, His Girl Friday, The Stranger, …) with
+> playback backed by Apple's and Mux's public HLS test streams. It exercises every
+> screen — Home with the rotating hero and shelves, Movies/Series browsing with
+> genre filters and an A–Z index, Live TV, the TV guide, natural-language search
+> with visible filter chips, detail pages with a cast rail and "More Like This",
+> the channel schedule screen, Watch History, Favorites, Personalize, Settings —
+> and plays content end to end via both the native player and the bundled decoder.
 >
-> No account is required or offered. No data is collected or transmitted to us (we
-> operate no servers). All settings and the library cache are stored locally on the
-> device; credentials are in the keychain and are only ever sent to the user's own
-> provider.
+> **Privacy:** no account is required or offered. We operate no servers; nothing is
+> transmitted to us. Preferences, the library cache and watch progress are stored
+> locally; provider credentials and optional API keys are in the keychain and are
+> only ever sent to the user's own provider. Optional artwork enrichment queries
+> The Movie Database with only a title + year (no identifier, no history). Optional
+> AI-assisted search is off by default and needs the user's own API key.
 >
-> Optional artwork enrichment queries The Movie Database with only a title and year.
-> Optional AI-assisted search is off by default and requires the user's own API key.
+> **`NSAllowsArbitraryLoads`:** IPTV panels and streams are very frequently plain
+> HTTP on non-standard ports; a working IPTV client cannot require HTTPS. No
+> first-party endpoint is contacted over HTTP (there are none).
 >
-> The app declares an App Group (`group.com.aeriaplus.appletv`) used solely to pass
-> a small "Continue Watching" list to the bundled Top Shelf extension on the same
-> device. Nothing leaves the device.
+> **App Group** (`group.com.aeriaplus.appletv`): used only to hand a short local
+> "Continue Watching" list to the bundled Top Shelf extension on the same device.
+> Nothing leaves the device.
+>
+> Contact for any questions during review: info@aeriaplus.se
 
 ## Screenshots
 
-tvOS requires 1920×1080 or 3840×2160. Capture from the Simulator (⌘S) with the
-**Demo Library** loaded (its titles are real public-domain films, so artwork looks
-real):
-1. Home — rotating hero + shelves
-2. A movie detail page — cast rail + "More Like This"
-3. Live TV
-4. The TV guide
-5. Search with interpreted filter chips
+Apple TV screenshots must be exactly **1920×1080** or **3840×2160** (landscape).
+Minimum 1; upload 5–8. Capture from the tvOS **Simulator** (menu **File → Save
+Screen** / ⌘S — saves to the Desktop at native resolution) with the **Demo
+Library** loaded and give TMDB ~30s to fill in artwork first:
 
-Optional: a 15–30s app preview video (same resolution).
+1. **Home** — the rotating hero + "Top Rated" / genre shelves
+2. **Movie detail** — poster + backdrop, the cast rail, "More Like This"
+3. **Live TV** — the channel grid with now-playing lines
+4. **TV Guide** — the per-channel programme strips
+5. **Search** — a query with the interpreted filter chips showing
+6. (optional) **Channel detail** — "On now" + the "Later today" schedule
+7. (optional) **Personalize** — shows the privacy-forward options
+
+A reviewer sees these before the demo, so lead with Home. Optional: a 15–30s
+app-preview video at the same resolution.

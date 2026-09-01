@@ -39,10 +39,17 @@
       <code>http://example.com:8080</code>), the username, and the password. Some providers
       also cap the number of connections — make sure another device isn't using the slot.</dd>
 
-  <dt>A live channel says "Apple TV can't play this stream"</dt>
-  <dd>Apple&nbsp;TV's player needs <strong>HLS</strong> (<code>.m3u8</code>). Many IPTV
-      providers serve live channels as raw MPEG-TS (<code>.ts</code>), which it can't play.
-      Ask your provider whether they offer an HLS output. Movies and series usually play fine.</dd>
+  <dt>What video formats play?</dt>
+  <dd>Aeria+ uses the native Apple&nbsp;TV player for HLS (<code>.m3u8</code>), MP4 and MOV,
+      and a bundled decoder (VLCKit) for everything else your provider is likely to send —
+      MKV, AVI, raw MPEG-TS (<code>.ts</code>), and RTMP/RTSP streams. If a specific stream
+      still won't start, it's usually a dead link on the provider's side, a hit connection
+      limit, or a geo-block.</dd>
+
+  <dt>A stream buffers or stalls</dt>
+  <dd>That's almost always the provider or your network, not the app. Try another channel to
+      confirm; check your Apple&nbsp;TV's connection under Settings; and make sure another
+      device isn't using your provider's connection slot.</dd>
 
   <dt>The library is taking a long time to load</dt>
   <dd>The first import of a very large library can take a minute or two. After that it's
@@ -53,11 +60,26 @@
   <dd>The app cleans up provider names automatically, but very unusual formatting can slip
       through. Let us know examples and we'll improve it.</dd>
 
+  <dt>There's no TV guide</dt>
+  <dd>The guide is built from EPG data. For Xtream that's automatic; for an M3U playlist you
+      also need to enter an XMLTV / EPG URL when you add the provider (Settings → Your
+      Provider → add again to update it). If your provider supplies no EPG, the guide stays
+      empty and that's expected.</dd>
+
+  <dt>I only want Swedish / Nordic channels</dt>
+  <dd>Settings → Personalize → "Nordic &amp; English only" (on by default) hides the flood of
+      other-region channels and titles. Turn it off to see your provider's full catalogue.</dd>
+
   <dt>How do I change my languages / which rows show on Home?</dt>
   <dd>Settings → Personalize.</dd>
 
   <dt>How do I remove or switch providers?</dt>
   <dd>Settings → Your Provider.</dd>
+
+  <dt>Continue Watching won't clear an item</dt>
+  <dd>Press and hold the Siri Remote clickpad on any Continue Watching poster for
+      <strong>Mark as Watched</strong> or <strong>Remove</strong>. History → Clear All wipes
+      the lot.</dd>
 </dl>
 
 <h2>About Aeria+</h2>
