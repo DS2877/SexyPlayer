@@ -47,6 +47,9 @@ targets:
       - package: VLCKitSPM
         product: VLCKitSPM
       - target: AeriaTopShelf
+      # The catalog store (`Sources/Data/Persistence`) uses the system SQLite via
+      # `import SQLite3` — no SPM package, just the platform library.
+      - sdk: libsqlite3.tbd
     entitlements:
       path: Sources/App/Aeria.entitlements
       properties:
