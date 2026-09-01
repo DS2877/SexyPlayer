@@ -11,32 +11,41 @@ build-setting changes. New files require `xcodegen generate`:
 
 ## ⚠️ THE MEMORY CRASH FIX — read this first
 
-The "terminated by the OS for using too much memory" was the **EPG import path**.
-`URLSession.data(from:)` pulled the whole decompressed XMLTV into RAM, then the
-parser built a struct for *every* programme (a real provider's is millions →
-~1 GB), then it was windowed, then normalised — several GB-scale allocations at
-once → jetsam.
+The device still jetsam'd after round 1 (EPG streaming), ~3 min into an import on
+a real Xtream provider. There were **six** separate amplifiers, now all fixed
+(commits after `847a643`):
 
-Fixed at the source (commits after `847a643`):
-- `HTTPClient.downloadToFile(from:)` — streams the response to a temp file
-  (`URLSession` gzip-inflates into it); nothing large is ever in memory.
-- `XMLTVParser.parse(fileURL:within:)` — `XMLParser(stream:)` off disk, and
-  **skips any programme outside the guide window** so they're never allocated.
-  Memory is now flat regardless of feed size. One reusable `DateFormatter`.
-- New `EPGWindow` (−2 h / +32 h) — single source of truth for Xtream, M3U,
-  `AppEnvironment`, `CatalogCache`.
-- Repository id-maps hold `Int` indices, not struct copies (−~30 MB).
-- Decoded-image `NSCache` 140 → 80 MB, decode cap 1400 → 1200 px (−~60 MB).
+1. **EPG** — `HTTPClient.downloadToFile(from:)` streams the XMLTV to a temp file;
+   `XMLTVParser.parse(fileURL:within:)` stream-parses off disk and **skips
+   programmes outside the ±32 h window** (never allocated). New `EPGWindow`.
+2. **Xtream fetch** — the six list downloads fired concurrently (`async let`), so
+   live + VOD + series JSON were decoded and resident together (150 MB+), each
+   held to end-of-function in a Debug build. Now sequential; each list mapped
+   inside its own helper so the ~100 MB VOD DTO array frees before the next
+   fetch; `do { }` blocks free the mapped arrays after each `emit`.
+3. **`concurrentMap`** — copied a slice of the input per worker (2nd full copy),
+   held every transformed chunk, then `flatMap`ped (3rd). Now indexes into the
+   shared input and folds chunks into the result one at a time.
+4. **VOD import** — dropped a full sort of the raw movie list (~50 MB copy for a
+   cosmetic "newest first" slice); the cache write is awaited so its plist encode
+   frees before the EPG stage instead of overlapping.
+5. **Rebuild storm** — the catalog + metadata revisions bump ~12× during import;
+   every bump spawned another full-catalog shaping pass (Home), channel scan
+   (Guide) or reload (browse). All debounced (~300 ms) + re-entrancy-guarded.
+6. **Image decode** — was unbounded; a fast scroll / rebuild burst kicked off
+   dozens of `CGImageSourceCreateThumbnail` calls, each a multi-MB bitmap. Gated
+   to 3 concurrent; decode cap 1400 → 900 px; NSCache 140 → 56 MB.
 
-**To verify:** import your real provider and watch **Debug navigator → Memory**
-in Xcode while it loads. It should settle well under ~400 MB and not spike into
-the GBs during the "guide" phase. If it still climbs, tell me the peak figure and
-the provider's rough size (channels / VOD count).
+Plus: repository id-maps + browse query caches store `Int` indices, not struct
+copies (−~60 MB steady state).
 
-Channels and VOD are naturally bounded (tens of MB); the EPG was the only part
-that scaled with the feed, and it's fixed. A SQLite-backed catalog is still an
-option if you want belt-and-braces for a pathologically huge VOD library —
-say the word.
+Estimated import peak now ~350–450 MB (was ~1.5–2 GB); steady state ~200 MB.
+
+**To verify:** import your real provider with **Debug navigator → Memory** open.
+Watch the "movies" and "guide" phases especially. If it still climbs past ~1 GB,
+tell me the peak figure and the provider's rough size (channels / VOD count) —
+the next step is the catalog into SQLite so memory stays flat regardless of size,
+and I'll do that.
 
 There's no Swift toolchain on the machine these were written on, so a couple of
 newer APIs are un-compiled. If `⌘B` shows red, send me the errors — the likely
