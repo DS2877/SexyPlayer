@@ -4,49 +4,78 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aeria+ — IPTV Player for Apple TV</title>
+<meta name="description" content="Aeria+ turns your own IPTV subscription into a modern streaming experience on Apple TV. Player only — bring your own source.">
 <style>
   :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
   body {
     font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    max-width: 660px; margin: 0 auto; padding: 72px 24px; text-align: center;
-    color: #e9eaec;
-    background: radial-gradient(60% 45% at 50% 32%, #16181d 0%, #0a0b0d 60%, #060607 100%);
+    margin: 0; padding: 0; color: #e9eaec;
+    background: radial-gradient(70% 50% at 50% 26%, #16181d 0%, #0a0b0d 62%, #060607 100%);
     min-height: 100vh;
   }
+  main { max-width: 680px; margin: 0 auto; padding: 76px 24px 56px; text-align: center; }
   .eyebrow {
-    font-size: 13px; letter-spacing: .22em; font-weight: 700;
-    color: #5CACFF; margin-bottom: 10px;
+    font-size: 12px; letter-spacing: .24em; font-weight: 700;
+    color: #5CACFF; margin-bottom: 12px;
   }
   h1.wordmark {
     font: 800 clamp(52px, 13vw, 88px)/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
-    letter-spacing: -.015em; margin: 0 0 20px;
+    letter-spacing: -.015em; margin: 0 0 18px;
     background: linear-gradient(180deg, #F8F9FB 0%, #ADB2BA 38%, #767C86 50%, #EEF0F3 57%, #C2C6CD 78%, #9DA2AA 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
     filter: drop-shadow(0 6px 18px rgba(0,0,0,.5));
   }
-  p { max-width: 500px; margin: 12px auto; color: #b9bcc2; }
-  .fine { font-size: 14px; color: #7c7f86; margin-top: 22px; }
+  .lede { max-width: 460px; margin: 0 auto 8px; color: #c6c9cf; font-size: 19px; }
+  .sub { max-width: 460px; margin: 0 auto; color: #9297a0; }
+
+  ul.features {
+    list-style: none; padding: 0; margin: 44px auto 0; max-width: 520px;
+    display: grid; gap: 14px; text-align: left;
+  }
+  ul.features li {
+    background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06);
+    border-radius: 12px; padding: 14px 18px; color: #cfd2d8; font-size: 15.5px;
+  }
+  ul.features li b { color: #f0f1f3; font-weight: 600; }
+
+  .fine { font-size: 13.5px; color: #7c7f86; max-width: 520px; margin: 40px auto 0; }
   a { color: #5CACFF; text-decoration: none; }
-  nav { margin-top: 36px; font-size: 15px; }
+  nav { margin-top: 30px; font-size: 15px; }
+  nav a { margin: 0 10px; }
 </style>
 </head>
 <body>
-  <div class="eyebrow">PREMIUM IPTV PLAYER</div>
+<main>
+  <div class="eyebrow">PREMIUM IPTV PLAYER · APPLE TV</div>
   <h1 class="wordmark">Aeria+</h1>
-  <p>Built for picture, for sound, and for the silence between them.<br>
-     We provide the player. You choose what to watch.</p>
+  <p class="lede">Built for picture, for sound, and for the silence between them.</p>
+  <p class="sub">We provide the player. You choose what to watch.</p>
+
+  <ul class="features">
+    <li><b>Bring your own source.</b> Connect with Xtream Codes or an M3U playlist URL — stored securely on your Apple TV, sent only to your provider.</li>
+    <li><b>It cleans up the mess.</b> "SE&nbsp;|&nbsp;TV4&nbsp;HD&nbsp;[1080p]" becomes "TV4". Episodes fall into seasons. Language, quality and year are detected.</li>
+    <li><b>A cinematic home.</b> A rotating hero, Continue&nbsp;Watching, a real TV guide, posters and cast from The&nbsp;Movie&nbsp;Database.</li>
+    <li><b>Search the way you think.</b> "A scary film with Swedish subtitles" — it works out what you mean and shows the filters it applied.</li>
+    <li><b>Private by design.</b> No account. No analytics. No ads. Nothing is sent anywhere except your own provider.</li>
+  </ul>
+
   <p class="fine">
-    Aeria+ does not provide, host, or control any channels or content. You connect
-    an IPTV service you already subscribe to. We take no responsibility for content
-    that third parties choose to view through the player.
+    Aeria+ is a player only. It does not provide, host, or control any channels,
+    streams, or media, and it is not affiliated with any IPTV service. We take no
+    responsibility for content that third parties choose to view through the player.
   </p>
+
   <nav>
-    <a href="privacy-policy.html">Privacy Policy</a> &nbsp;·&nbsp;
-    <a href="support.html">Support</a>
+    <a href="privacy-policy.html">Privacy Policy</a> ·
+    <a href="support.html">Support</a> ·
+    <a href="mailto:info@aeriaplus.se">info@aeriaplus.se</a>
   </nav>
-  <p class="fine" style="margin-top:40px">
+
+  <p class="fine" style="margin-top:28px">
     This product uses the TMDB API but is not endorsed or certified by
     <a href="https://www.themoviedb.org">TMDB</a>.
   </p>
+</main>
 </body>
 </html>

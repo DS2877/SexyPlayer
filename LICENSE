@@ -1,0 +1,18 @@
+Copyright (c) 2026 Philip Klingstedt. All rights reserved.
+
+This repository is source-available for transparency and review. It is NOT
+open-source software.
+
+You may view and clone this repository. You may not copy, modify, distribute,
+sublicense, or use this code or any substantial portion of it — in source or
+compiled form — to build, publish, or distribute another application or product,
+without prior written permission from the copyright holder.
+
+The "Aeria+" name and marks are not licensed.
+
+Third-party components retain their own licenses:
+  - VLCKitSPM / VLCKit — LGPL / MPL (see the package)
+  - Content played through the app is supplied by the user's own IPTV service and
+    is not part of this project.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
