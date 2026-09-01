@@ -503,9 +503,10 @@ public final class CatalogDatabase: @unchecked Sendable {
                 SELECT g.genre AS genre, count(*) AS n FROM series_genre g
                     JOIN series s ON s.id = g.series_id WHERE \(clause) GROUP BY g.genre
             ) GROUP BY genre ORDER BY total DESC
-            """, params + params) { (rawGenre: $0.string(0), tally: $0.int(1)) }
-            return rows.compactMap { row in
-                Genre(rawValue: row.rawGenre).map { GenreTally(genre: $0, count: row.tally) }
+            """, params + params) { row in (rawGenre: row.string(0), tally: row.int(1)) }
+            return rows.compactMap { row -> GenreTally? in
+                guard let genre = Genre(rawValue: row.rawGenre) else { return nil }
+                return GenreTally(genre: genre, count: row.tally)
             }
         }
     }
