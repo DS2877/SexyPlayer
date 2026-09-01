@@ -49,6 +49,22 @@ struct ChannelDetailView: View {
                     guard let epgID = channel.epgID else { return nil }
                     return await env.repository.nowPlaying(forEPGID: epgID, at: .now)?.title
                 },
+                nowTexts: { channels in
+                    // One windowed query for the whole page of the zap list.
+                    let now = Date()
+                    let window = DateInterval(start: now.addingTimeInterval(-4 * 3600),
+                                              end: now.addingTimeInterval(4 * 3600))
+                    let epg = await env.repository.epgIndex(
+                        forEPGIDs: channels.compactMap(\.epgID), in: window
+                    )
+                    var out: [CatalogID: String] = [:]
+                    for channel in channels {
+                        guard let epgID = channel.epgID,
+                              let event = epg.nowPlaying(forChannel: epgID, at: now) else { continue }
+                        out[channel.id] = event.title
+                    }
+                    return out
+                },
                 preferredAudio: env.preferences.preferences.preferredAudioLanguages,
                 preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
             ) { id, kind, position, duration in

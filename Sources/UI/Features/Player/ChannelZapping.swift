@@ -59,7 +59,10 @@ struct ChannelBanner: View {
 /// Menu button closes it.
 struct ChannelZapPanel: View {
     let lineup: ChannelLineup
-    var nowText: (@MainActor (Channel) async -> String?)?
+    /// Resolves "on now" for a page of channels in one go. One lookup per
+    /// channel would be 60 round-trips to the store and the text would trickle
+    /// in row by row.
+    var nowTexts: (@MainActor ([Channel]) async -> [CatalogID: String])?
     let onPick: (Channel) -> Void
     let onClose: () -> Void
 
@@ -99,10 +102,8 @@ struct ChannelZapPanel: View {
         }
         .onExitCommand { onClose() }
         .task {
-            guard let nowText else { return }
-            for channel in lineup.channels.prefix(60) {
-                if let text = await nowText(channel) { nowByID[channel.id] = text }
-            }
+            guard let nowTexts else { return }
+            nowByID = await nowTexts(Array(lineup.channels.prefix(80)))
         }
     }
 

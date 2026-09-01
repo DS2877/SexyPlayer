@@ -13,6 +13,8 @@ struct PlayerScreen: View {
     var makePlayback: (@MainActor (Channel) async -> PlaybackItem?)? = nil
     /// "Now playing" text for the channel banner, if EPG is available.
     var nowText: (@MainActor (Channel) async -> String?)? = nil
+    /// Batched "on now" for the zap panel's visible channels.
+    var nowTexts: (@MainActor ([Channel]) async -> [CatalogID: String])? = nil
     /// The viewer's language preferences, applied to the stream's tracks.
     var preferredAudio: [Language] = []
     var preferredSubtitle: Language? = nil
@@ -93,7 +95,7 @@ struct PlayerScreen: View {
             if let lineup = currentLineup {
                 ChannelZapPanel(
                     lineup: lineup,
-                    nowText: nowText,
+                    nowTexts: nowTexts,
                     onPick: { channel in
                         showChannelPanel = false
                         switchTo(channel)
