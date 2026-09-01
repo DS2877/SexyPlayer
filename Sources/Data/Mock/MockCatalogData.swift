@@ -134,30 +134,48 @@ public enum MockCatalogData {
         RawSeriesEpisode(providerKey: "e-ranger-s01e03", name: "The Lone Ranger - Season 1 Episode 3 - The Lone Ranger's Triumph", groupTitle: "Series | Western", logo: nil, streamURL: "https://example.com/series/ranger/s01e03.mp4", plot: "The hunt for Butch Cavendish reaches its end at Bryant's Gap."),
     ]
 
-    // MARK: - EPG (built relative to `now` so "Tonight" always has data)
+    // MARK: - EPG
+    //
+    // Anchored to `now` and generated forwards + backwards so that whenever the
+    // app is opened there is always a programme "on now" on every listed channel,
+    // and the guide has a full evening ahead.
 
     static func epg(now: Date) -> [RawEPGEvent] {
         let cal = Calendar(identifier: .gregorian)
-        let startOfEvening = cal.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+        // Start each channel's grid on the hour, six hours before now.
+        let topOfHour = cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: now)) ?? now
+        let gridStart = cal.date(byAdding: .hour, value: -6, to: topOfHour) ?? now
 
-        func slots(channelID: String, titles: [String]) -> [RawEPGEvent] {
+        func slots(_ channelID: String, _ titles: [String]) -> [RawEPGEvent] {
             var events: [RawEPGEvent] = []
-            var cursor = cal.date(byAdding: .hour, value: -2, to: startOfEvening) ?? startOfEvening
-            for title in titles {
-                let end = cal.date(byAdding: .minute, value: 60, to: cursor) ?? cursor
-                events.append(RawEPGEvent(channelID: channelID, title: title, subtitle: nil,
-                                          description: "\(title) on \(channelID).",
-                                          start: cursor, stop: end, category: nil))
-                cursor = end
+            var cursor = gridStart
+            // Repeat the block so the grid runs ~18h forward from gridStart.
+            for pass in 0..<3 {
+                for (i, title) in titles.enumerated() {
+                    let end = cal.date(byAdding: .minute, value: 60, to: cursor) ?? cursor
+                    events.append(RawEPGEvent(
+                        channelID: channelID, title: title,
+                        subtitle: (i == 0 && pass == 1) ? "New episode" : nil,
+                        description: "\(title) — \(channelID).",
+                        start: cursor, stop: end, category: nil))
+                    cursor = end
+                }
             }
             return events
         }
 
         return
-            slots(channelID: "svt1.se", titles: ["Gomorron Sverige", "Rapport", "Aktuellt", "Uppdrag granskning", "Nyheter", "Dokument inifrån"]) +
-            slots(channelID: "tv4.se", titles: ["Nyhetsmorgon", "Efter fem", "Nyheterna", "Bäst i test", "Farmen", "Brottsjournalen"]) +
-            slots(channelID: "kanal5.se", titles: ["Simpsons", "Friends", "Long Way Up", "MasterChef", "Alone", "Gordon Ramsay"]) +
-            slots(channelID: "bbc1.uk", titles: ["Breakfast", "Bargain Hunt", "BBC News", "EastEnders", "Planet Earth III", "Match of the Day"]) +
-            slots(channelID: "natgeo", titles: ["Car SOS", "Air Crash Investigation", "Drain the Oceans", "Cosmos", "Wicked Tuna", "Science of Stupid"])
+            slots("svt1.se", ["Gomorron Sverige", "Rapport", "Go'kväll", "Uppdrag granskning", "Aktuellt", "Dokument inifrån"]) +
+            slots("svt2.se", ["Vetenskapens värld", "Nordisk krimi", "Babel", "Sportnytt", "Fråga doktorn", "Kulturstudion"]) +
+            slots("tv4.se", ["Nyhetsmorgon", "Efter fem", "Nyheterna", "Bäst i test", "Farmen", "Brottsjournalen"]) +
+            slots("kanal5.se", ["The Simpsons", "Friends", "Long Way Up", "MasterChef", "Alone", "Gordon Ramsay's 24 Hours to Hell"]) +
+            slots("tv6.se", ["How I Met Your Mother", "Brooklyn Nine-Nine", "NCIS", "Family Guy", "Robot Chicken", "American Dad"]) +
+            slots("bbc1.uk", ["Breakfast", "Bargain Hunt", "BBC News at One", "EastEnders", "Planet Earth III", "Match of the Day"]) +
+            slots("bbcnews.uk", ["BBC News", "Business Today", "HARDtalk", "The Context", "Newsnight", "The World Tonight"]) +
+            slots("cnni.us", ["CNN Newsroom", "Connect the World", "Amanpour", "Quest Means Business", "The Lead", "Anderson Cooper 360"]) +
+            slots("natgeo", ["Car SOS", "Air Crash Investigation", "Drain the Oceans", "Cosmos", "Wicked Tuna", "Science of Stupid"]) +
+            slots("discovery", ["How It's Made", "Gold Rush", "Deadliest Catch", "MythBusters", "Street Outlaws", "Expedition Unknown"]) +
+            slots("eurosport1.se", ["Cycling: Giro Stage 12", "Snooker", "Tennis: ATP Highlights", "Athletics", "Motorsport", "Ski Classics"]) +
+            slots("nrk1.no", ["Dagsrevyen", "Norge Rundt", "Nytt på nytt", "Beat for Beat", "Debatten", "Kveldsnytt"])
     }
 }
