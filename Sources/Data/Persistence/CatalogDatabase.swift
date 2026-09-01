@@ -1,14 +1,19 @@
 import Foundation
 
-/// The catalog store. One SQLite connection, owned by this `actor` and never
-/// handed out, so all access is serialised without locks. `SQLiteCatalogRepository`
-/// reads through it; `CatalogWriter` streams an import into it.
+/// The catalog store. Two SQLite connections to the same file: a **writer**
+/// (serial `writerQueue`) that the import owns, and a **reader** (serial
+/// `readerQueue`, `PRAGMA query_only`) that every screen queries through. WAL
+/// mode lets the reader serve a consistent snapshot while the import commits, so
+/// browsing stays responsive mid-import.
 ///
-/// Every read takes an explicit `CatalogScope` (adult / region visibility) rather
-/// than holding that state here — the repository layer owns it.
-public actor CatalogDatabase {
+/// `@unchecked Sendable`: each connection is touched only from its own serial
+/// queue, and the class holds no other mutable state.
+public final class CatalogDatabase: @unchecked Sendable {
 
-    private let connection: SQLiteConnection
+    private let writer: SQLiteConnection
+    private let reader: SQLiteConnection
+    private let writerQueue = DispatchQueue(label: "se.aeriaplus.catalog.write")
+    private let readerQueue = DispatchQueue(label: "se.aeriaplus.catalog.read")
 
     /// Adult / region visibility applied to a query as `WHERE` clauses.
     public struct Scope: Sendable, Equatable {
@@ -24,8 +29,9 @@ public actor CatalogDatabase {
     // MARK: - Lifecycle
 
     public init(path: URL) throws {
-        connection = try SQLiteConnection(path: path.path)
-        try CatalogSchema.migrate(connection)
+        writer = try SQLiteConnection(path: path.path, role: .writer)
+        try CatalogSchema.migrate(writer)
+        reader = try SQLiteConnection(path: path.path, role: .reader)
     }
 
     /// Open (creating if needed) the catalog store in Application Support,
@@ -42,64 +48,96 @@ public actor CatalogDatabase {
 
         for url in candidates {
             if let database = try? CatalogDatabase(path: url) { return database }
-            try? fm.removeItem(at: url)   // a corrupt file — drop it and retry
+            for suffix in ["", "-wal", "-shm"] {
+                try? fm.removeItem(at: URL(fileURLWithPath: url.path + suffix))
+            }
             if let database = try? CatalogDatabase(path: url) { return database }
         }
-        // Every location failed — a unique scratch file is the last resort.
         return try! CatalogDatabase(path: fm.temporaryDirectory
             .appendingPathComponent("aeria-catalog-\(UUID().uuidString).sqlite3"))
     }
 
+    // MARK: - Queue plumbing
+
+    private func read<T: Sendable>(_ body: @escaping @Sendable (SQLiteConnection) throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            readerQueue.async {
+                do { continuation.resume(returning: try body(self.reader)) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
+    private func write<T: Sendable>(_ body: @escaping @Sendable (SQLiteConnection) throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            writerQueue.async {
+                do { continuation.resume(returning: try body(self.writer)) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
     // MARK: - Meta
-
-    public func metaValue(_ key: String) throws -> String? {
-        try connection.queryOne("SELECT value FROM meta WHERE key = ?", [.text(key)]) { $0.stringOrNil(0) } ?? nil
-    }
-
-    public func setMeta(_ key: String, _ value: String?) throws {
-        try connection.run(
-            "INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            [.text(key), SQLiteValue(value)]
-        )
-    }
-
-    private func rawMeta(_ key: String) -> String? {
-        guard let outer = try? metaValue(key) else { return nil }
-        return outer
-    }
-
-    public func intMeta(_ key: String) -> Int {
-        guard let text = rawMeta(key), let value = Int(text) else { return 0 }
-        return value
-    }
-
-    /// A completed import exists for this provider.
-    public func isReady(providerID: String) -> Bool {
-        rawMeta(MetaKey.providerID) == providerID && intMeta(MetaKey.importComplete) == 1
-    }
-
-    /// A completed import exists for whichever provider was last imported.
-    public func importIsComplete() -> Bool {
-        intMeta(MetaKey.importComplete) == 1 && rawMeta(MetaKey.providerID) != nil
-    }
-
-    public func loadedProviderID() -> String? {
-        rawMeta(MetaKey.providerID)
-    }
-
-    /// When the current catalog finished importing, if ever.
-    public func importedAt() -> Date? {
-        rawMeta(MetaKey.importedAt).flatMap(Double.init).map { Date(timeIntervalSince1970: $0) }
-    }
 
     public enum MetaKey {
         public static let providerID = "provider_id"
         public static let importComplete = "import_complete"
         public static let importedAt = "imported_at"
+        public static let importGeneration = "import_gen"
         public static let channelCount = "channel_count"
         public static let movieCount = "movie_count"
         public static let seriesCount = "series_count"
         public static let epgCount = "epg_count"
+    }
+
+    public func metaValue(_ key: String) async throws -> String? {
+        try await read { conn in
+            try conn.queryOne("SELECT value FROM meta WHERE key = ?", [.text(key)]) { $0.stringOrNil(0) } ?? nil
+        }
+    }
+
+    public func setMeta(_ key: String, _ value: String?) async throws {
+        try await write { conn in
+            try conn.run(
+                "INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [.text(key), SQLiteValue(value)]
+            )
+        }
+    }
+
+    private func rawMeta(_ key: String) async -> String? {
+        guard let outer = try? await metaValue(key) else { return nil }
+        return outer
+    }
+
+    public func intMeta(_ key: String) async -> Int {
+        guard let text = await rawMeta(key), let value = Int(text) else { return 0 }
+        return value
+    }
+
+    /// A completed import exists for this provider.
+    public func isReady(providerID: String) async -> Bool {
+        await rawMeta(MetaKey.providerID) == providerID && (await intMeta(MetaKey.importComplete)) == 1
+    }
+
+    /// A completed import exists for whichever provider was last imported.
+    public func importIsComplete() async -> Bool {
+        (await intMeta(MetaKey.importComplete)) == 1 && (await rawMeta(MetaKey.providerID)) != nil
+    }
+
+    public func loadedProviderID() async -> String? {
+        await rawMeta(MetaKey.providerID)
+    }
+
+    /// When the current catalog finished importing, if ever.
+    public func importedAt() async -> Date? {
+        guard let text = await rawMeta(MetaKey.importedAt), let seconds = Double(text) else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
+    /// The generation number the next import should stamp its rows with.
+    public func nextGeneration() async -> Int {
+        (await intMeta(MetaKey.importGeneration)) + 1
     }
 
     // MARK: - Column lists (SELECT order must match the decoders below)
@@ -212,141 +250,162 @@ public actor CatalogDatabase {
         )
     }
 
-    // MARK: - Scope predicate
-
-    /// `(clause, params)` for the adult / region gate, always safe to `AND` in.
-    private func scopeClause(_ scope: Scope) -> (String, [SQLiteValue]) {
-        ("(? OR is_adult = 0) AND (? OR is_relevant = 1)",
-         [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)])
-    }
-
     // MARK: - Facets
 
-    public func channelCategories() throws -> [String] {
-        let names = try connection.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) }
-        return ["All"] + names
+    public func channelCategories() async throws -> [String] {
+        try await read { conn in
+            ["All"] + conn.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) }
+        }
     }
 
-    public func presentGenres() throws -> [Genre] {
-        let raw = Set(try connection.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
-                      + connection.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
-        return Genre.allCases.filter { raw.contains($0.rawValue) }
+    public func presentGenres() async throws -> [Genre] {
+        try await read { conn in
+            let raw = Set(try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
+                          + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
+            return Genre.allCases.filter { raw.contains($0.rawValue) }
+        }
     }
 
-    public func presentLanguages(subtitles: Bool) throws -> [Language] {
+    public func presentLanguages(subtitles: Bool) async throws -> [Language] {
         let column = subtitles ? "sub_langs" : "audio_langs"
-        let rows = try connection.query(
-            "SELECT \(column) FROM movie WHERE \(column) <> '' " +
-            "UNION SELECT \(column) FROM series WHERE \(column) <> ''"
-        ) { $0.string(0) }
-        var codes = Set<String>()
-        for wrapped in rows { for part in wrapped.split(separator: ",") { codes.insert(String(part)) } }
-        return codes.compactMap { Language(code: $0) }.sorted()
+        return try await read { conn in
+            let rows = try conn.query(
+                "SELECT \(column) FROM movie WHERE \(column) <> '' " +
+                "UNION SELECT \(column) FROM series WHERE \(column) <> ''"
+            ) { $0.string(0) }
+            var codes = Set<String>()
+            for wrapped in rows { for part in wrapped.split(separator: ",") { codes.insert(String(part)) } }
+            return codes.compactMap { Language(code: $0) }.sorted()
+        }
     }
 
     // MARK: - Counts
 
-    public func movieCount(_ filter: CatalogFilter, _ scope: Scope) throws -> Int {
-        let (where_, params) = movieWhere(filter, scope)
-        return try connection.scalarInt("SELECT count(*) FROM movie WHERE \(where_)", params)
+    public func movieCount(_ filter: CatalogFilter, _ scope: Scope) async throws -> Int {
+        try await read { conn in
+            let (where_, params) = Self.movieWhere(filter, scope)
+            return try conn.scalarInt("SELECT count(*) FROM movie WHERE \(where_)", params)
+        }
     }
 
-    public func seriesCount(_ filter: CatalogFilter, _ scope: Scope) throws -> Int {
-        let (where_, params) = seriesWhere(filter, scope)
-        return try connection.scalarInt("SELECT count(*) FROM series WHERE \(where_)", params)
+    public func seriesCount(_ filter: CatalogFilter, _ scope: Scope) async throws -> Int {
+        try await read { conn in
+            let (where_, params) = Self.seriesWhere(filter, scope)
+            return try conn.scalarInt("SELECT count(*) FROM series WHERE \(where_)", params)
+        }
     }
 
-    public func channelCount(category: String?, _ scope: Scope) throws -> Int {
-        let (where_, params) = channelWhere(category: category, scope)
-        return try connection.scalarInt("SELECT count(*) FROM channel WHERE \(where_)", params)
+    public func channelCount(category: String?, _ scope: Scope) async throws -> Int {
+        try await read { conn in
+            let (where_, params) = Self.channelWhere(category: category, scope)
+            return try conn.scalarInt("SELECT count(*) FROM channel WHERE \(where_)", params)
+        }
     }
 
     // MARK: - Paged lists
 
-    public func movies(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) throws -> [Movie] {
-        let (where_, params) = movieWhere(filter, scope)
-        let sql = "SELECT \(Self.movieColumns) FROM movie WHERE \(where_) " +
-                  "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
-        return try connection.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))], Self.decodeMovie)
-    }
-
-    public func series(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) throws -> [Series] {
-        let (where_, params) = seriesWhere(filter, scope)
-        let sql = "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) " +
-                  "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
-        return try connection.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))]) {
-            Self.decodeSeries($0, seasons: [])
+    public func movies(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) async throws -> [Movie] {
+        try await read { conn in
+            let (where_, params) = Self.movieWhere(filter, scope)
+            let sql = "SELECT \(Self.movieColumns) FROM movie WHERE \(where_) " +
+                      "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
+            return try conn.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))], Self.decodeMovie)
         }
     }
 
-    public func channels(category: String?, sort: ChannelSort, _ scope: Scope, page: Int, pageSize: Int) throws -> [Channel] {
-        let (where_, params) = channelWhere(category: category, scope)
-        let order: String
-        switch sort {
-        case .number:  order = "(recent_rank IS NULL), recent_rank, region_priority, sort_index, name_fold"
-        case .nameAsc: order = "name_fold, sort_index"
+    public func series(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) async throws -> [Series] {
+        try await read { conn in
+            let (where_, params) = Self.seriesWhere(filter, scope)
+            let sql = "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) " +
+                      "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
+            return try conn.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))]) {
+                Self.decodeSeries($0, seasons: [])
+            }
         }
-        let sql = "SELECT \(Self.channelColumns) FROM channel WHERE \(where_) ORDER BY \(order) LIMIT ? OFFSET ?"
-        return try connection.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))], Self.decodeChannel)
+    }
+
+    public func channels(category: String?, sort: ChannelSort, _ scope: Scope, page: Int, pageSize: Int) async throws -> [Channel] {
+        try await read { conn in
+            let (where_, params) = Self.channelWhere(category: category, scope)
+            let order: String
+            switch sort {
+            case .number:  order = "(recent_rank IS NULL), recent_rank, region_priority, sort_index, name_fold"
+            case .nameAsc: order = "name_fold, sort_index"
+            }
+            let sql = "SELECT \(Self.channelColumns) FROM channel WHERE \(where_) ORDER BY \(order) LIMIT ? OFFSET ?"
+            return try conn.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))], Self.decodeChannel)
+        }
     }
 
     // MARK: - Ordered title columns (for the A–Z rails)
 
-    public func movieTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) throws -> [String] {
-        let (where_, params) = movieWhere(filter, scope)
-        return try connection.query(
-            "SELECT title FROM movie WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
-        ) { $0.string(0) }
+    public func movieTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) async throws -> [String] {
+        try await read { conn in
+            let (where_, params) = Self.movieWhere(filter, scope)
+            return try conn.query(
+                "SELECT title FROM movie WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
+            ) { $0.string(0) }
+        }
     }
 
-    public func seriesTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) throws -> [String] {
-        let (where_, params) = seriesWhere(filter, scope)
-        return try connection.query(
-            "SELECT title FROM series WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
-        ) { $0.string(0) }
+    public func seriesTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) async throws -> [String] {
+        try await read { conn in
+            let (where_, params) = Self.seriesWhere(filter, scope)
+            return try conn.query(
+                "SELECT title FROM series WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
+            ) { $0.string(0) }
+        }
     }
 
-    public func channelNamesInOrder(category: String?, _ scope: Scope) throws -> [String] {
-        let (where_, params) = channelWhere(category: category, scope)
-        return try connection.query(
-            "SELECT name FROM channel WHERE \(where_) ORDER BY name_fold, sort_index", params
-        ) { $0.string(0) }
+    public func channelNamesInOrder(category: String?, _ scope: Scope) async throws -> [String] {
+        try await read { conn in
+            let (where_, params) = Self.channelWhere(category: category, scope)
+            return try conn.query(
+                "SELECT name FROM channel WHERE \(where_) ORDER BY name_fold, sort_index", params
+            ) { $0.string(0) }
+        }
     }
 
     // MARK: - By id
 
-    public func movie(id: CatalogID) throws -> Movie? {
-        try connection.queryOne("SELECT \(Self.movieColumns) FROM movie WHERE id = ?", [.text(id.rawValue)], Self.decodeMovie)
+    public func movie(id: CatalogID) async throws -> Movie? {
+        try await read { conn in
+            try conn.queryOne("SELECT \(Self.movieColumns) FROM movie WHERE id = ?", [.text(id.rawValue)], Self.decodeMovie)
+        }
     }
 
-    public func channel(id: CatalogID) throws -> Channel? {
-        try connection.queryOne("SELECT \(Self.channelColumns) FROM channel WHERE id = ?", [.text(id.rawValue)], Self.decodeChannel)
+    public func channel(id: CatalogID) async throws -> Channel? {
+        try await read { conn in
+            try conn.queryOne("SELECT \(Self.channelColumns) FROM channel WHERE id = ?", [.text(id.rawValue)], Self.decodeChannel)
+        }
     }
 
-    public func series(id: CatalogID) throws -> Series? {
-        guard var show = try connection.queryOne(
-            "SELECT \(Self.seriesColumns) FROM series WHERE id = ?", [.text(id.rawValue)]
-        ) { Self.decodeSeries($0, seasons: []) } else { return nil }
-        show.seasons = try seasons(seriesID: id)
-        return show
+    public func series(id: CatalogID) async throws -> Series? {
+        try await read { conn in
+            guard var show = try conn.queryOne(
+                "SELECT \(Self.seriesColumns) FROM series WHERE id = ?", [.text(id.rawValue)]
+            ) { Self.decodeSeries($0, seasons: []) } else { return nil }
+            show.seasons = try Self.loadSeasons(conn, seriesID: id)
+            return show
+        }
     }
 
-    public func moviesByID(_ ids: [CatalogID]) throws -> [Movie] {
-        try fetchByIDs(ids, table: "movie", columns: Self.movieColumns, decode: Self.decodeMovie)
+    public func moviesByID(_ ids: [CatalogID]) async throws -> [Movie] {
+        try await read { conn in try Self.fetchByIDs(conn, ids, table: "movie", columns: Self.movieColumns, decode: Self.decodeMovie) }
     }
 
-    public func channelsByID(_ ids: [CatalogID]) throws -> [Channel] {
-        try fetchByIDs(ids, table: "channel", columns: Self.channelColumns, decode: Self.decodeChannel)
+    public func channelsByID(_ ids: [CatalogID]) async throws -> [Channel] {
+        try await read { conn in try Self.fetchByIDs(conn, ids, table: "channel", columns: Self.channelColumns, decode: Self.decodeChannel) }
     }
 
-    public func seriesByID(_ ids: [CatalogID]) throws -> [Series] {
-        try fetchByIDs(ids, table: "series", columns: Self.seriesColumns) { Self.decodeSeries($0, seasons: []) }
+    public func seriesByID(_ ids: [CatalogID]) async throws -> [Series] {
+        try await read { conn in try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { Self.decodeSeries($0, seasons: []) } }
     }
 
-    private func fetchByIDs<T>(_ ids: [CatalogID], table: String, columns: String, decode: (SQLiteRow) -> T) throws -> [T] {
+    private static func fetchByIDs<T>(_ conn: SQLiteConnection, _ ids: [CatalogID], table: String, columns: String, decode: (SQLiteRow) throws -> T) throws -> [T] {
         guard !ids.isEmpty else { return [] }
         let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
-        return try connection.query(
+        return try conn.query(
             "SELECT \(columns) FROM \(table) WHERE id IN (\(placeholders))",
             ids.map { SQLiteValue.text($0.rawValue) }, decode
         )
@@ -354,10 +413,10 @@ public actor CatalogDatabase {
 
     // MARK: - Seasons / episodes
 
-    public func seasons(seriesID: CatalogID) throws -> [Season] {
-        let episodes = try connection.query(
-            "SELECT \(Self.episodeColumns) FROM episode WHERE series_id = ? ORDER BY season, episode",
-            [.text(seriesID.rawValue)], Self.decodeEpisode
+    private static func loadSeasons(_ conn: SQLiteConnection, seriesID: CatalogID) throws -> [Season] {
+        let episodes = try conn.query(
+            "SELECT \(episodeColumns) FROM episode WHERE series_id = ? ORDER BY season, episode",
+            [.text(seriesID.rawValue)], decodeEpisode
         )
         let bySeason = Dictionary(grouping: episodes, by: { $0.seasonNumber })
         return bySeason.keys.sorted().map { number in
@@ -365,241 +424,290 @@ public actor CatalogDatabase {
         }
     }
 
-    public func episode(id: CatalogID) throws -> Episode? {
-        try connection.queryOne(
-            "SELECT \(Self.episodeColumns) FROM episode WHERE id = ?", [.text(id.rawValue)], Self.decodeEpisode
-        )
+    public func seasons(seriesID: CatalogID) async throws -> [Season] {
+        try await read { conn in try Self.loadSeasons(conn, seriesID: seriesID) }
     }
 
-    public func episodesByID(_ ids: [CatalogID]) throws -> [Episode] {
-        try fetchByIDs(ids, table: "episode", columns: Self.episodeColumns, decode: Self.decodeEpisode)
-    }
-
-    /// Series for the given ids, each with its full season / episode tree.
-    public func seriesWithSeasons(ids: [CatalogID]) throws -> [Series] {
-        try seriesByID(ids).map { shell in
-            var full = shell
-            full.seasons = (try? seasons(seriesID: shell.id)) ?? []
-            return full
+    public func episode(id: CatalogID) async throws -> Episode? {
+        try await read { conn in
+            try conn.queryOne("SELECT \(Self.episodeColumns) FROM episode WHERE id = ?", [.text(id.rawValue)], Self.decodeEpisode)
         }
     }
 
-    public func hasEpisodes(seriesID: CatalogID) throws -> Bool {
-        try connection.scalarInt("SELECT count(*) FROM episode WHERE series_id = ? LIMIT 1", [.text(seriesID.rawValue)]) > 0
+    public func episodesByID(_ ids: [CatalogID]) async throws -> [Episode] {
+        try await read { conn in try Self.fetchByIDs(conn, ids, table: "episode", columns: Self.episodeColumns, decode: Self.decodeEpisode) }
+    }
+
+    /// Series for the given ids, each with its full season / episode tree.
+    public func seriesWithSeasons(ids: [CatalogID]) async throws -> [Series] {
+        try await read { conn in
+            try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { Self.decodeSeries($0, seasons: []) }
+                .map { shell in
+                    var full = shell
+                    full.seasons = (try? Self.loadSeasons(conn, seriesID: shell.id)) ?? []
+                    return full
+                }
+        }
+    }
+
+    public func hasEpisodes(seriesID: CatalogID) async throws -> Bool {
+        try await read { conn in
+            try conn.scalarInt("SELECT count(*) FROM episode WHERE series_id = ? LIMIT 1", [.text(seriesID.rawValue)]) > 0
+        }
     }
 
     // MARK: - Recently added
 
-    public func recentlyAddedMovies(limit: Int, _ scope: Scope) throws -> [Movie] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query(
-            "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            params + [.integer(Int64(limit))], Self.decodeMovie
-        )
+    public func recentlyAddedMovies(limit: Int, _ scope: Scope) async throws -> [Movie] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query(
+                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                params + [.integer(Int64(limit))], Self.decodeMovie
+            )
+        }
     }
 
-    public func recentlyAddedSeries(limit: Int, _ scope: Scope) throws -> [Series] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query(
-            "SELECT \(Self.seriesColumns) FROM series WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            params + [.integer(Int64(limit))]
-        ) { Self.decodeSeries($0, seasons: []) }
+    public func recentlyAddedSeries(limit: Int, _ scope: Scope) async throws -> [Series] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query(
+                "SELECT \(Self.seriesColumns) FROM series WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                params + [.integer(Int64(limit))]
+            ) { Self.decodeSeries($0, seasons: []) }
+        }
     }
 
     // MARK: - Genre shelves (Home)
 
-    /// Genres present in the library with their combined movie + series count,
-    /// most first.
-    public func genreCounts(_ scope: Scope) throws -> [(genre: Genre, count: Int)] {
-        let (clause, params) = scopeClause(scope)
-        let rows = try connection.query("""
-        SELECT genre, sum(n) AS total FROM (
-            SELECT g.genre AS genre, count(*) AS n FROM movie_genre g
-                JOIN movie m ON m.id = g.movie_id WHERE \(clause) GROUP BY g.genre
-            UNION ALL
-            SELECT g.genre AS genre, count(*) AS n FROM series_genre g
-                JOIN series s ON s.id = g.series_id WHERE \(clause) GROUP BY g.genre
-        ) GROUP BY genre ORDER BY total DESC
-        """, params + params) { (genre: $0.string(0), count: $0.int(1)) }
-        return rows.compactMap { row in
-            Genre(rawValue: row.genre).map { (genre: $0, count: row.count) }
+    public struct GenreTally: Sendable {
+        public let genre: Genre
+        public let count: Int
+    }
+
+    public func genreCounts(_ scope: Scope) async throws -> [GenreTally] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            let rows = try conn.query("""
+            SELECT genre, sum(n) AS total FROM (
+                SELECT g.genre AS genre, count(*) AS n FROM movie_genre g
+                    JOIN movie m ON m.id = g.movie_id WHERE \(clause) GROUP BY g.genre
+                UNION ALL
+                SELECT g.genre AS genre, count(*) AS n FROM series_genre g
+                    JOIN series s ON s.id = g.series_id WHERE \(clause) GROUP BY g.genre
+            ) GROUP BY genre ORDER BY total DESC
+            """, params + params) { (rawGenre: $0.string(0), tally: $0.int(1)) }
+            return rows.compactMap { row in
+                Genre(rawValue: row.rawGenre).map { GenreTally(genre: $0, count: row.tally) }
+            }
         }
     }
 
-    public func moviesInGenre(_ genre: Genre, _ scope: Scope, limit: Int) throws -> [Movie] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query("""
-        SELECT \(Self.movieColumns) FROM movie
-        WHERE \(clause) AND id IN (SELECT movie_id FROM movie_genre WHERE genre = ?)
-        ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
-        """, params + [.text(genre.rawValue), .integer(Int64(limit))], Self.decodeMovie)
+    public func moviesInGenre(_ genre: Genre, _ scope: Scope, limit: Int) async throws -> [Movie] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query("""
+            SELECT \(Self.movieColumns) FROM movie
+            WHERE \(clause) AND id IN (SELECT movie_id FROM movie_genre WHERE genre = ?)
+            ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
+            """, params + [.text(genre.rawValue), .integer(Int64(limit))], Self.decodeMovie)
+        }
     }
 
-    public func seriesInGenre(_ genre: Genre, _ scope: Scope, limit: Int) throws -> [Series] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query("""
-        SELECT \(Self.seriesColumns) FROM series
-        WHERE \(clause) AND id IN (SELECT series_id FROM series_genre WHERE genre = ?)
-        ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
-        """, params + [.text(genre.rawValue), .integer(Int64(limit))]) { Self.decodeSeries($0, seasons: []) }
+    public func seriesInGenre(_ genre: Genre, _ scope: Scope, limit: Int) async throws -> [Series] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query("""
+            SELECT \(Self.seriesColumns) FROM series
+            WHERE \(clause) AND id IN (SELECT series_id FROM series_genre WHERE genre = ?)
+            ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
+            """, params + [.text(genre.rawValue), .integer(Int64(limit))]) { Self.decodeSeries($0, seasons: []) }
+        }
     }
 
-    /// Movies / series that carry one of `languages` in their audio track.
-    public func moviesInAudioLanguages(_ languages: [Language], _ scope: Scope, limit: Int) throws -> [Movie] {
+    public func moviesInAudioLanguages(_ languages: [Language], _ scope: Scope, limit: Int) async throws -> [Movie] {
         guard !languages.isEmpty else { return [] }
-        let (clause, params) = scopeClause(scope)
-        let langClause = languages.map { _ in "instr(audio_langs, ?) > 0" }.joined(separator: " OR ")
-        return try connection.query(
-            "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND (\(langClause)) " +
-            "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            params + languages.map { SQLiteValue.text(CatalogValues.needle($0)) } + [.integer(Int64(limit))],
-            Self.decodeMovie
-        )
+        return try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            let langClause = languages.map { _ in "instr(audio_langs, ?) > 0" }.joined(separator: " OR ")
+            return try conn.query(
+                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND (\(langClause)) " +
+                "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                params + languages.map { SQLiteValue.text(CatalogValues.needle($0)) } + [.integer(Int64(limit))],
+                Self.decodeMovie
+            )
+        }
     }
 
-    public func moviesInSubtitleLanguage(_ language: Language, _ scope: Scope, limit: Int) throws -> [Movie] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query(
-            "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND instr(sub_langs, ?) > 0 " +
-            "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            params + [.text(CatalogValues.needle(language)), .integer(Int64(limit))], Self.decodeMovie
-        )
+    public func moviesInSubtitleLanguage(_ language: Language, _ scope: Scope, limit: Int) async throws -> [Movie] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query(
+                "SELECT \(Self.movieColumns) FROM movie WHERE \(clause) AND instr(sub_langs, ?) > 0 " +
+                "ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                params + [.text(CatalogValues.needle(language)), .integer(Int64(limit))], Self.decodeMovie
+            )
+        }
     }
 
     // MARK: - Guide
 
-    /// The channels that carry an EPG id, in "for you" order, capped.
-    public func guideChannels(limit: Int, _ scope: Scope) throws -> [Channel] {
-        let (clause, params) = scopeClause(scope)
-        return try connection.query(
-            "SELECT \(Self.channelColumns) FROM channel WHERE \(clause) AND epg_id IS NOT NULL AND epg_id <> '' " +
-            "ORDER BY (recent_rank IS NULL), recent_rank, region_priority, sort_index, name_fold LIMIT ?",
-            params + [.integer(Int64(limit))], Self.decodeChannel
-        )
+    public func guideChannels(limit: Int, _ scope: Scope) async throws -> [Channel] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            return try conn.query(
+                "SELECT \(Self.channelColumns) FROM channel WHERE \(clause) AND epg_id IS NOT NULL AND epg_id <> '' " +
+                "ORDER BY (recent_rank IS NULL), recent_rank, region_priority, sort_index, name_fold LIMIT ?",
+                params + [.integer(Int64(limit))], Self.decodeChannel
+            )
+        }
     }
 
     // MARK: - Search candidates (ranking stays in SearchEngine)
 
-    public func movieCandidates(_ filter: CatalogFilter, _ scope: Scope, limit: Int) throws -> [Movie] {
-        let (where_, params) = movieWhere(filter, scope)
-        return try connection.query(
-            "SELECT \(Self.movieColumns) FROM movie WHERE \(where_) LIMIT ?",
-            params + [.integer(Int64(limit))], Self.decodeMovie
-        )
+    public func movieCandidates(_ filter: CatalogFilter, _ scope: Scope, limit: Int) async throws -> [Movie] {
+        try await read { conn in
+            let (where_, params) = Self.movieWhere(filter, scope)
+            return try conn.query(
+                "SELECT \(Self.movieColumns) FROM movie WHERE \(where_) LIMIT ?",
+                params + [.integer(Int64(limit))], Self.decodeMovie
+            )
+        }
     }
 
-    public func seriesCandidates(_ filter: CatalogFilter, _ scope: Scope, limit: Int) throws -> [Series] {
-        let (where_, params) = seriesWhere(filter, scope)
-        return try connection.query(
-            "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) LIMIT ?",
-            params + [.integer(Int64(limit))]
-        ) { Self.decodeSeries($0, seasons: []) }
+    public func seriesCandidates(_ filter: CatalogFilter, _ scope: Scope, limit: Int) async throws -> [Series] {
+        try await read { conn in
+            let (where_, params) = Self.seriesWhere(filter, scope)
+            return try conn.query(
+                "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) LIMIT ?",
+                params + [.integer(Int64(limit))]
+            ) { Self.decodeSeries($0, seasons: []) }
+        }
     }
 
-    public func channelCandidates(text: String, _ scope: Scope, limit: Int) throws -> [Channel] {
-        let (clause, params) = scopeClause(scope)
-        let needle = text.foldedForSearch()
-        let textClause = needle.isEmpty ? "" : " AND instr(name_fold, ?) > 0"
-        let textParams: [SQLiteValue] = needle.isEmpty ? [] : [.text(needle)]
-        return try connection.query(
-            "SELECT \(Self.channelColumns) FROM channel WHERE \(clause)\(textClause) LIMIT ?",
-            params + textParams + [.integer(Int64(limit))], Self.decodeChannel
-        )
+    public func channelCandidates(text: String, _ scope: Scope, limit: Int) async throws -> [Channel] {
+        try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            let needle = text.foldedForSearch()
+            let textClause = needle.isEmpty ? "" : " AND instr(name_fold, ?) > 0"
+            let textParams: [SQLiteValue] = needle.isEmpty ? [] : [.text(needle)]
+            return try conn.query(
+                "SELECT \(Self.channelColumns) FROM channel WHERE \(clause)\(textClause) LIMIT ?",
+                params + textParams + [.integer(Int64(limit))], Self.decodeChannel
+            )
+        }
     }
 
     // MARK: - "More like this"
 
-    public func similarMovies(to id: CatalogID, genres: [Genre], _ scope: Scope, limit: Int) throws -> [Movie] {
+    public func similarMovies(to id: CatalogID, genres: [Genre], _ scope: Scope, limit: Int) async throws -> [Movie] {
         guard !genres.isEmpty else { return [] }
-        let (clause, params) = scopeClause(scope)
-        let genrePlaceholders = Array(repeating: "?", count: genres.count).joined(separator: ",")
-        let sql = """
-        SELECT \(Self.movieColumns), \
-        (SELECT count(*) FROM movie_genre g WHERE g.movie_id = movie.id AND g.genre IN (\(genrePlaceholders))) AS shared
-        FROM movie WHERE \(clause) AND id <> ? AND shared > 0
-        ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
-        """
-        let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
-        return try connection.query(sql, args, Self.decodeMovie)
+        return try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            let ph = Array(repeating: "?", count: genres.count).joined(separator: ",")
+            let sql = """
+            SELECT \(Self.movieColumns), \
+            (SELECT count(*) FROM movie_genre g WHERE g.movie_id = movie.id AND g.genre IN (\(ph))) AS shared
+            FROM movie WHERE \(clause) AND id <> ? AND shared > 0
+            ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
+            """
+            let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
+            return try conn.query(sql, args, Self.decodeMovie)
+        }
     }
 
-    public func similarSeries(to id: CatalogID, genres: [Genre], _ scope: Scope, limit: Int) throws -> [Series] {
+    public func similarSeries(to id: CatalogID, genres: [Genre], _ scope: Scope, limit: Int) async throws -> [Series] {
         guard !genres.isEmpty else { return [] }
-        let (clause, params) = scopeClause(scope)
-        let genrePlaceholders = Array(repeating: "?", count: genres.count).joined(separator: ",")
-        let sql = """
-        SELECT \(Self.seriesColumns), \
-        (SELECT count(*) FROM series_genre g WHERE g.series_id = series.id AND g.genre IN (\(genrePlaceholders))) AS shared
-        FROM series WHERE \(clause) AND id <> ? AND shared > 0
-        ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
-        """
-        let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
-        return try connection.query(sql, args) { Self.decodeSeries($0, seasons: []) }
+        return try await read { conn in
+            let (clause, params) = Self.scopeClause(scope)
+            let ph = Array(repeating: "?", count: genres.count).joined(separator: ",")
+            let sql = """
+            SELECT \(Self.seriesColumns), \
+            (SELECT count(*) FROM series_genre g WHERE g.series_id = series.id AND g.genre IN (\(ph))) AS shared
+            FROM series WHERE \(clause) AND id <> ? AND shared > 0
+            ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
+            """
+            let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
+            return try conn.query(sql, args) { Self.decodeSeries($0, seasons: []) }
+        }
     }
 
     // MARK: - Artwork seeds (newest first)
 
-    public func artworkSeeds(movieLimit: Int, seriesLimit: Int) throws -> [ArtworkSeed] {
-        let movies = try connection.query(
-            "SELECT id, title, year FROM movie ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            [.integer(Int64(movieLimit))]
-        ) { ArtworkSeed(id: CatalogID(rawValue: $0.string(0)), title: $0.string(1), year: $0.intOrNil(2), isSeries: false) }
-        let series = try connection.query(
-            "SELECT id, title, year FROM series ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
-            [.integer(Int64(seriesLimit))]
-        ) { ArtworkSeed(id: CatalogID(rawValue: $0.string(0)), title: $0.string(1), year: $0.intOrNil(2), isSeries: true) }
-        return movies + series
+    public func artworkSeeds(movieLimit: Int, seriesLimit: Int) async throws -> [ArtworkSeed] {
+        try await read { conn in
+            let movies = try conn.query(
+                "SELECT id, title, year FROM movie ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                [.integer(Int64(movieLimit))]
+            ) { ArtworkSeed(id: CatalogID(rawValue: $0.string(0)), title: $0.string(1), year: $0.intOrNil(2), isSeries: false) }
+            let series = try conn.query(
+                "SELECT id, title, year FROM series ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
+                [.integer(Int64(seriesLimit))]
+            ) { ArtworkSeed(id: CatalogID(rawValue: $0.string(0)), title: $0.string(1), year: $0.intOrNil(2), isSeries: true) }
+            return movies + series
+        }
     }
 
     // MARK: - EPG
 
-    public func epgEvents(epgID: String, in window: DateInterval) throws -> [EPGEvent] {
-        try connection.query(
-            "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id = ? AND stop_at > ? AND start_at < ? ORDER BY start_at",
-            [.text(epgID), .real(window.start.timeIntervalSince1970), .real(window.end.timeIntervalSince1970)],
-            Self.decodeEPG
-        )
+    public func epgEvents(epgID: String, in window: DateInterval) async throws -> [EPGEvent] {
+        try await read { conn in
+            try conn.query(
+                "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id = ? AND stop_at > ? AND start_at < ? ORDER BY start_at",
+                [.text(epgID), .real(window.start.timeIntervalSince1970), .real(window.end.timeIntervalSince1970)],
+                Self.decodeEPG
+            )
+        }
     }
 
-    public func nowPlaying(epgID: String, at date: Date) throws -> EPGEvent? {
+    public func nowPlaying(epgID: String, at date: Date) async throws -> EPGEvent? {
         let t = date.timeIntervalSince1970
-        return try connection.queryOne(
-            "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id = ? AND start_at <= ? AND stop_at > ? ORDER BY start_at DESC LIMIT 1",
-            [.text(epgID), .real(t), .real(t)], Self.decodeEPG
-        )
+        return try await read { conn in
+            try conn.queryOne(
+                "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id = ? AND start_at <= ? AND stop_at > ? ORDER BY start_at DESC LIMIT 1",
+                [.text(epgID), .real(t), .real(t)], Self.decodeEPG
+            )
+        }
     }
 
     /// Every event for the given EPG ids inside the window, grouped by id.
-    public func epgIndex(epgIDs: [String], in window: DateInterval) throws -> [String: [EPGEvent]] {
+    public func epgIndex(epgIDs: [String], in window: DateInterval) async throws -> [String: [EPGEvent]] {
         guard !epgIDs.isEmpty else { return [:] }
-        let placeholders = Array(repeating: "?", count: epgIDs.count).joined(separator: ",")
-        let rows = try connection.query(
-            "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id IN (\(placeholders)) " +
-            "AND stop_at > ? AND start_at < ? ORDER BY channel_epg_id, start_at",
-            epgIDs.map { SQLiteValue.text($0) } +
-            [.real(window.start.timeIntervalSince1970), .real(window.end.timeIntervalSince1970)],
-            Self.decodeEPG
-        )
-        return Dictionary(grouping: rows, by: { $0.channelEPGID })
+        return try await read { conn in
+            let placeholders = Array(repeating: "?", count: epgIDs.count).joined(separator: ",")
+            let rows = try conn.query(
+                "SELECT \(Self.epgColumns) FROM epg_event WHERE channel_epg_id IN (\(placeholders)) " +
+                "AND stop_at > ? AND start_at < ? ORDER BY channel_epg_id, start_at",
+                epgIDs.map { SQLiteValue.text($0) } +
+                [.real(window.start.timeIntervalSince1970), .real(window.end.timeIntervalSince1970)],
+                Self.decodeEPG
+            )
+            return Dictionary(grouping: rows, by: { $0.channelEPGID })
+        }
     }
 
-    // MARK: - WHERE builders
+    // MARK: - WHERE builders (pure — no instance state)
 
-    private func movieWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
+    private static func scopeClause(_ scope: Scope) -> (String, [SQLiteValue]) {
+        ("(? OR is_adult = 0) AND (? OR is_relevant = 1)",
+         [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)])
+    }
+
+    private static func movieWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
         var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
         var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
         appendCommon(to: &clauses, params: &params, filter: filter, genreTable: "movie_genre", idColumn: "movie_id", hasDuration: true)
         return (clauses.joined(separator: " AND "), params)
     }
 
-    private func seriesWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
+    private static func seriesWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
         var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
         var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
         appendCommon(to: &clauses, params: &params, filter: filter, genreTable: "series_genre", idColumn: "series_id", hasDuration: false)
         return (clauses.joined(separator: " AND "), params)
     }
 
-    private func channelWhere(category: String?, _ scope: Scope) -> (String, [SQLiteValue]) {
+    private static func channelWhere(category: String?, _ scope: Scope) -> (String, [SQLiteValue]) {
         var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
         var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
         if let category, category != "All" {
@@ -609,7 +717,7 @@ public actor CatalogDatabase {
         return (clauses.joined(separator: " AND "), params)
     }
 
-    private func appendCommon(
+    private static func appendCommon(
         to clauses: inout [String], params: inout [SQLiteValue],
         filter: CatalogFilter, genreTable: String, idColumn: String, hasDuration: Bool
     ) {
@@ -649,7 +757,7 @@ public actor CatalogDatabase {
         }
     }
 
-    private func qualityRank(_ q: VideoQuality) -> Int {
+    private static func qualityRank(_ q: VideoQuality) -> Int {
         switch q {
         case .unknown: return 0
         case .sd:      return 1
@@ -671,15 +779,18 @@ public actor CatalogDatabase {
     // MARK: - Writes
 
     /// Wipe every catalog table (keeps `meta`), inside one transaction.
-    public func clearCatalog() throws {
-        try connection.transaction {
-            for table in ["channel", "movie", "movie_genre", "series", "series_genre", "episode", "epg_event"] {
-                try connection.execute("DELETE FROM \(table)")
+    public func clearCatalog() async throws {
+        try await write { conn in
+            try conn.transaction {
+                for table in ["channel", "movie", "movie_genre", "series", "series_genre", "episode", "epg_event"] {
+                    try conn.execute("DELETE FROM \(table)")
+                }
             }
         }
     }
 
-    public func insertChannels(_ channels: [Channel], homeRegions: Set<String>) throws {
+    public func insertChannels(_ channels: [Channel], homeRegions: Set<String>, generation: Int = 1) async throws {
+        let gen = Int64(generation)
         let rows = channels.map { channel -> [SQLiteValue] in
             let relevant = RelevanceFilter.isRelevant(countryCode: channel.countryCode, name: channel.name, category: channel.category)
             return [
@@ -698,19 +809,23 @@ public actor CatalogDatabase {
                 SQLiteValue(channel.isAdult),
                 SQLiteValue(relevant),
                 .integer(Int64(RelevanceFilter.priority(countryCode: channel.countryCode, home: homeRegions))),
+                .integer(gen),
             ]
         }
-        try connection.transaction {
-            try connection.executeMany("""
-            INSERT OR REPLACE INTO channel
-            (id, name, name_fold, category, logo_url, country_code, audio_langs, sub_langs, quality,
-             stream_url, epg_id, sort_index, is_adult, is_relevant, region_priority)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, rows)
+        try await write { conn in
+            try conn.transaction {
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO channel
+                (id, name, name_fold, category, logo_url, country_code, audio_langs, sub_langs, quality,
+                 stream_url, epg_id, sort_index, is_adult, is_relevant, region_priority, gen)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, rows)
+            }
         }
     }
 
-    public func insertMovies(_ movies: [Movie]) throws {
+    public func insertMovies(_ movies: [Movie], generation: Int = 1) async throws {
+        let gen = Int64(generation)
         let rows = movies.map { movie -> [SQLiteValue] in
             let relevant = RelevanceFilter.isRelevant(
                 countryCode: movie.countryCode, name: movie.title, category: movie.genres.first?.displayName ?? ""
@@ -735,29 +850,30 @@ public actor CatalogDatabase {
                 SQLiteValue(date: movie.addedAt),
                 SQLiteValue(movie.isAdult),
                 SQLiteValue(relevant),
+                .integer(gen),
             ]
         }
         let genreClears = movies.map { [SQLiteValue.text($0.id.rawValue)] }
         let genreRows = movies.flatMap { movie in
             movie.genres.map { [SQLiteValue.text(movie.id.rawValue), .text($0.rawValue)] }
         }
-        try connection.transaction {
-            try connection.executeMany("""
-            INSERT OR REPLACE INTO movie
-            (id, title, title_fold, year, duration_min, audio_langs, sub_langs, genres, quality,
-             country_code, poster_url, backdrop_url, synopsis, cast_list, directors, stream_url,
-             added_at, is_adult, is_relevant)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, rows)
-            // Replace this batch's genre rows (a refresh may have changed them).
-            try connection.executeMany("DELETE FROM movie_genre WHERE movie_id = ?", genreClears)
-            try connection.executeMany(
-                "INSERT OR IGNORE INTO movie_genre (movie_id, genre) VALUES (?,?)", genreRows
-            )
+        try await write { conn in
+            try conn.transaction {
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO movie
+                (id, title, title_fold, year, duration_min, audio_langs, sub_langs, genres, quality,
+                 country_code, poster_url, backdrop_url, synopsis, cast_list, directors, stream_url,
+                 added_at, is_adult, is_relevant, gen)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, rows)
+                try conn.executeMany("DELETE FROM movie_genre WHERE movie_id = ?", genreClears)
+                try conn.executeMany("INSERT OR IGNORE INTO movie_genre (movie_id, genre) VALUES (?,?)", genreRows)
+            }
         }
     }
 
-    public func insertSeries(_ series: [Series]) throws {
+    public func insertSeries(_ series: [Series], generation: Int = 1) async throws {
+        let gen = Int64(generation)
         let rows = series.map { show -> [SQLiteValue] in
             let relevant = RelevanceFilter.isRelevant(
                 countryCode: show.countryCode, name: show.title, category: show.genres.first?.displayName ?? ""
@@ -780,48 +896,53 @@ public actor CatalogDatabase {
                 SQLiteValue(show.isAdult),
                 SQLiteValue(relevant),
                 .integer(show.seasons.isEmpty ? 0 : 1),
+                .integer(gen),
             ]
         }
         let genreClears = series.map { [SQLiteValue.text($0.id.rawValue)] }
         let genreRows = series.flatMap { show in
             show.genres.map { [SQLiteValue.text(show.id.rawValue), .text($0.rawValue)] }
         }
-        let episodeRows = series.flatMap { $0.seasons.flatMap(\.episodes) }.map(Self.episodeRow)
+        let episodeRows = series.flatMap { $0.seasons.flatMap(\.episodes) }.map { Self.episodeRow($0, gen: gen) }
 
-        try connection.transaction {
-            try connection.executeMany("""
-            INSERT OR REPLACE INTO series
-            (id, title, title_fold, year, audio_langs, sub_langs, genres, quality, country_code,
-             poster_url, backdrop_url, synopsis, provider_key, added_at, is_adult, is_relevant, seasons_loaded)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, rows)
-            try connection.executeMany("DELETE FROM series_genre WHERE series_id = ?", genreClears)
-            try connection.executeMany(
-                "INSERT OR IGNORE INTO series_genre (series_id, genre) VALUES (?,?)", genreRows
-            )
-            try connection.executeMany("""
-            INSERT OR REPLACE INTO episode
-            (id, series_id, season, episode, title, overview, duration_min, still_url, stream_url)
-            VALUES (?,?,?,?,?,?,?,?,?)
-            """, episodeRows)
+        try await write { conn in
+            try conn.transaction {
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO series
+                (id, title, title_fold, year, audio_langs, sub_langs, genres, quality, country_code,
+                 poster_url, backdrop_url, synopsis, provider_key, added_at, is_adult, is_relevant, seasons_loaded, gen)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """, rows)
+                try conn.executeMany("DELETE FROM series_genre WHERE series_id = ?", genreClears)
+                try conn.executeMany("INSERT OR IGNORE INTO series_genre (series_id, genre) VALUES (?,?)", genreRows)
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO episode
+                (id, series_id, season, episode, title, overview, duration_min, still_url, stream_url, gen)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, episodeRows)
+            }
         }
     }
 
-    /// Replace one series' episodes after an on-demand fetch (Xtream).
-    public func replaceSeasons(_ seasons: [Season], seriesID: CatalogID) throws {
-        let episodeRows = seasons.flatMap(\.episodes).map(Self.episodeRow)
-        try connection.transaction {
-            try connection.run("DELETE FROM episode WHERE series_id = ?", [.text(seriesID.rawValue)])
-            try connection.executeMany("""
-            INSERT OR REPLACE INTO episode
-            (id, series_id, season, episode, title, overview, duration_min, still_url, stream_url)
-            VALUES (?,?,?,?,?,?,?,?,?)
-            """, episodeRows)
-            try connection.run("UPDATE series SET seasons_loaded = 1 WHERE id = ?", [.text(seriesID.rawValue)])
+    /// Replace one series' episodes after an on-demand fetch (Xtream). Stamps them
+    /// with the current committed generation so the next import doesn't sweep them.
+    public func replaceSeasons(_ seasons: [Season], seriesID: CatalogID) async throws {
+        let committedGen = Int64(await intMeta(MetaKey.importGeneration))
+        let episodeRows = seasons.flatMap(\.episodes).map { Self.episodeRow($0, gen: committedGen) }
+        try await write { conn in
+            try conn.transaction {
+                try conn.run("DELETE FROM episode WHERE series_id = ?", [.text(seriesID.rawValue)])
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO episode
+                (id, series_id, season, episode, title, overview, duration_min, still_url, stream_url, gen)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+                """, episodeRows)
+                try conn.run("UPDATE series SET seasons_loaded = 1 WHERE id = ?", [.text(seriesID.rawValue)])
+            }
         }
     }
 
-    private static func episodeRow(_ episode: Episode) -> [SQLiteValue] {
+    private static func episodeRow(_ episode: Episode, gen: Int64) -> [SQLiteValue] {
         [
             .text(episode.id.rawValue),
             .text(episode.seriesID.rawValue),
@@ -832,12 +953,14 @@ public actor CatalogDatabase {
             SQLiteValue(episode.durationMinutes),
             SQLiteValue(episode.stillURL),
             .text(episode.streamURL.absoluteString),
+            .integer(gen),
         ]
     }
 
-    /// Insert an EPG batch, dropping anything outside `window` before it touches
-    /// the database so `epg_event` never scales with the size of the feed.
-    public func insertEPG(_ events: [EPGEvent], window: DateInterval) throws {
+    /// Insert an EPG batch, dropping anything outside `window` first so
+    /// `epg_event` never scales with the size of the feed.
+    public func insertEPG(_ events: [EPGEvent], window: DateInterval, generation: Int = 1) async throws {
+        let gen = Int64(generation)
         let rows = events.compactMap { event -> [SQLiteValue]? in
             guard event.stop > window.start, event.start < window.end else { return nil }
             return [
@@ -848,47 +971,69 @@ public actor CatalogDatabase {
                 .real(event.start.timeIntervalSince1970),
                 .real(event.stop.timeIntervalSince1970),
                 SQLiteValue(event.category),
+                .integer(gen),
             ]
         }
-        try connection.transaction {
-            try connection.executeMany("""
-            INSERT OR IGNORE INTO epg_event
-            (channel_epg_id, title, subtitle, description, start_at, stop_at, category)
-            VALUES (?,?,?,?,?,?,?)
-            """, rows)
+        try await write { conn in
+            try conn.transaction {
+                try conn.executeMany("""
+                INSERT OR REPLACE INTO epg_event
+                (channel_epg_id, title, subtitle, description, start_at, stop_at, category, gen)
+                VALUES (?,?,?,?,?,?,?,?)
+                """, rows)
+            }
         }
+    }
+
+    /// End an import: delete every row an earlier generation left behind
+    /// (provider-removed titles, aged-out EPG), then commit the new generation.
+    public func finishGeneration(_ generation: Int) async throws {
+        let gen = Int64(generation)
+        try await write { conn in
+            try conn.transaction {
+                for table in ["channel", "movie", "series", "episode", "epg_event"] {
+                    try conn.run("DELETE FROM \(table) WHERE gen <> ?", [.integer(gen)])
+                }
+                try conn.run("DELETE FROM movie_genre WHERE movie_id NOT IN (SELECT id FROM movie)")
+                try conn.run("DELETE FROM series_genre WHERE series_id NOT IN (SELECT id FROM series)")
+            }
+        }
+        try await setMeta(MetaKey.importGeneration, String(generation))
     }
 
     // MARK: - Dynamic query state (columns, not app state)
 
-    public func updateRegionPriorities(homeRegions: Set<String>) throws {
-        let rows = try connection.query("SELECT id, country_code FROM channel") {
-            ($0.string(0), $0.stringOrNil(1))
-        }
-        let updates = rows.map { id, country in
-            [SQLiteValue.integer(Int64(RelevanceFilter.priority(countryCode: country, home: homeRegions))), .text(id)]
-        }
-        try connection.transaction {
-            try connection.executeMany("UPDATE channel SET region_priority = ? WHERE id = ?", updates)
+    public func updateRegionPriorities(homeRegions: Set<String>) async throws {
+        try await write { conn in
+            let rows = try conn.query("SELECT id, country_code FROM channel") { ($0.string(0), $0.stringOrNil(1)) }
+            let updates = rows.map { id, country in
+                [SQLiteValue.integer(Int64(RelevanceFilter.priority(countryCode: country, home: homeRegions))), .text(id)]
+            }
+            try conn.transaction {
+                try conn.executeMany("UPDATE channel SET region_priority = ? WHERE id = ?", updates)
+            }
         }
     }
 
-    public func updateRecentChannels(_ ids: [CatalogID]) throws {
-        try connection.transaction {
-            try connection.execute("UPDATE channel SET recent_rank = NULL WHERE recent_rank IS NOT NULL")
-            let updates = ids.enumerated().map { index, id in
-                [SQLiteValue.integer(Int64(index)), .text(id.rawValue)]
+    public func updateRecentChannels(_ ids: [CatalogID]) async throws {
+        try await write { conn in
+            try conn.transaction {
+                try conn.execute("UPDATE channel SET recent_rank = NULL WHERE recent_rank IS NOT NULL")
+                let updates = ids.enumerated().map { index, id in
+                    [SQLiteValue.integer(Int64(index)), .text(id.rawValue)]
+                }
+                try conn.executeMany("UPDATE channel SET recent_rank = ? WHERE id = ?", updates)
             }
-            try connection.executeMany("UPDATE channel SET recent_rank = ? WHERE id = ?", updates)
         }
     }
 
     // MARK: - Maintenance
 
-    /// Reclaim pages and refresh the query planner's statistics after a big
-    /// import. Cheap enough to run once per import.
-    public func optimize() throws {
-        try connection.execute("PRAGMA optimize")
-        try connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    /// Reclaim pages and refresh planner stats after a big import.
+    public func optimize() async throws {
+        try await write { conn in
+            try conn.execute("PRAGMA optimize")
+            try conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        }
     }
 }

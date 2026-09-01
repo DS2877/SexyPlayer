@@ -10,7 +10,7 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 
 /// A value that can be bound to a `?` placeholder. `nil`-carrying initialisers
 /// map an absent optional to `NULL`.
-enum SQLiteValue {
+enum SQLiteValue: Sendable {
     case null
     case integer(Int64)
     case real(Double)

@@ -237,4 +237,72 @@ final class CatalogDatabaseTests: XCTestCase {
         let points = await repo.resumePoints(progress: progress, limit: 10)
         XCTAssertEqual(points.first?.primaryTitle, "Half Watched")
     }
+
+    // MARK: - Generation-stamped refresh
+
+    func testRefreshPrunesRowsAnEarlierGenerationLeftBehind() async throws {
+        let gen1 = await database.nextGeneration()
+        try await database.insertMovies(
+            [movie("a", "Kept A"), movie("b", "Kept B"), movie("c", "Removed C")], generation: gen1
+        )
+        try await database.finishGeneration(gen1)
+        XCTAssertEqual(try await database.movieCount(.none, .unfiltered), 3)
+
+        // A refresh that no longer sees "Removed C".
+        let gen2 = await database.nextGeneration()
+        XCTAssertEqual(gen2, gen1 + 1)
+        try await database.insertMovies([movie("a", "Kept A v2"), movie("b", "Kept B")], generation: gen2)
+        try await database.finishGeneration(gen2)
+
+        let titles = try await database.movies(.none, .unfiltered, page: 0, pageSize: 10).map(\.title).sorted()
+        XCTAssertEqual(titles, ["Kept A v2", "Kept B"])
+        // The orphaned genre rows for "Removed C" are gone too.
+        var horror = CatalogFilter.none
+        horror.genres = [.drama]
+        XCTAssertEqual(try await database.movieCount(horror, .unfiltered), 2)
+    }
+
+    // MARK: - Scale
+
+    func testStaysFastAtScale() async throws {
+        let count = 20_000
+        let genres = Genre.allCases
+        for batch in stride(from: 0, to: count, by: 2_000) {
+            let movies = (batch ..< min(batch + 2_000, count)).map { i in
+                movie("m\(i)", "Title \(i)", year: 1980 + i % 45, genres: [genres[i % genres.count]])
+            }
+            try await database.insertMovies(movies)
+        }
+
+        var filter = CatalogFilter.none
+        filter.genres = [genres[0]]
+        filter.minYear = 2000
+
+        let start = Date()
+        let total = try await database.movieCount(filter, .unfiltered)
+        let page = try await database.movies(filter, .unfiltered, page: 3, pageSize: 60)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertGreaterThan(total, 0)
+        XCTAssertLessThanOrEqual(page.count, 60)
+        XCTAssertLessThan(elapsed, 0.5, "count + a deep page over 20k rows took \(elapsed)s")
+    }
+
+    func testReadsRunWhileAWriteIsInFlight() async throws {
+        try await database.insertMovies((0..<500).map { movie("seed\($0)", "Seed \($0)") })
+
+        // Kick off a big write, then hammer reads — they must not be blocked
+        // until the write finishes (separate connections + WAL).
+        let writeBatch = (0..<8_000).map { movie("w\($0)", "W \($0)") }
+        async let bigWrite: Void = database.insertMovies(writeBatch)
+
+        let start = Date()
+        for _ in 0 ..< 40 {
+            _ = try await database.movie(id: .init(rawValue: "seed0"))
+        }
+        let readElapsed = Date().timeIntervalSince(start)
+        try await bigWrite
+
+        XCTAssertLessThan(readElapsed, 2.0, "40 point reads took \(readElapsed)s while a write ran")
+    }
 }

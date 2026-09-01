@@ -2,10 +2,19 @@ import Foundation
 import SQLite3
 
 /// A single SQLite connection with a small typed surface. **Not thread-safe on
-/// its own** — every caller in the app reaches it through `CatalogDatabase`, an
-/// `actor`, so access is already serialised. Keeping it a plain `final class`
-/// (not `Sendable`) is deliberate: the actor owns it and never hands it out.
-final class SQLiteConnection {
+/// its own** — `CatalogDatabase` pins each connection to one serial
+/// `DispatchQueue` and never lets it escape, which is what makes the
+/// `@unchecked Sendable` here sound.
+final class SQLiteConnection: @unchecked Sendable {
+
+    /// How the connection participates in the store's two-connection model.
+    enum Role {
+        /// The importer's connection: sets WAL + the durability pragmas.
+        case writer
+        /// A read-only view (`PRAGMA query_only`) that serves queries while the
+        /// writer commits. WAL lets it read a consistent snapshot concurrently.
+        case reader
+    }
 
     enum SQLiteError: Error, CustomStringConvertible {
         case open(code: Int32, message: String)
@@ -30,7 +39,7 @@ final class SQLiteConnection {
     private var handle: OpaquePointer?
 
     /// `sqlite3_open_v2` on the given file path. Creates the file if missing.
-    init(path: String) throws {
+    init(path: String, role: Role = .writer) throws {
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         let rc = sqlite3_open_v2(path, &handle, flags, nil)
         guard rc == SQLITE_OK, handle != nil else {
@@ -40,13 +49,21 @@ final class SQLiteConnection {
             throw SQLiteError.open(code: rc, message: message)
         }
         sqlite3_busy_timeout(handle, 5_000)
-        // Durability tuned for a disposable, rebuildable catalog store that's
-        // written in big streaming batches and read in small pages.
-        try execute("PRAGMA journal_mode = WAL")
-        try execute("PRAGMA synchronous = NORMAL")
-        try execute("PRAGMA temp_store = MEMORY")
-        try execute("PRAGMA foreign_keys = ON")
-        try execute("PRAGMA cache_size = -4000")   // ~4 MB page cache, not more
+        switch role {
+        case .writer:
+            // Durability tuned for a disposable, rebuildable catalog store
+            // written in big streaming batches and read in small pages.
+            try execute("PRAGMA journal_mode = WAL")
+            try execute("PRAGMA synchronous = NORMAL")
+            try execute("PRAGMA temp_store = MEMORY")
+            try execute("PRAGMA foreign_keys = ON")
+            try execute("PRAGMA cache_size = -4000")   // ~4 MB page cache
+        case .reader:
+            // Journal mode + durability come from the file (the writer set them).
+            try? execute("PRAGMA query_only = ON")
+            try? execute("PRAGMA temp_store = MEMORY")
+            try? execute("PRAGMA cache_size = -8000")  // the hot path — 8 MB
+        }
     }
 
     deinit {
