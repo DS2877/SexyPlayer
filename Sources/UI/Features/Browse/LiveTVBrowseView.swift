@@ -26,6 +26,7 @@ public final class LiveTVBrowseViewModel {
     private let repository: any CatalogRepository
     private let pageSize = 90
     private var page = 0
+    private var reloadTask: Task<Void, Never>?
 
     public init(repository: any CatalogRepository) {
         self.repository = repository
@@ -34,6 +35,17 @@ public final class LiveTVBrowseViewModel {
     public func start() async {
         categories = await repository.allChannelCategories()
         await reload()
+    }
+
+    /// Coalesced (280 ms) — the catalog revision bumps repeatedly during import.
+    public func scheduleReload() {
+        reloadTask?.cancel()
+        reloadTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(280))
+            guard !Task.isCancelled, let self else { return }
+            self.categories = await self.repository.allChannelCategories()
+            await self.reload()
+        }
     }
 
     public func reload() async {
@@ -127,7 +139,7 @@ struct LiveTVBrowseView: View {
             }
         }
         .onChange(of: env.catalogRevision) { _, _ in
-            Task { await model?.reload() }
+            model?.scheduleReload()
         }
     }
 

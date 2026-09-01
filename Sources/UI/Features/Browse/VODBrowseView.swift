@@ -36,10 +36,8 @@ struct VODBrowseView: View {
             if atRoot { Task { await model?.start() } }
         }
         .onChange(of: env.catalogRevision) { _, _ in
-            Task {
-                await model?.start()
-                if let model { prefetchPosters(model) }
-            }
+            // Coalesced (280 ms) — the revision bumps repeatedly during import.
+            model?.scheduleReload()
         }
     }
 

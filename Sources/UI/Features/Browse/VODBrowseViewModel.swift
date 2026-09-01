@@ -60,6 +60,10 @@ public final class VODBrowseViewModel {
         isLoading = true
         page = 0
         canLoadMore = true
+        // Facets grow while a staged import is still running.
+        availableGenres = await repository.availableGenres()
+        availableAudio = await repository.availableAudioLanguages()
+        availableSubtitles = await repository.availableSubtitleLanguages()
         let snapshotFilter = filter
 
         switch kind {

@@ -14,6 +14,11 @@ public final class HomeViewModel {
     private let metadata: MetadataService
     private let channelHistory: ChannelHistoryStore
 
+    /// During a staged import the catalog + metadata revisions bump many times a
+    /// second. Without coalescing, every bump spawns another full-catalog shaping
+    /// pass; a handful running at once is enough to jetsam the app on device.
+    private var pendingRebuild: Task<Void, Never>?
+
     public init(repository: any CatalogRepository,
                 watchProgress: WatchProgressStore,
                 preferences: PreferencesStore,
@@ -26,7 +31,21 @@ public final class HomeViewModel {
         self.channelHistory = channelHistory
     }
 
+    /// Coalesced: rapid callers (import revisions, preference changes) collapse
+    /// into a single shaping pass ~300 ms after the last trigger. Only one runs
+    /// at a time.
     public func rebuild(now: Date = .now) async {
+        pendingRebuild?.cancel()
+        let task = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self else { return }
+            await self.performRebuild(now: now)
+        }
+        pendingRebuild = task
+        await task.value
+    }
+
+    private func performRebuild(now: Date) async {
         isBuilding = true
         defer { isBuilding = false }
 
@@ -34,6 +53,7 @@ public final class HomeViewModel {
         // (sorts/filters over tens of thousands of items) off it.
         let catalog = await repository.snapshot()
         guard !catalog.isEmpty else { content = .empty; return }
+        guard !Task.isCancelled else { return }
         let epg = await repository.epgIndex()
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
@@ -41,12 +61,15 @@ public final class HomeViewModel {
         // Already ranked: regulars first, then home country, then the rest.
         let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
         let recentChannelIDs = channelHistory.recent(limit: 16)
+        guard !Task.isCancelled else { return }
 
-        content = await Task.detached(priority: .userInitiated) {
+        let shaped = await Task.detached(priority: .userInitiated) {
             Self.makeContent(catalog: catalog, epg: epg, progress: progress,
                              prefs: prefs, ratings: ratings, liveNow: liveNow,
                              recentChannelIDs: recentChannelIDs, now: now)
         }.value
+        guard !Task.isCancelled else { return }
+        content = shaped
     }
 
     // MARK: - Pure builder (runs off the main actor)

@@ -21,13 +21,28 @@ final class GuideViewModel {
     private static let rowCap = 250
 
     private let repository: any CatalogRepository
+    private var pendingLoad: Task<Void, Never>?
 
     init(repository: any CatalogRepository) { self.repository = repository }
 
+    /// Coalesced — the catalog revision bumps several times during a staged
+    /// import; without this each bump kicks off another full channel scan.
     func load() async {
+        pendingLoad?.cancel()
+        let task = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, let self else { return }
+            await self.performLoad()
+        }
+        pendingLoad = task
+        await task.value
+    }
+
+    private func performLoad() async {
         isLoading = true
         defer { isLoading = false }
         let catalog = await repository.snapshot()
+        guard !Task.isCancelled else { return }
         let epg = await repository.epgIndex()
         let anchor = now
         let cap = Self.rowCap
@@ -47,6 +62,7 @@ final class GuideViewModel {
             return (rows, false)
         }.value
 
+        guard !Task.isCancelled else { return }
         rows = result.rows
         truncated = result.truncated
     }
