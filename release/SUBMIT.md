@@ -26,8 +26,8 @@ click there. Keyboard shortcuts are written like `⇧⌘K`.
 
 ## Step 0 — Branch
 
-All the real code lives on **`import-progress-checklist`** (`main` is stale at the
-M6 milestone). Just build from where you are:
+All the real code lives on **`import-progress-checklist`** (`main` is stale).
+Build from where you are:
 
 ```bash
 cd ~/Developer/SexyPlayer
@@ -35,12 +35,12 @@ git checkout import-progress-checklist
 git pull
 ```
 
-*Optional, if you want the release to come from `main`:*
-```bash
-git checkout main && git merge import-progress-checklist && git push origin main
-git checkout import-progress-checklist
-```
-Not required — the build is byte-identical either way.
+**Where things stand:** hand-off A (the SQLite foundation) built green for you.
+Everything since — the language pickers, hand-off B (the app switched onto the
+database, `CatalogCache` deleted), and the two-connection / generation-stamped
+follow-ups — is **not yet built**. `release/CHANGELOG-since-last-build.md` and
+`release/HANDOFF-database-B.md` cover it. **Step 2 below is the gate: nothing else
+here can happen until `⌘B` is green.**
 
 ---
 
@@ -49,18 +49,13 @@ Not required — the build is byte-identical either way.
 App Store Connect requires a public Privacy Policy URL and Support URL. The pages
 are already written in `docs/`.
 
-1. **Rename the repo** so the URL doesn't say "SexyPlayer":
-   - GitHub → the repo → **Settings** → **General** → *Repository name* →
-     change `SexyPlayer` to **`aeria`** → **Rename**.
-   - GitHub auto-redirects the old URL and your local `git` keeps working, but to
-     be tidy, in **Terminal**:
-     ```bash
-     cd ~/Developer/SexyPlayer
-     git remote set-url origin https://github.com/DS2877/aeria.git
-     ```
-     (You can leave the local folder named `SexyPlayer` — that's fine.)
-   - *If you'd rather not rename:* skip this and use `SexyPlayer` instead of
-     `aeria` in every URL below. It works, it just reads oddly.
+1. **The repo is already renamed to `aeria`** (`github.com/DS2877/aeria`). If your
+   local remote still points at the old name, tidy it in **Terminal**:
+   ```bash
+   cd ~/Developer/SexyPlayer
+   git remote set-url origin https://github.com/DS2877/aeria.git
+   ```
+   (The local folder can stay named `SexyPlayer` — that's fine.)
 
 2. **Enable Pages:** GitHub → repo → **Settings** → **Pages** →
    *Build and deployment* → **Source: Deploy from a branch** →
@@ -113,12 +108,21 @@ open Aeria.xcodeproj
 ```
 
 **In Xcode:**
-- Top-left toolbar: set the run destination to **Any tvOS Device (arm64)** for
-  archiving, or your **Apple TV** for a device test.
+- Top-left toolbar: set the run destination to your **Apple TV** first (for the
+  device test below), then **Any tvOS Device (arm64)** for archiving.
 - Press **⇧⌘K** (Clean Build Folder), then **⌘B** (Build).
-- If it builds: press **⌘U** to run the test suite (should be all green).
-- **If there are red build errors, send them to me** — 32 commits since your last
-  build (see `release/CHANGELOG-since-last-build.md`), written without a compiler.
+- If it builds: press **⌘U** to run the test suite (should be all green), then
+  **⌘R** onto the Apple TV.
+- **If there are red build errors, send them to me** — a large batch of Swift
+  since your last green build (the whole catalog-database migration), written
+  without a compiler. `release/CHANGELOG-since-last-build.md` lists the risky
+  spots. This is the round where 1–2 back-and-forths are likely; that's expected.
+
+**On the device, watch for the memory fix:** open **Debug navigator → Memory**
+and import your **real** provider. The gauge should stay **flat** (a few hundred
+MB) through the whole import instead of climbing until the app is killed. The app
+should become usable the moment the channel list lands. First launch does one
+full re-import; every launch after is near-instant.
 
 ### If the Top Shelf extension won't compile
 

@@ -116,18 +116,20 @@ question (`ITSAppUsesNonExemptEncryption = false`).
 ## Required URLs — GitHub Pages
 
 Hosting is the repo's `docs/` folder on GitHub Pages (see `release/SUBMIT.md` step 1).
-**Rename the repo `SexyPlayer` → `aeria` first** (Settings → General → Repository name;
-GitHub keeps the old URL redirecting, and the git remote keeps working). Then:
+The repo is already named **`aeria`** (`github.com/DS2877/aeria`), so:
 
 - **Privacy Policy URL:** `https://ds2877.github.io/aeria/privacy-policy.html`
 - **Support URL:** `https://ds2877.github.io/aeria/support.html`
 - **Marketing URL** (optional field): `https://ds2877.github.io/aeria/`
 
-If you skip the rename, substitute `SexyPlayer` for `aeria` in those URLs — it works,
-it just reads oddly next to the app name. Later, point `aeriaplus.se` at Pages with a
-`docs/CNAME` file containing `aeriaplus.se` and the DNS records GitHub shows you.
+Later, point `aeriaplus.se` at Pages with a `docs/CNAME` file containing
+`aeriaplus.se` and the DNS records GitHub shows you.
 
-Contact email in all three pages: `info@aeriaplus.se`.
+**Support email:** the pages use `info@aeriaplus.se`. Apple emails the support
+address during review and may verify it. If that mailbox isn't live yet, either
+stand it up now or do a find-and-replace in `docs/privacy-policy.html`,
+`docs/support.html`, `docs/index.html` and the review notes with an address you
+control (your Gmail is fine for a first release).
 
 After Pages builds (~1 min), open all three URLs in a browser and confirm they render.
 
