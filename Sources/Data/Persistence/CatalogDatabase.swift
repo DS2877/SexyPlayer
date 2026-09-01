@@ -323,7 +323,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             let sql = "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) " +
                       "ORDER BY \(Self.orderClause(filter.sort)) LIMIT ? OFFSET ?"
             return try conn.query(sql, params + [.integer(Int64(pageSize)), .integer(Int64(page * pageSize))]) {
-                Self.decodeSeries($0, seasons: [])
+                row in Self.decodeSeries(row, seasons: [])
             }
         }
     }
@@ -386,9 +386,12 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     public func series(id: CatalogID) async throws -> Series? {
         try await read { conn in
-            guard var show = try conn.queryOne(
-                "SELECT \(Self.seriesColumns) FROM series WHERE id = ?", [.text(id.rawValue)]
-            ) { Self.decodeSeries($0, seasons: []) } else { return nil }
+            let shell = try conn.queryOne(
+                "SELECT \(Self.seriesColumns) FROM series WHERE id = ?",
+                [.text(id.rawValue)],
+                { row in Self.decodeSeries(row, seasons: []) }
+            )
+            guard var show = shell else { return nil }
             show.seasons = try Self.loadSeasons(conn, seriesID: id)
             return show
         }
@@ -403,7 +406,7 @@ public final class CatalogDatabase: @unchecked Sendable {
     }
 
     public func seriesByID(_ ids: [CatalogID]) async throws -> [Series] {
-        try await read { conn in try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { Self.decodeSeries($0, seasons: []) } }
+        try await read { conn in try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { row in Self.decodeSeries(row, seasons: []) } }
     }
 
     private static func fetchByIDs<T>(_ conn: SQLiteConnection, _ ids: [CatalogID], table: String, columns: String, decode: (SQLiteRow) throws -> T) throws -> [T] {
@@ -445,7 +448,7 @@ public final class CatalogDatabase: @unchecked Sendable {
     /// Series for the given ids, each with its full season / episode tree.
     public func seriesWithSeasons(ids: [CatalogID]) async throws -> [Series] {
         try await read { conn in
-            try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { Self.decodeSeries($0, seasons: []) }
+            try Self.fetchByIDs(conn, ids, table: "series", columns: Self.seriesColumns) { row in Self.decodeSeries(row, seasons: []) }
                 .map { shell in
                     var full = shell
                     full.seasons = (try? Self.loadSeasons(conn, seriesID: shell.id)) ?? []
@@ -478,7 +481,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             return try conn.query(
                 "SELECT \(Self.seriesColumns) FROM series WHERE \(clause) ORDER BY (added_at IS NULL), added_at DESC LIMIT ?",
                 params + [.integer(Int64(limit))]
-            ) { Self.decodeSeries($0, seasons: []) }
+            ) { row in Self.decodeSeries(row, seasons: []) }
         }
     }
 
@@ -525,7 +528,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             SELECT \(Self.seriesColumns) FROM series
             WHERE \(clause) AND id IN (SELECT series_id FROM series_genre WHERE genre = ?)
             ORDER BY (added_at IS NULL), added_at DESC LIMIT ?
-            """, params + [.text(genre.rawValue), .integer(Int64(limit))]) { Self.decodeSeries($0, seasons: []) }
+            """, params + [.text(genre.rawValue), .integer(Int64(limit))]) { row in Self.decodeSeries(row, seasons: []) }
         }
     }
 
@@ -585,7 +588,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             return try conn.query(
                 "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) LIMIT ?",
                 params + [.integer(Int64(limit))]
-            ) { Self.decodeSeries($0, seasons: []) }
+            ) { row in Self.decodeSeries(row, seasons: []) }
         }
     }
 
@@ -632,7 +635,7 @@ public final class CatalogDatabase: @unchecked Sendable {
             ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
             """
             let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
-            return try conn.query(sql, args) { Self.decodeSeries($0, seasons: []) }
+            return try conn.query(sql, args) { row in Self.decodeSeries(row, seasons: []) }
         }
     }
 
