@@ -144,7 +144,7 @@ After Pages builds (~1 min), open all three URLs in a browser and confirm they r
 > **Reviewing without credentials:** on the first screen, choose **"Try the demo"**.
 > This loads a built-in sample library of **public-domain films** (Night of the
 > Living Dead, Nosferatu, Metropolis, His Girl Friday, The Stranger, …) with
-> playback backed by Apple's and Mux's public HLS test streams. It exercises every
+> playback backed by Apple's public HLS reference streams. It exercises every
 > screen — Home with the rotating hero and shelves, Movies/Series browsing with
 > genre filters and an A–Z index, Live TV, the TV guide, natural-language search
 > with visible filter chips, detail pages with a cast rail and "More Like This",

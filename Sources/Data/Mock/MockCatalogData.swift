@@ -19,14 +19,14 @@ public enum MockCatalogData {
 
     // MARK: - Real streams for the Simulator build
 
-    /// Public-domain HLS test streams so playback actually works in the Simulator
-    /// and for App Store review. Real providers supply their own URLs; nothing
-    /// here is bundled content.
+    /// Apple's own public HLS reference streams — rock-solid for the Simulator
+    /// and App Store review. Real providers supply their own URLs; nothing here
+    /// is bundled content.
     static let testStreams: [String] = [
         "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
-        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
         "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8",
-        "https://test-streams.mux.dev/pts_shift/master.m3u8",
+        "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
     ]
 
     private static func stream(_ index: Int) -> String {
@@ -83,7 +83,7 @@ public enum MockCatalogData {
     // All public-domain titles (real TMDB matches, so the demo shows real
     // posters / cast) wrapped in the kind of messy provider formatting the
     // Normalizer exists to clean up. Nothing here is bundled — playback uses
-    // Apple/Mux test streams.
+    // Apple's public HLS reference streams.
 
     static let movies: [RawVODItem] = [
         RawVODItem(providerKey: "m-notld", name: "VOD: Night of the Living Dead (1968) 1080p", groupTitle: "Movies | Horror", logo: nil, streamURL: "https://example.com/vod/notld.mp4", plot: "A disparate group of strangers barricade themselves in a farmhouse as the recently dead rise and attack the living.", genreText: "Horror, Thriller", releaseDate: "1968-10-01", durationSecs: 96 * 60, cast: "Duane Jones, Judith O'Dea", director: "George A. Romero"),
@@ -118,7 +118,7 @@ public enum MockCatalogData {
     // MARK: - Series episodes (structure must be reconstructed from names)
     //
     // Public-domain vintage TV so the reconstruction demo works without any
-    // rights questions.
+    // rights questions. Playback uses Apple's public HLS reference streams.
 
     static let episodes: [RawSeriesEpisode] = [
         RawSeriesEpisode(providerKey: "e-holmes-s01e01", name: "Sherlock Holmes (1954) S01E01 - The Case of the Cunningham Heritage 1080p", groupTitle: "Series | Mystery", logo: nil, streamURL: "https://example.com/series/holmes/s01e01.mp4", plot: "Holmes and Watson meet for the first time and take on a double murder."),

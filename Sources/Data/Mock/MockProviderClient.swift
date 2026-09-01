@@ -28,8 +28,8 @@ public struct MockProviderClient: ProviderClient {
     }
 
     public func resolveStreamURL(for providerItemKey: String, kind: ContentKind) async throws -> URL {
-        // In the mock everything points at a short public-domain test stream so
-        // the player can actually be exercised in the Simulator.
-        URL(string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")!
+        // In the mock everything points at one of Apple's public HLS reference
+        // streams so the player can actually be exercised in the Simulator.
+        URL(string: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8")!
     }
 }
