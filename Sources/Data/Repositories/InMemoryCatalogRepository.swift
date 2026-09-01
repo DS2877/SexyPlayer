@@ -18,11 +18,13 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     private var regionLimited = false
 
     // Indexes rebuilt whenever `catalog` changes — keep large-library queries
-    // off the O(n) path.
+    // off the O(n) path. The id→item maps store *array indices*, not struct
+    // copies: a `[CatalogID: Movie]` for a 50k-title library duplicates ~20 MB
+    // of value types for nothing.
     private var epgByChannel: [String: [EPGEvent]] = [:]   // each list sorted by start
-    private var movieByID: [CatalogID: Movie] = [:]
-    private var seriesByID: [CatalogID: Series] = [:]
-    private var channelByID: [CatalogID: Channel] = [:]
+    private var movieIndexByID: [CatalogID: Int] = [:]
+    private var seriesIndexByID: [CatalogID: Int] = [:]
+    private var channelIndexByID: [CatalogID: Int] = [:]
     private var facetGenres: [Genre] = []
     private var facetAudio: [Language] = []
     private var facetSubtitles: [Language] = []
@@ -115,9 +117,9 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     }
 
     private func rebuildIndexes() {
-        movieByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        seriesByID = Dictionary(catalog.series.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        channelByID = Dictionary(catalog.channels.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        movieIndexByID = Dictionary(catalog.movies.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        seriesIndexByID = Dictionary(catalog.series.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        channelIndexByID = Dictionary(catalog.channels.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
 
         var epg: [String: [EPGEvent]] = [:]
         for event in catalog.epg { epg[event.channelEPGID, default: []].append(event) }
@@ -293,16 +295,15 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         }
     }
 
-    public func movie(id: CatalogID) -> Movie? { movieByID[id] }
-    public func series(id: CatalogID) -> Series? { seriesByID[id] }
-    public func channel(id: CatalogID) -> Channel? { channelByID[id] }
+    public func movie(id: CatalogID) -> Movie? { movieIndexByID[id].map { catalog.movies[$0] } }
+    public func series(id: CatalogID) -> Series? { seriesIndexByID[id].map { catalog.series[$0] } }
+    public func channel(id: CatalogID) -> Channel? { channelIndexByID[id].map { catalog.channels[$0] } }
 
     public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) {
         if let i = source.series.firstIndex(where: { $0.id == id }) { source.series[i].seasons = seasons }
-        if let j = catalog.series.firstIndex(where: { $0.id == id }) {
-            catalog.series[j].seasons = seasons
-            seriesByID[id] = catalog.series[j]
-        }
+        // `series(id:)` reads `catalog.series[idx]` live, so mutating it here is
+        // enough — no cached struct to refresh.
+        if let j = seriesIndexByID[id] { catalog.series[j].seasons = seasons }
         seriesQueryCache = nil
     }
 
