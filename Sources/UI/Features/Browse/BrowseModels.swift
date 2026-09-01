@@ -23,6 +23,18 @@ public struct BrowseCard: Identifiable, Sendable {
     public let year: Int?
     public let isSeries: Bool
 
+    public init(id: CatalogID, route: AppRoute, title: String, subtitle: String?,
+                posterURL: URL?, progress: Double?, year: Int?, isSeries: Bool) {
+        self.id = id
+        self.route = route
+        self.title = title
+        self.subtitle = subtitle
+        self.posterURL = posterURL
+        self.progress = progress
+        self.year = year
+        self.isSeries = isSeries
+    }
+
     public var artworkRef: ArtworkRef {
         ArtworkRef(id: id, title: title, year: year, isSeries: isSeries)
     }

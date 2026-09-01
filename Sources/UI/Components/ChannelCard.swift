@@ -36,7 +36,7 @@ public struct ChannelCard: View {
                     GeneratedArtwork(seed: name)
 
                     if let logoURL {
-                        CachedImage(url: logoURL, contentMode: .fit) { monogram }
+                        CachedImage(url: logoURL, contentMode: .fit, size: .logo) { monogram }
                             .padding(Metrics.space3)
                     } else {
                         monogram

@@ -15,7 +15,7 @@ struct CastRail: View {
                 LazyHStack(alignment: .top, spacing: Metrics.space2) {
                     ForEach(Array(credits.enumerated()), id: \.offset) { _, credit in
                         VStack(spacing: 10) {
-                            CachedImage(url: credit.imageURL) {
+                            CachedImage(url: credit.imageURL, size: .logo) {
                                 ZStack {
                                     Circle().fill(Palette.surface)
                                     Image(systemName: "person.fill")

@@ -32,7 +32,12 @@ public final class LiveTVBrowseViewModel {
         self.repository = repository
     }
 
+    /// True once this model has loaded at least once, so re-entering the screen
+    /// can skip straight to the content it already holds.
+    public private(set) var hasStarted = false
+
     public func start() async {
+        hasStarted = true
         // Channels first; the category chips and the count fill in behind them.
         await reload()
     }
@@ -135,6 +140,7 @@ public final class LiveTVBrowseViewModel {
 
 struct LiveTVBrowseView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(SectionModels.self) private var models
     @State private var model: LiveTVBrowseViewModel?
     @State private var path: [AppRoute] = []
 
@@ -154,11 +160,11 @@ struct LiveTVBrowseView: View {
             .appRouteDestinations()
         }
         .task {
-            if model == nil {
-                let vm = LiveTVBrowseViewModel(repository: env.repository)
-                model = vm
-                await vm.start()
-            }
+            guard model == nil else { return }
+            let shared = models.liveTV(env)
+            model = shared
+            guard !shared.hasStarted else { return }
+            await shared.start()
         }
         .onChange(of: env.catalogRevision) { _, _ in
             model?.scheduleReload()

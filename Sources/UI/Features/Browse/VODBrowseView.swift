@@ -4,6 +4,7 @@ struct VODBrowseView: View {
     let kind: BrowseKind
 
     @Environment(AppEnvironment.self) private var env
+    @Environment(SectionModels.self) private var models
     @State private var model: VODBrowseViewModel?
     @State private var showFilters = false
     @State private var path: [AppRoute] = []
@@ -24,16 +25,18 @@ struct VODBrowseView: View {
             .appRouteDestinations()
         }
         .task {
-            if model == nil {
-                let vm = VODBrowseViewModel(kind: kind, repository: env.repository, watchProgress: env.watchProgress)
-                vm.filter.sort = env.preferences.preferences.defaultSort
-                model = vm
-                await vm.start()
-                prefetchPosters(vm)
-            }
+            guard model == nil else { return }
+            let shared = models.vod(kind, env)
+            model = shared
+            // Already populated from an earlier visit — don't re-query.
+            guard !shared.hasStarted else { return }
+            await shared.start()
+            prefetchPosters(shared)
         }
         .onChange(of: path.isEmpty) { _, atRoot in
-            if atRoot { Task { await model?.start() } }
+            // Back from a detail screen: only the watch-progress bars can have
+            // changed. Keep the grid — and the focus — exactly as it was.
+            if atRoot { model?.refreshProgress() }
         }
         .onChange(of: env.catalogRevision) { _, _ in
             // Coalesced (280 ms) — the revision bumps repeatedly during import.

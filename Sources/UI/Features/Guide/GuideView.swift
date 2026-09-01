@@ -23,6 +23,9 @@ final class GuideViewModel {
     private let repository: any CatalogQuerying
     private var pendingLoad: Task<Void, Never>?
 
+    /// True once loaded at least once — re-entering the Guide reuses the rows.
+    private(set) var hasLoaded = false
+
     init(repository: any CatalogQuerying) { self.repository = repository }
 
     /// Coalesced — the catalog revision bumps several times during a staged
@@ -61,6 +64,7 @@ final class GuideViewModel {
         }
         rows = built
         truncated = channels.count >= cap && built.count == channels.count
+        hasLoaded = true
     }
 }
 
@@ -69,6 +73,7 @@ final class GuideViewModel {
 /// dense 2-D timeline grid.
 struct GuideView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(SectionModels.self) private var models
     @State private var model: GuideViewModel?
     @State private var path: [AppRoute] = []
 
@@ -85,11 +90,11 @@ struct GuideView: View {
             .appRouteDestinations()
         }
         .task {
-            if model == nil {
-                let vm = GuideViewModel(repository: env.repository)
-                model = vm
-                await vm.load()
-            }
+            guard model == nil else { return }
+            let shared = models.guide(env)
+            model = shared
+            guard !shared.hasLoaded else { return }
+            await shared.load()
         }
         .onChange(of: env.catalogRevision) { _, _ in
             Task { await model?.load() }

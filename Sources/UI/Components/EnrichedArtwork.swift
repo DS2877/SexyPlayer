@@ -25,6 +25,7 @@ struct EnrichedArtwork: View {
     let providerURL: URL?
     var aspect: CGFloat = 2.0 / 3.0
     var style: ArtworkView.Style = .poster
+    var size: ImageSize = .poster
     /// Called once a real image (provider or TMDB) is available.
     var onResolvedImage: (() -> Void)? = nil
     /// Called with the TMDB rating (0…10) when one is found.
@@ -33,7 +34,7 @@ struct EnrichedArtwork: View {
     @State private var fetchedURL: URL?
 
     var body: some View {
-        ArtworkView(url: providerURL ?? fetchedURL, title: ref.title, aspect: aspect, style: style)
+        ArtworkView(url: providerURL ?? fetchedURL, title: ref.title, aspect: aspect, style: style, size: size)
             .task(id: ref) {
                 if providerURL != nil { onResolvedImage?(); return }
                 guard fetchedURL == nil else { return }

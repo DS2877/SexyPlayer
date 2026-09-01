@@ -65,8 +65,9 @@ public final class HomeViewModel {
     }
 
     /// A restored snapshot doesn't count — the first *live* build still runs
-    /// without the debounce.
-    private var hasBuiltOnce = false
+    /// without the debounce. Also tells the view whether re-entering Home needs
+    /// a rebuild at all.
+    public private(set) var hasBuiltOnce = false
 
     /// How much of the library each shelf query pulls.
     ///

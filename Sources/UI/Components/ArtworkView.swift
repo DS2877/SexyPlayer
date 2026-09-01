@@ -14,19 +14,25 @@ public struct ArtworkView: View {
     let title: String
     let aspect: CGFloat
     var style: Style = .poster
+    /// How large this actually renders — drives the decode. `style` is about the
+    /// *fallback*; a 16:9 episode still uses `.backdrop` styling but is only a
+    /// card-sized image, so the two are set independently.
+    var size: ImageSize = .poster
 
-    public init(url: URL?, title: String, aspect: CGFloat, style: Style = .poster) {
+    public init(url: URL?, title: String, aspect: CGFloat,
+                style: Style = .poster, size: ImageSize = .poster) {
         self.url = url
         self.title = title
         self.aspect = aspect
         self.style = style
+        self.size = size
     }
 
     public var body: some View {
         ZStack {
             GeneratedArtwork(seed: title)
             if let url {
-                CachedImage(url: url) { fallback }
+                CachedImage(url: url, size: size) { fallback }
             } else {
                 fallback
             }

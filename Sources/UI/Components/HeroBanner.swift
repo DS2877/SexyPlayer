@@ -65,7 +65,8 @@ struct HeroBanner: View {
                 EnrichedArtwork(ref: ref, providerURL: hero.artworkURL,
                                 aspect: 16.0 / 7.0, style: .backdrop)
             } else {
-                ArtworkView(url: hero.artworkURL, title: hero.title, aspect: 16.0 / 7.0, style: .backdrop)
+                ArtworkView(url: hero.artworkURL, title: hero.title, aspect: 16.0 / 7.0,
+                            style: .backdrop, size: .backdrop)
             }
         }
         .frame(height: height)

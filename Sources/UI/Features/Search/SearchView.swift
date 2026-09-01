@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(SectionModels.self) private var models
     @State private var model: SearchViewModel?
     @State private var path: [AppRoute] = []
     @State private var didAutoFocus = false
@@ -30,13 +31,8 @@ struct SearchView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task {
-            if model == nil {
-                model = SearchViewModel(repository: env.repository,
-                                        engine: env.searchEngine,
-                                        ai: env.aiService)
-            }
-        }
+        // Shared, so coming back to Search still shows your last results.
+        .task { if model == nil { model = models.search(env) } }
     }
 
     @ViewBuilder

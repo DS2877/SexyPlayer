@@ -31,13 +31,36 @@ public final class VODBrowseViewModel {
         self.watchProgress = watchProgress
     }
 
+    /// True once this model has loaded at least once, so re-entering the screen
+    /// can skip straight to the content it already holds.
+    public private(set) var hasStarted = false
+
     public func start() async {
+        hasStarted = true
         // Cards first — the facets fill the chip row in behind them.
         await reload()
     }
 
     public func clearFilters() {
         filter = CatalogFilter(sort: filter.sort)
+    }
+
+    /// Coming back from a detail screen, the only thing that can have changed is
+    /// how far through something you are. Re-mapping the cards in place keeps
+    /// scroll position and focus exactly where you left them — re-running the
+    /// query would rebuild the grid and throw both away.
+    public func refreshProgress() {
+        guard !cards.isEmpty, kind == .movies else { return }
+        var changed = false
+        let updated = cards.map { card -> BrowseCard in
+            let fresh = progressFraction(for: card.id)
+            if fresh == card.progress { return card }
+            changed = true
+            return BrowseCard(id: card.id, route: card.route, title: card.title,
+                              subtitle: card.subtitle, posterURL: card.posterURL,
+                              progress: fresh, year: card.year, isSeries: card.isSeries)
+        }
+        if changed { cards = updated }
     }
 
     /// Debounced — the filter UI calls this on every chip tap; only the settled

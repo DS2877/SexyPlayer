@@ -84,7 +84,7 @@ struct ChannelDetailView: View {
     private func header(_ channel: Channel) -> some View {
         HStack(alignment: .bottom, spacing: Metrics.space4) {
             if let logo = channel.logoURL {
-                CachedImage(url: logo, contentMode: .fit) { EmptyView() }
+                CachedImage(url: logo, contentMode: .fit, size: .logo) { EmptyView() }
                     .frame(width: 150, height: 150)
                     .padding(Metrics.space2)
                     .background(Palette.surface, in: RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))

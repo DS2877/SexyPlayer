@@ -6,26 +6,47 @@ import CryptoKit
 /// Decoded `UIImage`s kept in memory for instant redisplay while scrolling.
 /// Split out of the actor so views can read it synchronously; `NSCache` is
 /// itself thread-safe.
+/// How large an image needs to actually be decoded, by where it's shown.
+///
+/// This is the single biggest lever on scroll smoothness: a poster renders at
+/// 258 pt (≈516 px at 2×), so decoding it at 900 px was three times the pixels
+/// for no visible gain — 4.9 MB of bitmap instead of 1.7 MB. A channel logo sits
+/// in a 300×169 card and Live TV shows 90 of them per page.
+public enum ImageSize: Int, Sendable {
+    /// Channel logos, cast portraits, small chips.
+    case logo = 320
+    /// Poster cards, episode stills, history rows.
+    case poster = 560
+    /// The Home hero and detail backdrops — full-bleed, so worth the pixels.
+    case backdrop = 1280
+}
+
 final class DecodedImageMemoryCache: @unchecked Sendable {
     static let shared = DecodedImageMemoryCache()
 
     private let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
-        // Deliberately small — the Apple TV's memory budget is tight and the raw
-        // bytes are still on disk, so an eviction costs a ~10 ms re-decode on the
-        // next scroll, not a re-download. NSCache also drops everything on a
-        // system memory warning.
-        c.totalCostLimit = 56 * 1024 * 1024
-        c.countLimit = 40
+        // Sized against the *decoded* footprint above: a 560 px poster is
+        // ~1.7 MB, a logo ~0.2 MB. 64 MB therefore holds a couple of screens of
+        // posters plus every logo on a Live TV page — where the old 40-item cap
+        // couldn't even hold one screen, so scrolling back always re-decoded.
+        // The raw bytes stay on disk, so an eviction costs a decode, never a
+        // download. NSCache drops everything on a system memory warning.
+        c.totalCostLimit = 64 * 1024 * 1024
+        c.countLimit = 140
         return c
     }()
 
-    func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url.absoluteString as NSString)
+    private static func key(_ url: URL, _ size: ImageSize) -> NSString {
+        "\(size.rawValue)|\(url.absoluteString)" as NSString
     }
 
-    func store(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: url.absoluteString as NSString, cost: image.estimatedBytes)
+    func image(for url: URL, size: ImageSize) -> UIImage? {
+        cache.object(forKey: Self.key(url, size))
+    }
+
+    func store(_ image: UIImage, for url: URL, size: ImageSize) {
+        cache.setObject(image, forKey: Self.key(url, size), cost: image.estimatedBytes)
     }
 
     func removeAll() { cache.removeAllObjects() }
@@ -91,15 +112,31 @@ actor ImageCache {
         }
     }
 
-    func image(for url: URL) async -> UIImage? {
-        if let hit = DecodedImageMemoryCache.shared.image(for: url) { return hit }
+    /// URLs that came back 404 / unreachable, and when. Provider artwork is full
+    /// of dead links; without this every scroll past a broken poster fires the
+    /// request again, competing with the images that *do* load.
+    private var failures: [String: Date] = [:]
+    private static let failureCooldown: TimeInterval = 10 * 60
 
-        let key = url.absoluteString
+    func image(for url: URL, size: ImageSize = .poster) async -> UIImage? {
+        if let hit = DecodedImageMemoryCache.shared.image(for: url, size: size) { return hit }
+
+        let urlKey = url.absoluteString
+        if let failedAt = failures[urlKey] {
+            if Date().timeIntervalSince(failedAt) < Self.failureCooldown { return nil }
+            failures[urlKey] = nil
+        }
+
+        // Keyed by size: two shelves wanting the same poster at different sizes
+        // share the download but not the decode.
+        let key = "\(size.rawValue)|\(urlKey)"
         if let running = inFlight[key] { return await running.value }
 
         let dir = directory
         let session = self.session
         let task = Task<UIImage?, Never> {
+            // Raw bytes on disk are keyed by URL alone, so switching size never
+            // re-downloads.
             let fileURL = dir.appendingPathComponent(Self.filename(for: url))
             var bytes = try? Data(contentsOf: fileURL)
             if bytes == nil {
@@ -113,31 +150,35 @@ actor ImageCache {
 
             // Gate the expensive part — the decode holds a big uncompressed bitmap.
             await DecodeLimiter.shared.acquire()
-            let image = Self.decode(bytes)
+            let image = Self.decode(bytes, maxPixel: size.rawValue)
             await DecodeLimiter.shared.release()
             return image
         }
         inFlight[key] = task
         let image = await task.value
         inFlight[key] = nil
-        if let image { DecodedImageMemoryCache.shared.store(image, for: url) }
+        if let image {
+            DecodedImageMemoryCache.shared.store(image, for: url, size: size)
+        } else {
+            failures[urlKey] = Date()
+        }
         return image
     }
 
     /// Warm the cache for URLs about to scroll into view. Bounded to a couple of
     /// workers so a big grid doesn't spawn hundreds of concurrent decodes.
-    nonisolated func prefetch(_ urls: [URL]) {
-        let pending = urls.filter { DecodedImageMemoryCache.shared.image(for: $0) == nil }
+    nonisolated func prefetch(_ urls: [URL], size: ImageSize = .poster) {
+        let pending = urls.filter { DecodedImageMemoryCache.shared.image(for: $0, size: size) == nil }
         guard !pending.isEmpty else { return }
         Task.detached(priority: .utility) {
             await withTaskGroup(of: Void.self) { group in
                 var it = pending.makeIterator()
                 let workers = min(2, pending.count)
                 for _ in 0 ..< workers {
-                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u) } }
+                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u, size: size) } }
                 }
                 while await group.next() != nil {
-                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u) } }
+                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u, size: size) } }
                 }
             }
         }
@@ -150,19 +191,14 @@ actor ImageCache {
 
     // MARK: - Helpers
 
-    /// Largest edge we ever keep in memory. Posters display at ~520 px (2x); the
-    /// Home hero is the only full-width image. 900 keeps the hero acceptable at
-    /// TV viewing distance while a decoded 2:3 poster is ~4.9 MB (was ~12 MB at
-    /// 1400). Provider artwork is frequently many megapixels — downsampling on
-    /// decode is the whole point.
-    private static let maxPixelSize = 900
-
-    private static func decode(_ data: Data) -> UIImage? {
+    /// Downsample to the size the view actually renders at. Provider artwork is
+    /// frequently many megapixels; this is where that gets paid for exactly once.
+    private static func decode(_ data: Data, maxPixel: Int) -> UIImage? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
         ]
         if let source = CGImageSourceCreateWithData(data as CFData, nil),
            let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) {
@@ -204,45 +240,58 @@ private extension FileManager {
 struct CachedImage<Fallback: View>: View {
     private let url: URL?
     private let contentMode: ContentMode
+    private let size: ImageSize
     private let fallback: () -> Fallback
 
     @State private var image: UIImage?
     @State private var didFail = false
 
-    init(url: URL?, contentMode: ContentMode = .fill, @ViewBuilder fallback: @escaping () -> Fallback) {
+    init(url: URL?, contentMode: ContentMode = .fill, size: ImageSize = .poster,
+         @ViewBuilder fallback: @escaping () -> Fallback) {
         self.url = url
         self.contentMode = contentMode
+        self.size = size
         self.fallback = fallback
+    }
+
+    /// A cache hit must render on the very first frame — going through `.task`
+    /// would blank the cell for a frame and make a fast scroll flicker.
+    private var cached: UIImage? {
+        guard let url else { return nil }
+        return DecodedImageMemoryCache.shared.image(for: url, size: size)
     }
 
     var body: some View {
         ZStack {
-            if let image {
-                Image(uiImage: image).resizable().aspectRatio(contentMode: contentMode)
+            if let shown = image ?? cached {
+                Image(uiImage: shown).resizable().aspectRatio(contentMode: contentMode)
             } else if didFail {
                 fallback()
             }
         }
-        .task(id: url) {
+        .task(id: taskID) {
             didFail = false
             guard let url else { image = nil; return }
-            if let hit = DecodedImageMemoryCache.shared.image(for: url) {
+            if let hit = DecodedImageMemoryCache.shared.image(for: url, size: size) {
                 image = hit
                 return
             }
             image = nil
-            let loaded = await ImageCache.shared.image(for: url)
+            let loaded = await ImageCache.shared.image(for: url, size: size)
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.25)) {
+            // Only cross-fade a genuine load; a cache hit is already on screen.
+            withAnimation(.easeOut(duration: 0.22)) {
                 image = loaded
                 didFail = loaded == nil
             }
         }
     }
+
+    private var taskID: String { "\(size.rawValue)|\(url?.absoluteString ?? "")" }
 }
 
 extension CachedImage where Fallback == Color {
-    init(url: URL?, contentMode: ContentMode = .fill) {
-        self.init(url: url, contentMode: contentMode, fallback: { Color.clear })
+    init(url: URL?, contentMode: ContentMode = .fill, size: ImageSize = .poster) {
+        self.init(url: url, contentMode: contentMode, size: size, fallback: { Color.clear })
     }
 }

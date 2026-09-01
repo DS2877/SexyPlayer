@@ -43,6 +43,9 @@ struct SidebarShell: View {
 
     @State private var selection: Section = .home
     @FocusState private var focusedItem: Section?
+    /// Section view models outlive the `switch` below, so revisiting a screen
+    /// shows what it already had instead of re-querying.
+    @State private var models = SectionModels()
 
     var body: some View {
         HStack(spacing: 0) {
@@ -69,6 +72,11 @@ struct SidebarShell: View {
                 })
         }
         .background(Palette.canvas.ignoresSafeArea())
+        .environment(models)
+        .onChange(of: env.activeProvider?.id) { _, _ in
+            // A different library — nothing the old models hold is valid.
+            models.reset()
+        }
         .onChange(of: focusedItem) { _, item in
             // Focus-driven sidebar, the way the Apple TV app works: moving up/down
             // the list switches the content live.

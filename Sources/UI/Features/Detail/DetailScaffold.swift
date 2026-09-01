@@ -31,7 +31,8 @@ struct DetailScaffold<Content: View>: View {
     @ViewBuilder
     private var backdrop: some View {
         if hasBackdrop {
-            ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0, style: .backdrop)
+            ArtworkView(url: backdropURL, title: title, aspect: 16.0 / 9.0,
+                        style: .backdrop, size: .backdrop)
                 .frame(height: backdropHeight)
                 .frame(maxWidth: .infinity)
                 .clipped()

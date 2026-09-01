@@ -2,6 +2,9 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppEnvironment.self) private var environment
+    @Environment(SectionModels.self) private var models
+    /// A handle on the shared model — the store owns it, so leaving and
+    /// returning to Home doesn't rebuild the screen.
     @State private var model: HomeViewModel?
     @State private var path: [AppRoute] = []
 
@@ -28,30 +31,31 @@ struct HomeView: View {
                     loadingView
                 }
             }
+            .transition(.opacity)
+            // Skeleton → real content cross-fades instead of snapping. The
+            // shelves the full pass adds settle in the same way.
+            .animation(.easeInOut(duration: 0.32), value: contentFingerprint)
             .appThemeBackground()
             .appRouteDestinations()
         }
-        // Runs once, before the library is ready: build the model and paint the
-        // cached screen from the last session. This is the "instant" frame.
+        // Grab the shared model. On a first launch it restores the cached screen
+        // from the last session — the "instant" frame. On a return visit it
+        // already holds everything, so nothing reloads.
         .task {
             guard model == nil else { return }
-            let model = HomeViewModel(
-                repository: environment.repository,
-                watchProgress: environment.watchProgress,
-                preferences: environment.preferences,
-                metadata: environment.metadata,
-                channelHistory: environment.channelHistory
-            )
-            if let providerID = environment.activeProvider?.id {
-                model.restoreSnapshot(providerID: providerID)
-            }
-            self.model = model
-            if !model.content.rows.isEmpty { prefetchArtwork(model) }
+            let shared = models.home(environment)
+            model = shared
+            if !shared.content.rows.isEmpty { prefetchArtwork(shared) }
         }
         .task(id: environment.loadState) {
-            guard case .ready = environment.loadState, let model else { return }
-            await model.rebuild()
-            prefetchArtwork(model)
+            guard case .ready = environment.loadState else { return }
+            let shared = models.home(environment)
+            model = shared
+            // A rebuild is only needed the first time in, or when the catalog
+            // itself changed (handled by the catalogRevision hook below).
+            guard !shared.hasBuiltOnce else { consumePendingRoute(); return }
+            await shared.rebuild()
+            prefetchArtwork(shared)
             consumePendingRoute()
         }
         .onChange(of: environment.pendingRoute) { _, _ in consumePendingRoute() }
@@ -77,6 +81,13 @@ struct HomeView: View {
         }
     }
 
+    /// Changes when the shape of the screen changes (skeleton ↔ content, or a
+    /// pass adding rows) — drives the cross-fade without animating on every
+    /// unrelated redraw.
+    private var contentFingerprint: Int {
+        (model?.content.rows.count ?? -1) * 8 + (model?.content.heroes.isEmpty == false ? 1 : 0)
+    }
+
     /// Push a Top Shelf deep link onto the stack once Home is on screen and the
     /// catalog is loaded enough to resolve it.
     private func consumePendingRoute() {
@@ -88,12 +99,21 @@ struct HomeView: View {
 
     /// Warm the image cache for the hero and the first few rows so Home looks
     /// populated the instant it appears rather than filling in poster by poster.
+    ///
+    /// The hero is prefetched at backdrop resolution and the cards at poster
+    /// resolution — warming them at the wrong size would decode twice and still
+    /// miss when the view asks.
     private func prefetchArtwork(_ model: HomeViewModel) {
-        var urls: [URL] = model.content.heroes.compactMap(\.artworkURL)
+        // The lead hero first: it's the largest thing on screen and the one gap
+        // the eye actually notices.
+        ImageCache.shared.prefetch(Array(model.content.heroes.prefix(2)).compactMap(\.artworkURL),
+                                   size: .backdrop)
+
+        var cardURLs: [URL] = []
         for row in model.content.rows.prefix(3) {
-            urls += row.cards.prefix(8).compactMap(\.artworkURL)
+            cardURLs += row.cards.prefix(8).compactMap(\.artworkURL)
         }
-        ImageCache.shared.prefetch(urls)
+        ImageCache.shared.prefetch(cardURLs, size: .poster)
     }
 
     private var loadingView: some View {
