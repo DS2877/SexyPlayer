@@ -28,14 +28,26 @@ public actor CatalogDatabase {
         try CatalogSchema.migrate(connection)
     }
 
-    /// Open (creating if needed) the catalog store in Application Support.
-    public static func open() throws -> CatalogDatabase {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-        )
-        let directory = base.appendingPathComponent("AeriaCatalog", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return try CatalogDatabase(path: directory.appendingPathComponent("catalog.sqlite3"))
+    /// Open (creating if needed) the catalog store in Application Support,
+    /// falling back to a temporary location if that fails so the app still runs.
+    public static func open() -> CatalogDatabase {
+        let fm = FileManager.default
+        var candidates: [URL] = []
+        if let base = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true) {
+            let directory = base.appendingPathComponent("AeriaCatalog", isDirectory: true)
+            try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            candidates.append(directory.appendingPathComponent("catalog.sqlite3"))
+        }
+        candidates.append(fm.temporaryDirectory.appendingPathComponent("aeria-catalog.sqlite3"))
+
+        for url in candidates {
+            if let database = try? CatalogDatabase(path: url) { return database }
+            try? fm.removeItem(at: url)   // a corrupt file — drop it and retry
+            if let database = try? CatalogDatabase(path: url) { return database }
+        }
+        // Every location failed — a unique scratch file is the last resort.
+        return try! CatalogDatabase(path: fm.temporaryDirectory
+            .appendingPathComponent("aeria-catalog-\(UUID().uuidString).sqlite3"))
     }
 
     // MARK: - Meta
@@ -73,6 +85,11 @@ public actor CatalogDatabase {
 
     public func loadedProviderID() -> String? {
         rawMeta(MetaKey.providerID)
+    }
+
+    /// When the current catalog finished importing, if ever.
+    public func importedAt() -> Date? {
+        rawMeta(MetaKey.importedAt).flatMap(Double.init).map { Date(timeIntervalSince1970: $0) }
     }
 
     public enum MetaKey {

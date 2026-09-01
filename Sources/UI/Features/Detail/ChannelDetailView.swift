@@ -67,7 +67,8 @@ struct ChannelDetailView: View {
             schedule = await env.repository.epgEvents(forEPGID: epgID, in: window)
         }
         if lineup.isEmpty {
-            lineup = await env.repository.snapshot().channels
+            // "For you" order — enough for zapping through nearby channels.
+            lineup = await env.repository.channels(in: nil, sort: .number, page: 0, pageSize: 3000)
         }
     }
 

@@ -19,13 +19,13 @@ public final class VODBrowseViewModel {
 
     public var filter = CatalogFilter()
 
-    private let repository: any CatalogRepository
+    private let repository: any CatalogQuerying
     private let watchProgress: WatchProgressStore
     private let pageSize = 60
     private var page = 0
     private var reloadTask: Task<Void, Never>?
 
-    public init(kind: BrowseKind, repository: any CatalogRepository, watchProgress: WatchProgressStore) {
+    public init(kind: BrowseKind, repository: any CatalogQuerying, watchProgress: WatchProgressStore) {
         self.kind = kind
         self.repository = repository
         self.watchProgress = watchProgress

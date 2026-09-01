@@ -26,11 +26,11 @@ public final class SearchViewModel {
 
     public var chips: [Chip] { Self.chips(for: intent) }
 
-    private let repository: any CatalogRepository
+    private let repository: any CatalogQuerying
     private let engine: SearchEngine
     private let ai: AIService
 
-    public init(repository: any CatalogRepository, engine: SearchEngine, ai: AIService) {
+    public init(repository: any CatalogQuerying, engine: SearchEngine, ai: AIService) {
         self.repository = repository
         self.engine = engine
         self.ai = ai
@@ -82,8 +82,7 @@ public final class SearchViewModel {
     }
 
     private func runEngine() async {
-        let catalog = await repository.snapshot()
-        results = engine.search(intent, in: catalog, limit: 150)
+        results = await repository.search(intent, limit: 150)
     }
 
     // MARK: - Chip mapping

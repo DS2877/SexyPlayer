@@ -20,10 +20,10 @@ final class GuideViewModel {
     /// Most people never scroll past a few hundred channels in a guide.
     private static let rowCap = 250
 
-    private let repository: any CatalogRepository
+    private let repository: any CatalogQuerying
     private var pendingLoad: Task<Void, Never>?
 
-    init(repository: any CatalogRepository) { self.repository = repository }
+    init(repository: any CatalogQuerying) { self.repository = repository }
 
     /// Coalesced — the catalog revision bumps several times during a staged
     /// import; without this each bump kicks off another full channel scan.
@@ -41,30 +41,26 @@ final class GuideViewModel {
     private func performLoad() async {
         isLoading = true
         defer { isLoading = false }
-        let catalog = await repository.snapshot()
-        guard !Task.isCancelled else { return }
-        let epg = await repository.epgIndex()
-        let anchor = now
+
         let cap = Self.rowCap
-
-        let result = await Task.detached(priority: .userInitiated) { () -> (rows: [GuideChannelRow], truncated: Bool) in
-            let window = DateInterval(start: anchor.addingTimeInterval(-3600),
-                                      end: anchor.addingTimeInterval(8 * 3600))
-            var rows: [GuideChannelRow] = []
-            for channel in catalog.channels {
-                guard let epgID = channel.epgID, epg[epgID] != nil else { continue }
-                let events = epg.events(forChannel: epgID, in: window)
-                guard !events.isEmpty else { continue }
-                rows.append(GuideChannelRow(id: channel.id, name: channel.name,
-                                            logoURL: channel.logoURL, events: events))
-                if rows.count >= cap { return (rows, true) }
-            }
-            return (rows, false)
-        }.value
-
+        // "For you" order, EPG-carrying channels only — the store already caps it.
+        let channels = await repository.guideChannels(limit: cap)
         guard !Task.isCancelled else { return }
-        rows = result.rows
-        truncated = result.truncated
+
+        let epgIDs = channels.compactMap(\.epgID)
+        let window = DateInterval(start: now.addingTimeInterval(-3600),
+                                  end: now.addingTimeInterval(8 * 3600))
+        let epg = await repository.epgIndex(forEPGIDs: epgIDs, in: window)
+        guard !Task.isCancelled else { return }
+
+        var built: [GuideChannelRow] = []
+        for channel in channels {
+            guard let epgID = channel.epgID, let events = epg[epgID], !events.isEmpty else { continue }
+            built.append(GuideChannelRow(id: channel.id, name: channel.name,
+                                         logoURL: channel.logoURL, events: events))
+        }
+        rows = built
+        truncated = channels.count >= cap && built.count == channels.count
     }
 }
 

@@ -94,20 +94,30 @@ struct HistoryView: View {
     }
 
     private func reload() async {
-        let catalog = await env.repository.snapshot()
-        let moviesByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let repo = env.repository
+        let entries = env.watchProgress.history()
 
+        let movieIDs = entries.filter { $0.kind == .movie }.map(\.itemID)
+        let episodeIDs = entries.filter { $0.kind == .series }.map(\.itemID)
+
+        let movieHits = await repo.movies(ids: movieIDs)
+        var episodes: [Episode] = []
+        for id in episodeIDs {
+            if let episode = await repo.episode(id: id) { episodes.append(episode) }
+        }
+        let seriesHits = await repo.series(ids: Array(Set(episodes.map(\.seriesID))))
+
+        let moviesByID = Dictionary(movieHits.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let seriesByID = Dictionary(seriesHits.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var episodeIndex: [CatalogID: (series: Series, episode: Episode)] = [:]
-        for series in catalog.series {
-            for season in series.seasons {
-                for episode in season.episodes { episodeIndex[episode.id] = (series, episode) }
-            }
+        for episode in episodes {
+            if let series = seriesByID[episode.seriesID] { episodeIndex[episode.id] = (series, episode) }
         }
 
         var inProgress: [HistoryRow] = []
         var watched: [HistoryRow] = []
 
-        for entry in env.watchProgress.history() {
+        for entry in entries {
             guard let row = makeRow(for: entry, moviesByID: moviesByID, episodeIndex: episodeIndex) else { continue }
             if entry.isFinished { watched.append(row) } else { inProgress.append(row) }
         }

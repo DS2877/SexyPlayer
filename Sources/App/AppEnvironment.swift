@@ -15,7 +15,8 @@ public final class AppEnvironment {
     }
 
     // Dependencies
-    public let repository: InMemoryCatalogRepository
+    public let database: CatalogDatabase
+    public let repository: SQLiteCatalogRepository
     public let searchEngine: SearchEngine
     public let aiService: AIService
     public let watchProgress: WatchProgressStore
@@ -27,10 +28,8 @@ public final class AppEnvironment {
     public let metadata = MetadataService()
     public let network = NetworkMonitor()
     private let normalizer: Normalizer
-    private let cache = CatalogCache()
     private var provider: (any ProviderClient)?
     private var refreshTask: Task<Void, Never>?
-    private var backgroundLoadTask: Task<Void, Never>?
 
     /// How old a cached catalog can be before we silently refresh it on launch.
     private let staleAfter: TimeInterval = 60 * 60 * 6
@@ -68,8 +67,9 @@ public final class AppEnvironment {
     public var needsProviderSetup: Bool { !providers.hasAnyProvider }
 
     public init() {
-        self.repository = InMemoryCatalogRepository()
+        self.database = CatalogDatabase.open()
         self.searchEngine = SearchEngine()
+        self.repository = SQLiteCatalogRepository(database: self.database, searchEngine: self.searchEngine)
         self.aiService = AIService(mode: .onDeviceOnly)
         self.watchProgress = WatchProgressStore()
         self.channelHistory = ChannelHistoryStore()
@@ -138,9 +138,11 @@ public final class AppEnvironment {
 
     public static func live() -> AppEnvironment { AppEnvironment() }
 
-    /// Load the active provider's catalog: cached copy first (instant), then a
-    /// background refresh from the provider. A full foreground import (with the
-    /// progress checklist) only happens when there's no usable cache.
+    /// Load the active provider's catalog. If a completed import is already in
+    /// the SQLite store, the app is interactive immediately and a stale copy is
+    /// refreshed in the background. Otherwise the import is streamed in — the app
+    /// goes interactive the moment the channel list lands, and movies / series /
+    /// guide fill in behind it, none of it ever fully resident in memory.
     public func bootstrap(forceReload: Bool = false) async {
         if case .loading = loadState { return }
         if case .ready = loadState, !forceReload { return }
@@ -152,92 +154,65 @@ public final class AppEnvironment {
         }
         provider = client
         let providerID = config.id
+        let homeRegions = RelevanceFilter.homeRegions(for: preferences.preferences.preferredAudioLanguages)
 
-        // Fast path: cached catalog, loaded in phases. Channels first → the app
-        // is interactive in well under a second; movies/series and then the EPG
-        // stream in behind it.
-        if !forceReload, let chans = await cache.loadChannels(providerID: providerID), !chans.channels.isEmpty {
-            catalogComplete = false
-            backgroundLoadTask?.cancel()
-            await repository.loadChannelsOnly(chans.channels)
+        // Fast path: a completed import for this provider is already on disk.
+        if !forceReload, await database.isReady(providerID: providerID) {
             await applyPreferences()
             loadState = .ready
             hasLoadedOnce = true
-            AppLog.app.info("Cache channels loaded (\(Int(chans.age))s old) — \(chans.channels.count) channels.")
+            catalogComplete = true
+            reachedPhases = Set(ImportPhase.allCases)
+            catalogRevision += 1
+            vocabulary = await repository.searchVocabulary()
+            startMetadataWarmUp()
+            await writeTopShelfSnapshot()
 
-            backgroundLoadTask = Task { [weak self] in
-                guard let self else { return }
-                let vod = await self.cache.loadVOD(providerID: providerID)
-                guard !Task.isCancelled else { return }
-                await self.repository.mergeVOD(movies: vod.movies, series: vod.series)
-                self.vocabulary = await Task.detached {
-                    SearchVocabulary.from(catalog: Catalog(movies: vod.movies, series: vod.series))
-                }.value
-                self.catalogRevision += 1
-
-                let events = await self.cache.loadEPG(providerID: providerID)
-                guard !Task.isCancelled else { return }
-                await self.repository.mergeEPG(events)
-                self.catalogComplete = true
-                self.catalogRevision += 1
-                AppLog.app.info("Cache fully loaded — \(vod.movies.count) mv · \(vod.series.count) sr · \(events.count) EPG.")
-                self.startMetadataWarmUp()
-                await self.writeTopShelfSnapshot()
-            }
-
-            if chans.age > staleAfter {
-                startBackgroundRefresh(client: client, providerID: providerID)
+            let age = await database.importedAt().map { Date().timeIntervalSince($0) } ?? .infinity
+            if age > staleAfter {
+                startBackgroundRefresh(client: client, providerID: providerID, homeRegions: homeRegions)
             }
             return
         }
 
-        // Slow path: staged cold import. The app becomes interactive the moment
-        // the channels land; movies/series and then the EPG stream in behind it,
-        // exactly like the cached fast path above.
+        // Cold import — stream it into the store.
         reachedPhases = []
         catalogComplete = false
         loadState = .loading
         let reporter = ImportProgressReporter { [weak self] phase in
             Task { @MainActor in self?.markPhase(phase) }
         }
+        let freshImport = !(await database.isReady(providerID: providerID))
+        let writer = CatalogWriter(database: database, normalizer: normalizer,
+                                   providerID: providerID, homeRegions: homeRegions)
         do {
             let importStart = Date()
+            try await writer.begin(fresh: freshImport)
 
             try await client.fetchStaged(progress: reporter) { [weak self] stage in
-                guard let self else { return }
-                await self.ingest(stage, providerID: providerID)
+                await self?.handleImportStage(stage, providerID: providerID, writer: writer)
             }
             guard providers.activeConfiguration?.id == providerID else { return }
 
-            let assembled = await repository.exportCatalog()
-            guard !assembled.isEmpty else {
-                loadState = .failed(.emptyLibrary)
-                AppLog.provider.error("Staged import produced an empty catalog.")
-                return
-            }
-
-            // A VOD-only provider never fires a channels stage — go ready now.
+            try await writer.finish()
+            markPhase(.finalizing)
+            catalogComplete = true
+            catalogRevision += 1
             if loadState != .ready {
                 await applyPreferences()
                 loadState = .ready
                 hasLoadedOnce = true
             }
-            markPhase(.finalizing)
-            catalogComplete = true
-            catalogRevision += 1
-            vocabulary = await Task.detached { SearchVocabulary.from(catalog: assembled) }.value
+            vocabulary = await repository.searchVocabulary()
 
             let elapsed = String(format: "%.1f", Date().timeIntervalSince(importStart))
-            AppLog.app.info("Catalog ready (staged) in \(elapsed)s — \(RuntimeStats.catalogSummary(assembled)).")
-            await cache.save(assembled, providerID: providerID)
+            AppLog.app.info("Catalog imported to SQLite in \(elapsed)s.")
             startMetadataWarmUp()
             await writeTopShelfSnapshot()
         } catch {
             if loadState == .ready {
-                // The user already has a working app — keep the partial catalog
-                // rather than throwing them back to an error screen.
                 catalogComplete = true
-                AppLog.provider.notice("Import stage failed after going interactive; keeping partial catalog.")
+                AppLog.provider.notice("Import failed after going interactive; keeping the partial catalog.")
             } else {
                 let providerError = ProviderError.from(error)
                 loadState = .failed(providerError)
@@ -246,122 +221,59 @@ public final class AppEnvironment {
         }
     }
 
-    /// Fold one staged fetch slice into the live repository. `@MainActor` (class
-    /// default) so it can update published state directly.
-    private func ingest(_ stage: RawStage, providerID: String) async {
-        // The user may have switched providers while this import was in flight.
+    /// Normalise + write one staged slice, then flip the app interactive on the
+    /// first content stage and nudge the feature screens to re-query. `@MainActor`
+    /// so it can touch published state; the heavy work is on the writer actor.
+    private func handleImportStage(_ stage: RawStage, providerID: String, writer: CatalogWriter) async {
         guard providers.activeConfiguration?.id == providerID else { return }
-        switch stage {
-        case .channels(let raw):
-            let started = Date()
-            let channels = await normalizer.normalizeChannels(raw, providerID: providerID)
-            guard providers.activeConfiguration?.id == providerID else { return }
-            await repository.loadChannelsOnly(channels)
-            await applyPreferences()
-            loadState = .ready
-            hasLoadedOnce = true
-            Task { await cache.saveChannels(channels, providerID: providerID) }
-            AppLog.app.info("Channels stage: \(channels.count) in \(Int(Date().timeIntervalSince(started) * 1000)) ms — app interactive.")
-        case .vod(let movies, let shells, let episodes):
-            let started = Date()
-            // Merge a small first slice so the shelves populate a beat sooner on
-            // a big library. Provider order (not "newest first") — sorting the
-            // whole raw list is a ~50 MB copy for nothing; the repository sorts
-            // on query anyway, and the slice is replaced by the full set a
-            // couple of seconds later.
-            if movies.count > Self.vodFirstChunk {
-                let first = await normalizer.normalizeVOD(
-                    movies: Array(movies.prefix(Self.vodFirstChunk)),
-                    shells: [], episodes: [], providerID: providerID
-                )
-                guard providers.activeConfiguration?.id == providerID else { return }
-                await repository.mergeVOD(movies: first.movies, series: first.series)
-                catalogRevision += 1
-            }
+        do { try await writer.ingest(stage) }
+        catch { AppLog.provider.error("Import stage failed: \(String(describing: error))") }
 
-            let result = await normalizer.normalizeVOD(
-                movies: movies, shells: shells, episodes: episodes, providerID: providerID
-            )
-            guard providers.activeConfiguration?.id == providerID else { return }
-            await repository.mergeVOD(movies: result.movies, series: result.series)
-            catalogRevision += 1
-            let (mCount, sCount) = (result.movies.count, result.series.count)
-            await cache.saveVOD(movies: result.movies, series: result.series, providerID: providerID)
-            AppLog.app.info("VOD stage: \(mCount) movies · \(sCount) series in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
-        case .guide(let raw):
-            let started = Date()
-            // The provider clients already parse the XMLTV within EPGWindow, so
-            // `raw` is small; a light re-trim only matters for the default
-            // (non-streamed) fetch path.
-            let window = EPGWindow.current()
-            let windowed = raw.count > 50_000
-                ? raw.filter { $0.stop > window.start && $0.start < window.end }
-                : raw
-            let events = await normalizer.normalizeGuide(windowed)
-            guard providers.activeConfiguration?.id == providerID else { return }
-            await repository.mergeEPG(events)
-            catalogRevision += 1
-            Task { await cache.saveEPG(events, providerID: providerID) }
-            AppLog.app.info("Guide stage: \(events.count) of \(raw.count) events in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
+        switch stage {
+        case .channels, .vod:
+            if loadState != .ready {
+                await applyPreferences()
+                loadState = .ready
+                hasLoadedOnce = true
+            }
+        case .guide:
+            break
         }
+        catalogRevision += 1
     }
 
     /// Manually re-pull the active provider's library (Settings → Refresh).
     public func refreshLibrary() async {
         guard let client = provider, let providerID = providers.activeConfiguration?.id else { return }
-        startBackgroundRefresh(client: client, providerID: providerID)
+        let homeRegions = RelevanceFilter.homeRegions(for: preferences.preferences.preferredAudioLanguages)
+        startBackgroundRefresh(client: client, providerID: providerID, homeRegions: homeRegions)
         await refreshTask?.value
     }
 
-    /// On a cold import, merge this many newest movies before the full set so
-    /// the Home shelves fill in without waiting on the whole library.
-    private static let vodFirstChunk = 800
-
-    /// EPG window — see `EPGWindow`. The provider clients already parse the
-    /// XMLTV within this window; these constants are a belt-and-braces trim in
-    /// case a provider's default (non-streamed) path is ever used.
-    private static let epgWindowPast = EPGWindow.past
-    private static let epgWindowFuture = EPGWindow.future
-
-    private func importCatalog(client: any ProviderClient, reporter: ImportProgressReporter) async throws -> Catalog {
-        var raw = try await client.fetchRawCatalog(progress: reporter)
-
-        // Drop EPG outside the window *before* normalizing — no point spending
-        // time on events we'll never show.
-        let now = Date()
-        let lower = now.addingTimeInterval(-Self.epgWindowPast)
-        let upper = now.addingTimeInterval(Self.epgWindowFuture)
-        let epgBefore = raw.epg.count
-        raw.epg = raw.epg.filter { $0.stop > lower && $0.start < upper }
-        if epgBefore != raw.epg.count {
-            AppLog.app.info("Trimmed EPG before normalize: \(raw.epg.count) of \(epgBefore) events kept.")
-        }
-
-        let normStart = Date()
-        let catalog = await normalizer.normalizeConcurrently(raw) { phase in reporter.reached(phase) }
-        AppLog.app.info("Normalized in \(String(format: "%.1f", Date().timeIntervalSince(normStart)))s.")
-        return catalog
-    }
-
-    private func startBackgroundRefresh(client: any ProviderClient, providerID: String) {
+    /// Re-import in the background, updating rows in place so nothing on screen
+    /// goes blank while it runs.
+    private func startBackgroundRefresh(client: any ProviderClient, providerID: String, homeRegions: Set<String>) {
         guard refreshTask == nil else { return }
         isRefreshing = true
         refreshTask = Task { [weak self] in
             guard let self else { return }
             defer { self.refreshTask = nil; self.isRefreshing = false }
+            let writer = CatalogWriter(database: self.database, normalizer: self.normalizer,
+                                       providerID: providerID, homeRegions: homeRegions)
             do {
-                let catalog = try await self.importCatalog(client: client, reporter: .ignore)
-                // Provider may have changed while we were fetching.
+                try await writer.begin(fresh: false)
+                try await client.fetchStaged(progress: .ignore) { stage in
+                    try? await writer.ingest(stage)
+                }
                 guard !Task.isCancelled,
                       self.providers.activeConfiguration?.id == providerID else { return }
-                await self.repository.load(catalog)
+                try await writer.finish()
                 await self.applyPreferences()
-                let forVocab = catalog
-                self.vocabulary = await Task.detached { SearchVocabulary.from(catalog: forVocab) }.value
-                await self.cache.save(catalog, providerID: providerID)
-                AppLog.app.info("Catalog refreshed in background.")
+                self.vocabulary = await self.repository.searchVocabulary()
+                self.catalogRevision += 1
+                AppLog.app.info("Catalog refreshed in the background.")
             } catch {
-                AppLog.provider.notice("Background refresh failed; keeping cached catalog.")
+                AppLog.provider.notice("Background refresh failed; keeping the existing catalog.")
             }
         }
     }
@@ -385,28 +297,30 @@ public final class AppEnvironment {
         reachedPhases.formUnion(order.prefix(idx + 1))
     }
 
-    /// Make `config` active and load its catalog (cache first, else full import).
+    /// Make `config` active and load its catalog. The store keeps one provider's
+    /// catalog at a time; switching triggers a fresh import (which wipes first).
     public func activate(_ config: ProviderConfiguration) async {
         refreshTask?.cancel()
         refreshTask = nil
-        backgroundLoadTask?.cancel()
-        backgroundLoadTask = nil
         await metadata.cancelWarmUp()
         providers.setActive(config.id)
         loadState = .idle
         hasLoadedOnce = false
         catalogComplete = false
         reachedPhases = []
-        await repository.load(Catalog())
         await bootstrap(forceReload: false)
     }
 
-    /// Remove a provider and its cached catalog.
+    /// Remove a provider; wipe the catalog store if it was the loaded one.
     public func removeProvider(_ id: String) async {
+        let wasLoaded = await database.loadedProviderID() == id
         providers.remove(id)
-        await cache.clear(providerID: id)
+        if wasLoaded || !providers.hasAnyProvider {
+            try? await database.clearCatalog()
+            try? await database.setMeta(CatalogDatabase.MetaKey.providerID, nil)
+            try? await database.setMeta(CatalogDatabase.MetaKey.importComplete, "0")
+        }
         if !providers.hasAnyProvider {
-            await repository.load(Catalog())
             loadState = .idle
             hasLoadedOnce = false
         }
@@ -541,11 +455,10 @@ public final class AppEnvironment {
     }
 
     func writeTopShelfSnapshot() async {
-        let catalog = await repository.snapshot()
-        guard !catalog.isEmpty else { return }
+        guard await repository.isReady() else { return }
         let progress = watchProgress.allEntries()
 
-        let resume = UpNext.resumePoints(catalog: catalog, progress: progress, limit: 12)
+        let resume = await repository.resumePoints(progress: progress, limit: 12)
         var continueItems: [TopShelfPayload.Item] = []
         for point in resume {
             var image = point.artworkURL
@@ -559,12 +472,8 @@ public final class AppEnvironment {
             ))
         }
 
-        let recentMovies = catalog.movies
-            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
-            .prefix(8)
-        let recentSeries = catalog.series
-            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
-            .prefix(4)
+        let recentMovies = await repository.newestMovies(limit: 8)
+        let recentSeries = await repository.newestSeries(limit: 4)
         var recentItems: [TopShelfPayload.Item] = []
         for movie in recentMovies {
             var image = movie.posterURL

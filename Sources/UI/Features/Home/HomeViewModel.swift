@@ -8,7 +8,7 @@ public final class HomeViewModel {
     public private(set) var content: HomeContent = .empty
     public private(set) var isBuilding = false
 
-    private let repository: any CatalogRepository
+    private let repository: any CatalogQuerying
     private let watchProgress: WatchProgressStore
     private let preferences: PreferencesStore
     private let metadata: MetadataService
@@ -19,7 +19,7 @@ public final class HomeViewModel {
     /// pass; a handful running at once is enough to jetsam the app on device.
     private var pendingRebuild: Task<Void, Never>?
 
-    public init(repository: any CatalogRepository,
+    public init(repository: any CatalogQuerying,
                 watchProgress: WatchProgressStore,
                 preferences: PreferencesStore,
                 metadata: MetadataService,
@@ -45,31 +45,107 @@ public final class HomeViewModel {
         await task.value
     }
 
+    /// How much of the library each shelf query pulls. These bound Home's
+    /// working set to a few thousand rows regardless of library size — the whole
+    /// reason for the SQLite store.
+    private enum Slice {
+        static let newestMovies = 500
+        static let newestSeries = 200
+        static let perGenreMovies = 24
+        static let perGenreSeries = 10
+        static let topGenres = 6
+        static let languageShelf = 30
+        static let guideChannels = 60
+    }
+
     private func performRebuild(now: Date) async {
         isBuilding = true
         defer { isBuilding = false }
 
-        // Gather Sendable inputs on the main actor, then do the heavy shaping
-        // (sorts/filters over tens of thousands of items) off it.
-        let catalog = await repository.snapshot()
-        guard !catalog.isEmpty else { content = .empty; return }
-        guard !Task.isCancelled else { return }
-        let epg = await repository.epgIndex()
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
-        let ratings = await metadata.ratingsSnapshot()
-        // Already ranked: regulars first, then home country, then the rest.
-        let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
-        let recentChannelIDs = channelHistory.recent(limit: 16)
+
+        guard await repository.isReady() else { content = .empty; return }
         guard !Task.isCancelled else { return }
 
-        let shaped = await Task.detached(priority: .userInitiated) {
-            Self.makeContent(catalog: catalog, epg: epg, progress: progress,
-                             prefs: prefs, ratings: ratings, liveNow: liveNow,
-                             recentChannelIDs: recentChannelIDs, now: now)
-        }.value
+        // Bounded shelf queries — never the whole catalog.
+        async let newestMoviesF = repository.newestMovies(limit: Slice.newestMovies)
+        async let newestSeriesF = repository.newestSeries(limit: Slice.newestSeries)
+        async let liveNowF = repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
+        async let guideChannelsF = repository.guideChannels(limit: Slice.guideChannels)
+        async let ratingsF = metadata.ratingsSnapshot()
+
+        var newestMovies = await newestMoviesF
+        var newestSeries = await newestSeriesF
+        let liveNow = await liveNowF
+        let guideChannels = await guideChannelsF
+        let ratings = await ratingsF
         guard !Task.isCancelled else { return }
-        content = shaped
+
+        // Resolve the containers Continue Watching / "Because You Watched" need.
+        let watchedMovies = await repository.movies(ids: progress.filter { $0.kind == .movie }.map(\.itemID))
+        var watchedEpisodes: [Episode] = []
+        for id in progress.filter({ $0.kind == .series }).map(\.itemID) {
+            if let episode = await repository.episode(id: id) { watchedEpisodes.append(episode) }
+        }
+        let watchedSeries = await repository.series(ids: Array(Set(watchedEpisodes.map(\.seriesID))))
+        guard !Task.isCancelled else { return }
+
+        // Genre shelves.
+        let topGenres = await repository.topGenres(limit: Slice.topGenres)
+        var genreMovies: [Movie] = []
+        var genreSeries: [Series] = []
+        for genre in topGenres {
+            genreMovies += await repository.moviesInGenre(genre, limit: Slice.perGenreMovies)
+            genreSeries += await repository.seriesInGenre(genre, limit: Slice.perGenreSeries)
+        }
+        guard !Task.isCancelled else { return }
+
+        // Language shelves.
+        let langMovies = prefs.preferredAudioLanguages.isEmpty ? []
+            : await repository.moviesInAudioLanguages(prefs.preferredAudioLanguages, limit: Slice.languageShelf)
+        let subMovies: [Movie]
+        if let sub = prefs.preferredSubtitleLanguage {
+            subMovies = await repository.moviesInSubtitleLanguage(sub, limit: Slice.languageShelf)
+        } else {
+            subMovies = []
+        }
+        guard !Task.isCancelled else { return }
+
+        // "Because You Watched" — genre-similar to the newest played title.
+        // `watchedSeries` already carries its season tree from the store.
+        var becauseMovies: [Movie] = []
+        var becauseSeries: [Series] = []
+        if let anchor = Self.mostRecentWatched(
+            progress: progress, catalog: Catalog(movies: watchedMovies, series: watchedSeries)
+        ) {
+            becauseMovies = await repository.similarMovies(to: anchor.id, genres: anchor.genres, limit: 20)
+            becauseSeries = await repository.similarSeries(to: anchor.id, genres: anchor.genres, limit: 12)
+        }
+        guard !Task.isCancelled else { return }
+
+        // Merge into one bounded catalog for the shaper, de-duplicated.
+        newestMovies = Self.uniqued(newestMovies + watchedMovies + genreMovies + langMovies + subMovies + becauseMovies)
+        newestSeries = Self.uniqued(newestSeries + watchedSeries + genreSeries + becauseSeries)
+        let channels = Self.uniqued(liveNow + guideChannels)
+
+        let window = DateInterval(start: now.addingTimeInterval(-3600), end: now.addingTimeInterval(18 * 3600))
+        let epg = await repository.epgIndex(forEPGIDs: channels.compactMap(\.epgID), in: window)
+        guard !Task.isCancelled else { return }
+
+        let miniCatalog = Catalog(channels: channels, movies: newestMovies, series: newestSeries,
+                                  epg: epg.values.flatMap { $0 })
+        let recentChannelIDs = channelHistory.recent(limit: 16)
+
+        content = Self.makeContent(catalog: miniCatalog, epg: epg, progress: progress,
+                                   prefs: prefs, ratings: ratings, liveNow: liveNow,
+                                   recentChannelIDs: recentChannelIDs, now: now)
+    }
+
+    /// De-dupe by id, keeping first-seen order.
+    nonisolated private static func uniqued<T: Identifiable>(_ items: [T]) -> [T] where T.ID: Hashable {
+        var seen = Set<T.ID>()
+        return items.filter { seen.insert($0.id).inserted }
     }
 
     // MARK: - Pure builder (runs off the main actor)
@@ -290,9 +366,17 @@ public final class HomeViewModel {
     }
 
     nonisolated static func card(for series: Series) -> HomeCard {
-        HomeCard(id: series.id, kind: .series, title: series.title,
-                 subtitle: "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")",
-                 artworkURL: series.posterURL, year: series.year)
+        // Shelf series come from the store without their season tree loaded;
+        // fall back to year / genre when the count isn't known.
+        let subtitle: String
+        if series.seasons.isEmpty {
+            subtitle = [series.year.map(String.init), series.genres.first?.displayName]
+                .compactMap { $0 }.joined(separator: " · ")
+        } else {
+            subtitle = "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")"
+        }
+        return HomeCard(id: series.id, kind: .series, title: series.title,
+                        subtitle: subtitle, artworkURL: series.posterURL, year: series.year)
     }
 
     /// The newest movie / series the viewer has played that still carries genre
@@ -346,7 +430,9 @@ public final class HomeViewModel {
         var parts: [String] = []
         if let year = series.year { parts.append(String(year)) }
         if let genre = series.genres.first { parts.append(genre.displayName) }
-        parts.append("\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")")
+        if !series.seasons.isEmpty {
+            parts.append("\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")")
+        }
         if series.quality > .unknown { parts.append(series.quality.shortLabel) }
         return parts.joined(separator: " · ")
     }

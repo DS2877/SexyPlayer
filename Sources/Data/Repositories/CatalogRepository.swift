@@ -1,58 +1,7 @@
 import Foundation
 
-/// Read model the feature layer depends on. In M1 this is backed by SQLite with
-/// paginated queries; in M0 it's an in-memory implementation over `Catalog`.
-///
-/// Every method is async so the SQLite implementation can hop to a background
-/// executor without changing call sites.
-public protocol CatalogRepository: Sendable {
-    /// True once a catalog has been loaded.
-    func isReady() async -> Bool
-
-    /// When `true`, every query and `snapshot()` excludes adult-flagged items.
-    func setHideAdult(_ hide: Bool) async
-
-    func channels(in category: String?, sort: ChannelSort, page: Int, pageSize: Int) async -> [Channel]
-    func channelTitleAnchors(in category: String?) async -> [BrowseAnchor]
-    func allChannelCategories() async -> [String]
-
-    func movies(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Movie]
-    func series(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Series]
-
-    /// First-letter jump targets for the A–Z browse index (title-sorted list).
-    func movieTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
-    func seriesTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
-
-    func moviesCount(filter: CatalogFilter) async -> Int
-    func seriesCount(filter: CatalogFilter) async -> Int
-    func channelsCount(in category: String?) async -> Int
-
-    /// Genres actually present among movies + series — for the filter UI.
-    func availableGenres() async -> [Genre]
-    func availableAudioLanguages() async -> [Language]
-    func availableSubtitleLanguages() async -> [Language]
-
-    func movie(id: CatalogID) async -> Movie?
-    func series(id: CatalogID) async -> Series?
-    func channel(id: CatalogID) async -> Channel?
-
-    /// Attach on-demand-loaded episodes to a series shell.
-    func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) async
-
-    func recentlyAdded(limit: Int) async -> [SearchResult.Item]
-
-    /// EPG events for a channel within a window.
-    func epgEvents(forEPGID epgID: String, in window: DateInterval) async -> [EPGEvent]
-    func nowPlaying(forEPGID epgID: String, at date: Date) async -> EPGEvent?
-
-    /// The whole EPG grouped by channel (each list sorted by start). Cheap to
-    /// return — callers window it locally instead of scanning the flat array.
-    func epgIndex() async -> [String: [EPGEvent]]
-
-    /// Full snapshot — used by the search engine in M0. In M1 the search engine
-    /// queries the FTS index instead.
-    func snapshot() async -> Catalog
-}
+// The repository protocol now lives in `CatalogQuerying.swift` (SQLite-backed).
+// This file keeps the value types the browse layer and that protocol share.
 
 /// Composable, structured filter used by browse screens (distinct from
 /// `SearchIntent`, which is the *parsed* form of a natural-language query —

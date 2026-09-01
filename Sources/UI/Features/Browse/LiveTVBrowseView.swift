@@ -23,12 +23,12 @@ public final class LiveTVBrowseViewModel {
     public var selectedCategory = "All"
     public var sort: ChannelSort = .number
 
-    private let repository: any CatalogRepository
+    private let repository: any CatalogQuerying
     private let pageSize = 90
     private var page = 0
     private var reloadTask: Task<Void, Never>?
 
-    public init(repository: any CatalogRepository) {
+    public init(repository: any CatalogQuerying) {
         self.repository = repository
     }
 

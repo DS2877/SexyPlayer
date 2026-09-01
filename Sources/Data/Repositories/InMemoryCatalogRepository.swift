@@ -1,9 +1,9 @@
 import Foundation
 
-/// M0 repository. Holds a normalised `Catalog` in memory behind an actor and
-/// answers queries with plain array operations. Pagination is honoured so
-/// callers are already written for the SQLite implementation.
-public actor InMemoryCatalogRepository: CatalogRepository {
+/// In-memory `CatalogQuerying` — the test double. Holds a normalised `Catalog`
+/// behind an actor and answers queries with plain array operations. The shipping
+/// app uses `SQLiteCatalogRepository`; this stays for fast, disk-free tests.
+public actor InMemoryCatalogRepository: CatalogQuerying {
 
     /// Full imported catalog.
     private var source: Catalog
@@ -390,6 +390,105 @@ public actor InMemoryCatalogRepository: CatalogRepository {
             .prefix(seriesLimit)
             .map { ArtworkSeed(id: $0.id, title: $0.title, year: $0.year, isSeries: true) }
         return Array(movies) + Array(series)
+    }
+
+    // MARK: - CatalogQuerying (SQLite-era additions)
+
+    public func hasEpisodes(seriesID id: CatalogID) -> Bool {
+        seriesIndexByID[id].map { catalog.series[$0].hasEpisodes } ?? false
+    }
+
+    public func movies(ids: [CatalogID]) -> [Movie] {
+        let want = Set(ids)
+        return catalog.movies.filter { want.contains($0.id) }
+    }
+
+    public func series(ids: [CatalogID]) -> [Series] {
+        let want = Set(ids)
+        return catalog.series.filter { want.contains($0.id) }
+    }
+
+    public func channels(ids: [CatalogID]) -> [Channel] {
+        let want = Set(ids)
+        return catalog.channels.filter { want.contains($0.id) }
+    }
+
+    public func episode(id: CatalogID) -> Episode? {
+        for series in catalog.series {
+            for season in series.seasons where season.episodes.contains(where: { $0.id == id }) {
+                return season.episodes.first { $0.id == id }
+            }
+        }
+        return nil
+    }
+
+    public func epgIndex(forEPGIDs epgIDs: [String], in window: DateInterval) -> [String: [EPGEvent]] {
+        var out: [String: [EPGEvent]] = [:]
+        for epgID in epgIDs {
+            let events = epgByChannel.events(forChannel: epgID, in: window)
+            if !events.isEmpty { out[epgID] = events }
+        }
+        return out
+    }
+
+    public func guideChannels(limit: Int) -> [Channel] {
+        Array(channelOrder(in: nil, sort: .number)
+            .lazy
+            .map { catalog.channels[$0] }
+            .filter { $0.epgID?.isEmpty == false }
+            .prefix(limit))
+    }
+
+    public func newestMovies(limit: Int) -> [Movie] {
+        catalog.movies
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(limit).map { $0 }
+    }
+
+    public func newestSeries(limit: Int) -> [Series] {
+        catalog.series
+            .sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+            .prefix(limit).map { $0 }
+    }
+
+    public func topGenres(limit: Int) -> [Genre] {
+        var counts: [Genre: Int] = [:]
+        for m in catalog.movies { for g in m.genres { counts[g, default: 0] += 1 } }
+        for s in catalog.series { for g in s.genres { counts[g, default: 0] += 1 } }
+        return counts.sorted { $0.value > $1.value }.prefix(limit).map(\.key)
+    }
+
+    public func moviesInGenre(_ genre: Genre, limit: Int) -> [Movie] {
+        newestMovies(limit: .max).filter { $0.genres.contains(genre) }.prefix(limit).map { $0 }
+    }
+
+    public func seriesInGenre(_ genre: Genre, limit: Int) -> [Series] {
+        newestSeries(limit: .max).filter { $0.genres.contains(genre) }.prefix(limit).map { $0 }
+    }
+
+    public func moviesInAudioLanguages(_ languages: [Language], limit: Int) -> [Movie] {
+        let want = Set(languages)
+        return newestMovies(limit: .max)
+            .filter { !want.isDisjoint(with: $0.audioLanguages) }
+            .prefix(limit).map { $0 }
+    }
+
+    public func moviesInSubtitleLanguage(_ language: Language, limit: Int) -> [Movie] {
+        newestMovies(limit: .max)
+            .filter { $0.subtitleLanguages.contains(language) }
+            .prefix(limit).map { $0 }
+    }
+
+    public func resumePoints(progress: [WatchProgress], limit: Int) -> [ResumePoint] {
+        UpNext.resumePoints(catalog: catalog, progress: progress, limit: limit)
+    }
+
+    public func search(_ intent: SearchIntent, limit: Int) -> [SearchResult] {
+        SearchEngine().search(intent, in: catalog, limit: limit)
+    }
+
+    public func searchVocabulary() -> SearchVocabulary {
+        SearchVocabulary.from(catalog: catalog)
     }
 }
 
