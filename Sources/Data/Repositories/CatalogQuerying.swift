@@ -1,0 +1,98 @@
+import Foundation
+
+/// The read model the feature layer depends on, backed by `CatalogDatabase`.
+///
+/// This is the SQLite-era replacement for `CatalogRepository`. The whole-catalog
+/// escape hatches (`snapshot()`, `epgIndex()`) are gone — every screen is served
+/// by a bounded query so memory never scales with library size.
+///
+/// Every method is `async`: the implementation hops to the database actor.
+public protocol CatalogQuerying: Sendable {
+
+    /// A completed import exists.
+    func isReady() async -> Bool
+
+    // MARK: Visibility
+
+    /// Exclude adult-flagged items from every query.
+    func setHideAdult(_ hide: Bool) async
+    /// Hide foreign-region items everywhere (see `RelevanceFilter`).
+    func setRegionLimit(_ limited: Bool) async
+    /// The viewer's home country codes — channels from these sort first.
+    func setHomeRegions(_ regions: Set<String>) async
+    /// Recently-watched channel ids, most recent first — they float to the top
+    /// of the "for you" channel order.
+    func setRecentChannels(_ ids: [CatalogID]) async
+
+    // MARK: Channels
+
+    func channels(in category: String?, sort: ChannelSort, page: Int, pageSize: Int) async -> [Channel]
+    func channelsCount(in category: String?) async -> Int
+    func channelTitleAnchors(in category: String?) async -> [BrowseAnchor]
+    func allChannelCategories() async -> [String]
+    func channel(id: CatalogID) async -> Channel?
+
+    // MARK: Movies / series
+
+    func movies(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Movie]
+    func series(filter: CatalogFilter, page: Int, pageSize: Int) async -> [Series]
+    func moviesCount(filter: CatalogFilter) async -> Int
+    func seriesCount(filter: CatalogFilter) async -> Int
+    func movieTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
+    func seriesTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor]
+
+    func movie(id: CatalogID) async -> Movie?
+    /// The series with its full season / episode tree attached.
+    func series(id: CatalogID) async -> Series?
+    /// Replace one series' episodes after an on-demand fetch (Xtream).
+    func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) async
+    func hasEpisodes(seriesID: CatalogID) async -> Bool
+
+    // MARK: Facets
+
+    func availableGenres() async -> [Genre]
+    func availableAudioLanguages() async -> [Language]
+    func availableSubtitleLanguages() async -> [Language]
+
+    // MARK: Batch id lookups (Favorites, History, Top Shelf)
+
+    func movies(ids: [CatalogID]) async -> [Movie]
+    func series(ids: [CatalogID]) async -> [Series]
+    func channels(ids: [CatalogID]) async -> [Channel]
+    func episode(id: CatalogID) async -> Episode?
+
+    // MARK: EPG
+
+    func epgEvents(forEPGID epgID: String, in window: DateInterval) async -> [EPGEvent]
+    func nowPlaying(forEPGID epgID: String, at date: Date) async -> EPGEvent?
+    /// EPG for a set of channels inside a window, grouped by EPG id.
+    func epgIndex(forEPGIDs epgIDs: [String], in window: DateInterval) async -> [String: [EPGEvent]]
+    /// Channels that carry a guide, "for you" order, capped.
+    func guideChannels(limit: Int) async -> [Channel]
+
+    // MARK: Home / discovery
+
+    func recentlyAdded(limit: Int) async -> [SearchResult.Item]
+    func newestMovies(limit: Int) async -> [Movie]
+    func newestSeries(limit: Int) async -> [Series]
+    func topGenres(limit: Int) async -> [Genre]
+    func moviesInGenre(_ genre: Genre, limit: Int) async -> [Movie]
+    func seriesInGenre(_ genre: Genre, limit: Int) async -> [Series]
+    func moviesInAudioLanguages(_ languages: [Language], limit: Int) async -> [Movie]
+    func moviesInSubtitleLanguage(_ language: Language, limit: Int) async -> [Movie]
+    func similarMovies(to id: CatalogID, genres: [Genre], limit: Int) async -> [Movie]
+    func similarSeries(to id: CatalogID, genres: [Genre], limit: Int) async -> [Series]
+
+    /// Continue-Watching / Up-Next, resolved against the stored catalog.
+    func resumePoints(progress: [WatchProgress], limit: Int) async -> [ResumePoint]
+
+    // MARK: Search
+
+    func search(_ intent: SearchIntent, limit: Int) async -> [SearchResult]
+    /// The library-derived vocabulary a query parser resolves against.
+    func searchVocabulary() async -> SearchVocabulary
+
+    // MARK: Metadata warm-up
+
+    func artworkSeeds(movieLimit: Int, seriesLimit: Int) async -> [ArtworkSeed]
+}
