@@ -97,8 +97,8 @@ public final class CatalogDatabase: @unchecked Sendable {
     }
 
     public func setMeta(_ key: String, _ value: String?) async throws {
-        try await write { conn in
-            try conn.run(
+        try await write { conn -> Void in
+            _ = try conn.run(
                 "INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 [.text(key), SQLiteValue(value)]
             )
@@ -117,12 +117,16 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     /// A completed import exists for this provider.
     public func isReady(providerID: String) async -> Bool {
-        await rawMeta(MetaKey.providerID) == providerID && (await intMeta(MetaKey.importComplete)) == 1
+        let loaded = await rawMeta(MetaKey.providerID)
+        let complete = await intMeta(MetaKey.importComplete)
+        return loaded == providerID && complete == 1
     }
 
     /// A completed import exists for whichever provider was last imported.
     public func importIsComplete() async -> Bool {
-        (await intMeta(MetaKey.importComplete)) == 1 && (await rawMeta(MetaKey.providerID)) != nil
+        let complete = await intMeta(MetaKey.importComplete)
+        let loaded = await rawMeta(MetaKey.providerID)
+        return complete == 1 && loaded != nil
     }
 
     public func loadedProviderID() async -> String? {
@@ -254,7 +258,7 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     public func channelCategories() async throws -> [String] {
         try await read { conn in
-            ["All"] + conn.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) }
+            ["All"] + (try conn.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) })
         }
     }
 
@@ -929,15 +933,15 @@ public final class CatalogDatabase: @unchecked Sendable {
     public func replaceSeasons(_ seasons: [Season], seriesID: CatalogID) async throws {
         let committedGen = Int64(await intMeta(MetaKey.importGeneration))
         let episodeRows = seasons.flatMap(\.episodes).map { Self.episodeRow($0, gen: committedGen) }
-        try await write { conn in
-            try conn.transaction {
-                try conn.run("DELETE FROM episode WHERE series_id = ?", [.text(seriesID.rawValue)])
+        try await write { conn -> Void in
+            try conn.transaction { () -> Void in
+                _ = try conn.run("DELETE FROM episode WHERE series_id = ?", [.text(seriesID.rawValue)])
                 try conn.executeMany("""
                 INSERT OR REPLACE INTO episode
                 (id, series_id, season, episode, title, overview, duration_min, still_url, stream_url, gen)
                 VALUES (?,?,?,?,?,?,?,?,?,?)
                 """, episodeRows)
-                try conn.run("UPDATE series SET seasons_loaded = 1 WHERE id = ?", [.text(seriesID.rawValue)])
+                _ = try conn.run("UPDATE series SET seasons_loaded = 1 WHERE id = ?", [.text(seriesID.rawValue)])
             }
         }
     }
@@ -989,13 +993,13 @@ public final class CatalogDatabase: @unchecked Sendable {
     /// (provider-removed titles, aged-out EPG), then commit the new generation.
     public func finishGeneration(_ generation: Int) async throws {
         let gen = Int64(generation)
-        try await write { conn in
-            try conn.transaction {
+        try await write { conn -> Void in
+            try conn.transaction { () -> Void in
                 for table in ["channel", "movie", "series", "episode", "epg_event"] {
-                    try conn.run("DELETE FROM \(table) WHERE gen <> ?", [.integer(gen)])
+                    _ = try conn.run("DELETE FROM \(table) WHERE gen <> ?", [.integer(gen)])
                 }
-                try conn.run("DELETE FROM movie_genre WHERE movie_id NOT IN (SELECT id FROM movie)")
-                try conn.run("DELETE FROM series_genre WHERE series_id NOT IN (SELECT id FROM series)")
+                _ = try conn.run("DELETE FROM movie_genre WHERE movie_id NOT IN (SELECT id FROM movie)")
+                _ = try conn.run("DELETE FROM series_genre WHERE series_id NOT IN (SELECT id FROM series)")
             }
         }
         try await setMeta(MetaKey.importGeneration, String(generation))
