@@ -264,16 +264,15 @@ public final class AppEnvironment {
             AppLog.app.info("Channels stage: \(channels.count) in \(Int(Date().timeIntervalSince(started) * 1000)) ms — app interactive.")
         case .vod(let movies, let shells, let episodes):
             let started = Date()
-            // Newest first, and merge that slice before the rest so the shelves
-            // the user actually looks at (Recently Added, hero, Top Rated)
-            // populate a beat sooner on a big library.
-            let sortedMovies = movies.sorted {
-                ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast)
-            }
-            if sortedMovies.count > Self.vodFirstChunk {
-                let head = Array(sortedMovies.prefix(Self.vodFirstChunk))
+            // Merge a small first slice so the shelves populate a beat sooner on
+            // a big library. Provider order (not "newest first") — sorting the
+            // whole raw list is a ~50 MB copy for nothing; the repository sorts
+            // on query anyway, and the slice is replaced by the full set a
+            // couple of seconds later.
+            if movies.count > Self.vodFirstChunk {
                 let first = await normalizer.normalizeVOD(
-                    movies: head, shells: [], episodes: [], providerID: providerID
+                    movies: Array(movies.prefix(Self.vodFirstChunk)),
+                    shells: [], episodes: [], providerID: providerID
                 )
                 guard providers.activeConfiguration?.id == providerID else { return }
                 await repository.mergeVOD(movies: first.movies, series: first.series)
@@ -281,14 +280,14 @@ public final class AppEnvironment {
             }
 
             let result = await normalizer.normalizeVOD(
-                movies: sortedMovies, shells: shells, episodes: episodes, providerID: providerID
+                movies: movies, shells: shells, episodes: episodes, providerID: providerID
             )
             guard providers.activeConfiguration?.id == providerID else { return }
             await repository.mergeVOD(movies: result.movies, series: result.series)
             catalogRevision += 1
-            let (m, s) = (result.movies, result.series)
-            Task { await cache.saveVOD(movies: m, series: s, providerID: providerID) }
-            AppLog.app.info("VOD stage: \(m.count) movies · \(s.count) series in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
+            let (mCount, sCount) = (result.movies.count, result.series.count)
+            await cache.saveVOD(movies: result.movies, series: result.series, providerID: providerID)
+            AppLog.app.info("VOD stage: \(mCount) movies · \(sCount) series in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
         case .guide(let raw):
             let started = Date()
             // The provider clients already parse the XMLTV within EPGWindow, so
