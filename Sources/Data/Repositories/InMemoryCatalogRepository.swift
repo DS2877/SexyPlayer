@@ -395,7 +395,8 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
     // MARK: - CatalogQuerying (SQLite-era additions)
 
     public func hasEpisodes(seriesID id: CatalogID) -> Bool {
-        seriesIndexByID[id].map { catalog.series[$0].hasEpisodes } ?? false
+        guard let index = seriesIndexByID[id] else { return false }
+        return catalog.series[index].hasEpisodes
     }
 
     public func movies(ids: [CatalogID]) -> [Movie] {
@@ -432,11 +433,15 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
     }
 
     public func guideChannels(limit: Int) -> [Channel] {
-        Array(channelOrder(in: nil, sort: .number)
-            .lazy
-            .map { catalog.channels[$0] }
-            .filter { $0.epgID?.isEmpty == false }
-            .prefix(limit))
+        let channels = catalog.channels
+        var result: [Channel] = []
+        for index in channelOrder(in: nil, sort: .number) {
+            let channel = channels[index]
+            guard channel.epgID?.isEmpty == false else { continue }
+            result.append(channel)
+            if result.count >= limit { break }
+        }
+        return result
     }
 
     public func newestMovies(limit: Int) -> [Movie] {
