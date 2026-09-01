@@ -58,8 +58,13 @@ struct HomeView: View {
                 consumePendingRoute()
                 return
             }
-            models.markLoaded(.home, revision: environment.catalogRevision)
+            let revision = environment.catalogRevision
             await shared.rebuild()
+            // Marked only once the build actually finished. Switching section
+            // mid-build cancels this task; marking up front would have left the
+            // screen half-built and never retried.
+            guard !Task.isCancelled else { return }
+            models.markLoaded(.home, revision: revision)
             prefetchArtwork(shared)
             consumePendingRoute()
         }

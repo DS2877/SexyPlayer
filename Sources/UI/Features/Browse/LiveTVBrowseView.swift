@@ -159,8 +159,10 @@ struct LiveTVBrowseView: View {
             let shared = models.liveTV(env)
             model = shared
             guard models.needsLoad(.liveTV, revision: env.catalogRevision) else { return }
-            models.markLoaded(.liveTV, revision: env.catalogRevision)
+            let revision = env.catalogRevision
             await shared.start()
+            guard !Task.isCancelled else { return }
+            models.markLoaded(.liveTV, revision: revision)
         }
         .onChange(of: env.catalogRevision) { _, revision in
             models.markLoaded(.liveTV, revision: revision)

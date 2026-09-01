@@ -34,8 +34,11 @@ struct VODBrowseView: View {
             // library, so a newer revision does need a refresh.)
             let key: SectionModels.SectionKey = kind == .movies ? .movies : .series
             guard models.needsLoad(key, revision: env.catalogRevision) else { return }
-            models.markLoaded(key, revision: env.catalogRevision)
+            let revision = env.catalogRevision
             await shared.start()
+            // Only after it finished — leaving mid-load must not mark it done.
+            guard !Task.isCancelled else { return }
+            models.markLoaded(key, revision: revision)
             prefetchPosters(shared)
         }
         .onChange(of: path.isEmpty) { _, atRoot in

@@ -89,8 +89,10 @@ struct GuideView: View {
             let shared = models.guide(env)
             model = shared
             guard models.needsLoad(.guide, revision: env.catalogRevision) else { return }
-            models.markLoaded(.guide, revision: env.catalogRevision)
+            let revision = env.catalogRevision
             await shared.load()
+            guard !Task.isCancelled else { return }
+            models.markLoaded(.guide, revision: revision)
         }
         .onChange(of: env.catalogRevision) { _, revision in
             models.markLoaded(.guide, revision: revision)

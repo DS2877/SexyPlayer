@@ -64,10 +64,10 @@ public final class HomeViewModel {
         await task.value
     }
 
-    /// A restored snapshot doesn't count — the first *live* build still runs
-    /// without the debounce. Also tells the view whether re-entering Home needs
-    /// a rebuild at all.
-    public private(set) var hasBuiltOnce = false
+    /// Gates the debounce only. A restored snapshot doesn't count — the first
+    /// *live* build still runs immediately. (Whether re-entering Home needs a
+    /// rebuild at all is `SectionModels`' business, not this flag's.)
+    private var hasBuiltOnce = false
 
     /// How much of the library each shelf query pulls.
     ///
