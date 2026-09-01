@@ -63,9 +63,12 @@ struct HomeView: View {
             consumePendingRoute()
         }
         .onChange(of: environment.pendingRoute) { _, _ in consumePendingRoute() }
-        .onChange(of: path.isEmpty) { _, backAtRoot in
-            // Returning to Home refreshes Continue Watching after playback.
-            if backAtRoot { Task { await model?.rebuild() } }
+        // Returning to Home only rebuilds when something was actually watched —
+        // otherwise browsing into a title and straight back out re-shaped the
+        // whole screen for nothing.
+        .onChange(of: watchRevisionAtRoot) { _, _ in
+            guard path.isEmpty else { return }
+            Task { await model?.rebuild() }
         }
         .onChange(of: environment.isRefreshing) { _, refreshing in
             // A background library refresh just finished — rebuild shelves.
@@ -84,6 +87,13 @@ struct HomeView: View {
         .onChange(of: environment.metadataRevision) { _, _ in
             Task { await model?.rebuild() }
         }
+    }
+
+    /// Watch progress, but only while Home is the visible screen — so a rebuild
+    /// fires once when you come back from playback, not while you're still deep
+    /// in a detail screen scrubbing through something.
+    private var watchRevisionAtRoot: Int {
+        path.isEmpty ? environment.watchProgress.revision : -1
     }
 
     /// Changes when the shape of the screen changes (skeleton ↔ content, or a

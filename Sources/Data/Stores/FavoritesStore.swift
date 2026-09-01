@@ -23,6 +23,17 @@ public final class FavoritesStore {
         byID.values.sorted { $0.addedAt > $1.addedAt }
     }
 
+    /// Changes whenever the *set* of favourites changes — not just its size, so
+    /// hearting one thing and unhearting another still registers. Cheap enough
+    /// to use as a SwiftUI `task(id:)` without sorting and copying the list on
+    /// every redraw.
+    public var revision: Int {
+        var hasher = Hasher()
+        hasher.combine(byID.count)
+        for key in byID.keys { hasher.combine(key) }
+        return hasher.finalize()
+    }
+
     public func toggle(id: CatalogID, kind: ContentKind) {
         if byID[id.rawValue] != nil {
             byID[id.rawValue] = nil

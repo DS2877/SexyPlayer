@@ -41,6 +41,19 @@ public final class WatchProgressStore {
     /// Every stored progress entry — order unspecified. For `UpNext` and history.
     public func allEntries() -> [WatchProgress] { Array(byID.values) }
 
+    /// Changes whenever what's been watched changes — including a position move
+    /// on an item already in the list, which a plain count would miss. Cheap
+    /// enough for a SwiftUI `task(id:)`.
+    public var revision: Int {
+        var hasher = Hasher()
+        hasher.combine(byID.count)
+        for (key, value) in byID {
+            hasher.combine(key)
+            hasher.combine(value.updatedAt.timeIntervalSince1970.rounded())
+        }
+        return hasher.finalize()
+    }
+
     /// Everything the user has actually started or finished, most recent first.
     /// Momentary taps (< 30s, not finished) are treated as noise and excluded.
     public func history(limit: Int = 200) -> [WatchProgress] {

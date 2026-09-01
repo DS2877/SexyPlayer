@@ -62,8 +62,9 @@ struct HistoryView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task(id: env.watchProgress.allEntries().count) { await reload() }
-        .onChange(of: path.isEmpty) { _, atRoot in if atRoot { Task { await reload() } } }
+        // Keyed on what's actually been watched — so playing something updates
+        // the list, and merely returning from a detail screen doesn't.
+        .task(id: env.watchProgress.revision) { await reload() }
     }
 
     private var header: some View {

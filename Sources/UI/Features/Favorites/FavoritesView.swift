@@ -61,8 +61,10 @@ struct FavoritesView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task(id: env.favorites.all().count) { await reload() }
-        .onChange(of: path.isEmpty) { _, atRoot in if atRoot { Task { await reload() } } }
+        // Keyed on the *set* of favourites, so it reloads when you heart or
+        // unheart something (including on a detail screen) and stays put —
+        // scroll and focus intact — when you simply come back from one.
+        .task(id: env.favorites.revision) { await reload() }
     }
 
     private func reload() async {
