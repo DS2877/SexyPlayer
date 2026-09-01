@@ -315,13 +315,11 @@ public final class AppEnvironment {
     /// the Home shelves fill in without waiting on the whole library.
     private static let vodFirstChunk = 800
 
-    /// EPG kept in memory: enough for "on now", "tonight", and a day-and-a-bit
-    /// guide. A real provider's full XMLTV is millions of events — at ~250 bytes
-    /// each, a 14-day window for a few thousand channels is >150 MB per copy and
-    /// was the main cause of the on-device memory kill. ~32 h is plenty for what
-    /// the UI actually shows.
-    private static let epgWindowPast: TimeInterval = 2 * 3600
-    private static let epgWindowFuture: TimeInterval = 32 * 3600
+    /// EPG window — see `EPGWindow`. The provider clients already parse the
+    /// XMLTV within this window; these constants are a belt-and-braces trim in
+    /// case a provider's default (non-streamed) path is ever used.
+    private static let epgWindowPast = EPGWindow.past
+    private static let epgWindowFuture = EPGWindow.future
 
     private func importCatalog(client: any ProviderClient, reporter: ImportProgressReporter) async throws -> Catalog {
         var raw = try await client.fetchRawCatalog(progress: reporter)

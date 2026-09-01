@@ -40,6 +40,35 @@ public struct HTTPClient: @unchecked Sendable {  // URLSession is thread-safe
         }
     }
 
+    /// Download a (potentially large) resource to a temporary file instead of
+    /// holding it all in memory. `URLSession` transparently gzip-inflates into
+    /// the file. **The caller owns the returned file and must delete it.**
+    public func downloadToFile(from url: URL) async throws -> URL {
+        do {
+            let (tempURL, response) = try await session.download(from: url)
+            do {
+                try validateStatus(response)
+                let attrs = try? FileManager.default.attributesOfItem(atPath: tempURL.path)
+                if let size = attrs?[.size] as? Int, size > config.maxResponseBytes {
+                    throw ProviderError.badResponse
+                }
+
+                let dest = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("aeria-dl-\(UUID().uuidString).tmp")
+                try? FileManager.default.removeItem(at: dest)
+                try FileManager.default.moveItem(at: tempURL, to: dest)
+                return dest
+            } catch {
+                try? FileManager.default.removeItem(at: tempURL)
+                throw error
+            }
+        } catch let error as ProviderError {
+            throw error
+        } catch {
+            throw ProviderError.from(error)
+        }
+    }
+
     /// GET + JSON-decode. Xtream panels sometimes return `""` or `false` for
     /// "no content" — callers should tolerate `nil`.
     public func decode<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
@@ -53,18 +82,18 @@ public struct HTTPClient: @unchecked Sendable {  // URLSession is thread-safe
     }
 
     private func validate(_ response: URLResponse, data: Data) throws {
+        try validateStatus(response)
+        if data.count > config.maxResponseBytes { throw ProviderError.badResponse }
+    }
+
+    private func validateStatus(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { return }
         switch http.statusCode {
-        case 200...299:
-            guard data.count <= config.maxResponseBytes else { throw ProviderError.badResponse }
-        case 401, 403:
-            throw ProviderError.authenticationFailed
-        case 404, 400:
-            throw ProviderError.badResponse
-        case 408, 429, 500...599:
-            throw ProviderError.cannotReachProvider
-        default:
-            throw ProviderError.badResponse
+        case 200...299:            return
+        case 401, 403:             throw ProviderError.authenticationFailed
+        case 404, 400:             throw ProviderError.badResponse
+        case 408, 429, 500...599:  throw ProviderError.cannotReachProvider
+        default:                   throw ProviderError.badResponse
         }
     }
 }

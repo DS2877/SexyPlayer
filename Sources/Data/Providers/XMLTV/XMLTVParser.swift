@@ -4,17 +4,37 @@ import Foundation
 ///
 /// URLSession transparently inflates `Content-Encoding: gzip` responses, which
 /// covers the common Xtream `xmltv.php` case. A literal gzip *file* (`.xml.gz`
-/// served as octet-stream) is detected and reported rather than mis-parsed;
-/// full `.gz` support can be added if a real provider needs it.
+/// served as octet-stream) is detected and reported rather than mis-parsed.
+///
+/// A real provider's XMLTV is millions of programmes / hundreds of MB. Both
+/// entry points take an optional `EPGWindow`-style `DateInterval`; programmes
+/// outside it are skipped and never allocated, so parsing a huge feed stays
+/// flat in memory. The file-based entry point additionally streams the document
+/// off disk so the decompressed XML is never fully resident.
 public enum XMLTVParser {
 
-    public static func parse(_ data: Data) throws -> [RawEPGEvent] {
+    /// Parse from an in-memory blob (used by tests and small feeds).
+    public static func parse(_ data: Data, within window: DateInterval? = nil) throws -> [RawEPGEvent] {
         if data.count >= 2, data[data.startIndex] == 0x1f, data[data.startIndex + 1] == 0x8b {
             throw ProviderError.playlistMalformed(reason: "EPG is a gzip file; not yet supported")
         }
+        return try run(XMLParser(data: data), window: window)
+    }
 
-        let delegate = Delegate()
-        let parser = XMLParser(data: data)
+    /// Stream-parse from a file on disk — for the (usually huge) provider EPG.
+    public static func parse(fileURL: URL, within window: DateInterval?) throws -> [RawEPGEvent] {
+        if let magic = try? Data(contentsOf: fileURL, options: .mappedIfSafe).prefix(2),
+           Array(magic) == [0x1f, 0x8b] as [UInt8] {
+            throw ProviderError.playlistMalformed(reason: "EPG is a gzip file; not yet supported")
+        }
+        guard let stream = InputStream(url: fileURL) else {
+            throw ProviderError.playlistMalformed(reason: "cannot open EPG file")
+        }
+        return try run(XMLParser(stream: stream), window: window)
+    }
+
+    private static func run(_ parser: XMLParser, window: DateInterval?) throws -> [RawEPGEvent] {
+        let delegate = Delegate(window: window)
         parser.delegate = delegate
         guard parser.parse() else {
             throw ProviderError.playlistMalformed(reason: "invalid XMLTV")
@@ -27,6 +47,9 @@ public enum XMLTVParser {
     private final class Delegate: NSObject, XMLParserDelegate {
         private(set) var events: [RawEPGEvent] = []
 
+        private let windowStart: Date?
+        private let windowEnd: Date?
+
         private var currentChannel: String?
         private var currentStart: Date?
         private var currentStop: Date?
@@ -36,14 +59,28 @@ public enum XMLTVParser {
         private var desc = ""
         private var category = ""
 
+        /// One reusable formatter — the naive version allocated one per
+        /// programme, which for a million-event feed is a real cost.
+        private let dateFormatter: DateFormatter = {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyyMMddHHmmss"
+            return f
+        }()
+
+        init(window: DateInterval?) {
+            self.windowStart = window?.start
+            self.windowEnd = window?.end
+        }
+
         func parser(_ parser: XMLParser, didStartElement elementName: String,
                     namespaceURI: String?, qualifiedName qName: String?,
                     attributes attributeDict: [String: String]) {
             currentElement = elementName
             if elementName == "programme" {
                 currentChannel = attributeDict["channel"]
-                currentStart = Self.parseDate(attributeDict["start"])
-                currentStop = Self.parseDate(attributeDict["stop"])
+                currentStart = parseDate(attributeDict["start"])
+                currentStop = parseDate(attributeDict["stop"])
                 title = ""; subtitle = ""; desc = ""; category = ""
             }
         }
@@ -62,7 +99,7 @@ public enum XMLTVParser {
                     namespaceURI: String?, qualifiedName qName: String?) {
             if elementName == "programme" {
                 if let channel = currentChannel, let start = currentStart, let stop = currentStop,
-                   stop > start {
+                   stop > start, overlapsWindow(start: start, stop: stop) {
                     events.append(RawEPGEvent(
                         channelID: channel,
                         title: title.trimmingCharacters(in: .whitespacesAndNewlines).ifEmpty("Programme"),
@@ -78,21 +115,24 @@ public enum XMLTVParser {
             currentElement = nil
         }
 
+        private func overlapsWindow(start: Date, stop: Date) -> Bool {
+            if let windowStart, stop <= windowStart { return false }
+            if let windowEnd, start >= windowEnd { return false }
+            return true
+        }
+
         /// XMLTV timestamps: `20240115203000 +0100` (offset optional).
-        static func parseDate(_ raw: String?) -> Date? {
+        private func parseDate(_ raw: String?) -> Date? {
             guard let raw = raw?.trimmingCharacters(in: .whitespaces), raw.count >= 14 else { return nil }
             let digits = String(raw.prefix(14))
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "yyyyMMddHHmmss"
 
             let tzPart = raw.dropFirst(14).trimmingCharacters(in: .whitespaces)
             if tzPart.count == 5, let hours = Int(tzPart.prefix(3)), let mins = Int(tzPart.suffix(2)) {
-                formatter.timeZone = TimeZone(secondsFromGMT: hours * 3600 + (hours < 0 ? -mins : mins) * 60)
+                dateFormatter.timeZone = TimeZone(secondsFromGMT: hours * 3600 + (hours < 0 ? -mins : mins) * 60)
             } else {
-                formatter.timeZone = TimeZone(identifier: "UTC")
+                dateFormatter.timeZone = TimeZone(identifier: "UTC")
             }
-            return formatter.date(from: digits)
+            return dateFormatter.date(from: digits)
         }
     }
 }

@@ -189,7 +189,10 @@ public struct XtreamProviderClient: ProviderClient {
     }
 
     private func fetchEPG() async throws -> [RawEPGEvent] {
-        let data = try await http.data(from: api.xmltvURL)
-        return try XMLTVParser.parse(data)
+        // Stream the (often huge) XMLTV off disk and keep only the guide window,
+        // so import memory never scales with the size of the feed.
+        let file = try await http.downloadToFile(from: api.xmltvURL)
+        defer { try? FileManager.default.removeItem(at: file) }
+        return try XMLTVParser.parse(fileURL: file, within: EPGWindow.current())
     }
 }

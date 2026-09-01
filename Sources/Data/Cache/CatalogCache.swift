@@ -89,11 +89,9 @@ public actor CatalogCache {
     }
 
     public func saveEPG(_ epg: [EPGEvent], providerID: String) {
-        // Mirror AppEnvironment.epgWindow* — never persist more than the UI shows.
-        let now = Date()
-        let lower = now.addingTimeInterval(-2 * 3600)
-        let upper = now.addingTimeInterval(32 * 3600)
-        let events = epg.filter { $0.stop > lower && $0.start < upper }
+        // Never persist more than the guide window shows.
+        let window = EPGWindow.current()
+        let events = epg.filter { $0.stop > window.start && $0.start < window.end }
         write(EPGEnvelope(version: Self.currentVersion, events: events),
               to: url(providerID, "epg"), label: "epg (\(events.count) events)")
     }

@@ -55,10 +55,13 @@ public struct M3UProviderClient: ProviderClient {
 
         progress.reached(.guide)
         var epg: [RawEPGEvent] = []
-        if let epgURL,
-           let epgData = try? await http.data(from: epgURL),
-           let events = try? XMLTVParser.parse(epgData) {
-            epg = events
+        if let epgURL {
+            // Stream the XMLTV off disk and window it while parsing so a big
+            // feed never balloons memory.
+            if let file = try? await http.downloadToFile(from: epgURL) {
+                defer { try? FileManager.default.removeItem(at: file) }
+                epg = (try? XMLTVParser.parse(fileURL: file, within: EPGWindow.current())) ?? []
+            }
         }
         await emit(.guide(epg))
         AppLog.provider.info("M3U import: \(catalog.channels.count) channels, \(catalog.vod.count) movies, \(catalog.seriesEpisodes.count) episodes.")
