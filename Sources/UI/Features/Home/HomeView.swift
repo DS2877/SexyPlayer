@@ -40,9 +40,9 @@ struct HomeView: View {
         }
         // Grab the shared model. On a first launch it restores the cached screen
         // from the last session — the "instant" frame. On a return visit it
-        // already holds everything, so nothing reloads.
-        // Keyed on the store's generation so a provider switch (which discards
-        // every model) re-fetches the handle instead of holding the old one.
+        // already holds everything, so nothing reloads. Keyed on the store's
+        // generation so a provider switch (which discards every model)
+        // re-fetches the handle instead of holding the old one.
         .task(id: models.generation) {
             let shared = models.home(environment)
             model = shared
