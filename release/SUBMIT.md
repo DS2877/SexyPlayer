@@ -86,7 +86,8 @@ cd ~/Developer/SexyPlayer
 git pull
 ```
 
-**TMDB token** (skip if you don't have one — see checklist):
+**TMDB token** — strongly recommended (see checklist). If
+`Sources/App/TMDBDefaults.swift` already has a long `readAccessToken`, skip this:
 
 ```bash
 ./Scripts/set-tmdb-token.sh "PASTE_YOUR_TMDB_READ_ACCESS_TOKEN_HERE"
@@ -204,8 +205,10 @@ Create. Don't fill in the rest yet — you need a build first.
    **App Store Connect** → **Upload** → keep the defaults
    (Include bitcode: off, Upload symbols: on) → **Distribute**.
    - If **Validate** offers itself first, run it — fix anything it flags, re-archive.
-   - Common validation stops: missing icon size (re-run the icon generator),
-     App Group not on both targets, wrong Team.
+   - Common validation stops: App Group capability not on both targets, wrong
+     Team, or a missing icon layer (open `Assets.xcassets` → the brand asset →
+     confirm every layer has an image; `git checkout -- Resources/Assets.xcassets`
+     restores the committed set).
 
 4. Wait for the "processing" email from App Store Connect (5–30 min). The build
    then appears under the app's **TestFlight** tab and can be attached to the
