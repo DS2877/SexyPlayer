@@ -42,14 +42,16 @@ public final class WatchProgressStore {
     public func allEntries() -> [WatchProgress] { Array(byID.values) }
 
     /// Changes whenever what's been watched changes — including a position move
-    /// on an item already in the list, which a plain count would miss. Cheap
-    /// enough for a SwiftUI `task(id:)`.
+    /// on an item already in the list, which a plain count would miss. Keyed on
+    /// position rather than `updatedAt`: two writes can land in the same second,
+    /// and it's the position that decides what the screen shows. Cheap enough
+    /// for a SwiftUI `task(id:)`.
     public var revision: Int {
         var hasher = Hasher()
         hasher.combine(byID.count)
         for (key, value) in byID {
             hasher.combine(key)
-            hasher.combine(value.updatedAt.timeIntervalSince1970.rounded())
+            hasher.combine(value.positionSeconds)
         }
         return hasher.finalize()
     }
