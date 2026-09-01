@@ -80,9 +80,9 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     }
 
     private func rebuildVisible() {
-        movieQueryCache = nil
-        seriesQueryCache = nil
-        channelQueryCache = nil
+        movieOrderCache = nil
+        seriesOrderCache = nil
+        channelOrderCache = nil
 
         let keepChannel: (Channel) -> Bool = { [hideAdult, regionLimited] c in
             if hideAdult && c.isAdult { return false }
@@ -137,7 +137,11 @@ public actor InMemoryCatalogRepository: CatalogRepository {
 
     // MARK: - Channels
 
-    private var channelQueryCache: (category: String?, sort: ChannelSort, result: [Channel])?
+    // A one-deep cache of the last sorted+filtered result, stored as *indices*
+    // into `catalog.channels` (a few KB) rather than a copy of every struct
+    // (megabytes). Browse paginates by asking for page after page of the same
+    // query; without a cache each page re-sorts the whole library.
+    private var channelOrderCache: (category: String?, sort: ChannelSort, order: [Int])?
     /// The viewer's home country codes (from chosen languages) — channels from
     /// these sort first in `.number` mode. Set via `applyPreferences()`.
     private var homeRegions: Set<String> = ["SE"]
@@ -148,28 +152,32 @@ public actor InMemoryCatalogRepository: CatalogRepository {
     public func setHomeRegions(_ regions: Set<String>) {
         guard regions != homeRegions else { return }
         homeRegions = regions
-        channelQueryCache = nil
+        channelOrderCache = nil
     }
 
     public func setRecentChannels(_ ids: [CatalogID]) {
         let rank = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($1, $0) })
         guard rank != recentChannelRank else { return }
         recentChannelRank = rank
-        channelQueryCache = nil
+        channelOrderCache = nil
     }
 
-    private func sortedChannels(in rawCategory: String?, sort: ChannelSort) -> [Channel] {
+    /// Indices into `catalog.channels`, filtered by category and sorted.
+    private func channelOrder(in rawCategory: String?, sort: ChannelSort) -> [Int] {
         let category = (rawCategory == "All") ? nil : rawCategory   // same result either way
-        if let c = channelQueryCache, c.category == category, c.sort == sort { return c.result }
-        var list = catalog.channels
+        if let c = channelOrderCache, c.category == category, c.sort == sort { return c.order }
+
+        let ch = catalog.channels
+        var order = Array(ch.indices)
         if let category {
-            list = list.filter { $0.category == category }
+            order = order.filter { ch[$0].category == category }
         }
         switch sort {
         case .number:
             let home = homeRegions
             let recent = recentChannelRank
-            list.sort { lhs, rhs in
+            order.sort { a, b in
+                let lhs = ch[a], rhs = ch[b]
                 // 1. channels the viewer actually watches, most recent first
                 let lr = recent[lhs.id], rr = recent[rhs.id]
                 if (lr != nil) != (rr != nil) { return lr != nil }
@@ -183,70 +191,79 @@ public actor InMemoryCatalogRepository: CatalogRepository {
                 return lhs.name.localizedCompare(rhs.name) == .orderedAscending
             }
         case .nameAsc:
-            list.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
+            order.sort { ch[$0].name.localizedCompare(ch[$1].name) == .orderedAscending }
         }
-        channelQueryCache = (category, sort, list)
-        return list
+        channelOrderCache = (category: category, sort: sort, order: order)
+        return order
     }
 
     public func channels(in category: String?, sort: ChannelSort, page: Int, pageSize: Int) -> [Channel] {
-        sortedChannels(in: category, sort: sort).page(page, size: pageSize)
+        let ch = catalog.channels
+        return channelOrder(in: category, sort: sort).page(page, size: pageSize).map { ch[$0] }
     }
 
     public func channelTitleAnchors(in category: String?) -> [BrowseAnchor] {
-        Self.anchors(sortedChannels(in: category, sort: .nameAsc).map(\.name))
+        let ch = catalog.channels
+        return Self.anchors(channelOrder(in: category, sort: .nameAsc).map { ch[$0].name })
     }
 
     public func allChannelCategories() -> [String] { facetCategories }
 
     // MARK: - Movies / Series
 
-    // A one-deep cache of the last sorted+filtered result. Browse paginates by
-    // calling back for page after page of the *same* filter; without this each
-    // page re-sorts the whole library (O(n log n) × pages).
-    private var movieQueryCache: (filter: CatalogFilter, result: [Movie])?
-    private var seriesQueryCache: (filter: CatalogFilter, result: [Series])?
+    // Same one-deep index cache as channels above.
+    private var movieOrderCache: (filter: CatalogFilter, order: [Int])?
+    private var seriesOrderCache: (filter: CatalogFilter, order: [Int])?
 
-    private func sortedFilteredMovies(_ filter: CatalogFilter) -> [Movie] {
-        if let c = movieQueryCache, c.filter == filter { return c.result }
-        let result = catalog.movies
-            .filter { filter.matches(movie: $0) }
-            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
-        movieQueryCache = (filter, result)
-        return result
+    /// Indices into `catalog.movies`, filtered and sorted.
+    private func movieOrder(_ filter: CatalogFilter) -> [Int] {
+        if let c = movieOrderCache, c.filter == filter { return c.order }
+        let mv = catalog.movies
+        let order = mv.indices
+            .filter { filter.matches(movie: mv[$0]) }
+            .sorted { a, b in
+                Self.order(mv[a].title, mv[a].year, mv[a].addedAt,
+                           mv[b].title, mv[b].year, mv[b].addedAt, filter.sort)
+            }
+        movieOrderCache = (filter: filter, order: order)
+        return order
     }
 
-    private func sortedFilteredSeries(_ filter: CatalogFilter) -> [Series] {
-        if let c = seriesQueryCache, c.filter == filter { return c.result }
-        let result = catalog.series
-            .filter { filter.matches(series: $0) }
-            .sorted { Self.order($0.title, $0.year, $0.addedAt, $1.title, $1.year, $1.addedAt, filter.sort) }
-        seriesQueryCache = (filter, result)
-        return result
+    private func seriesOrder(_ filter: CatalogFilter) -> [Int] {
+        if let c = seriesOrderCache, c.filter == filter { return c.order }
+        let sr = catalog.series
+        let order = sr.indices
+            .filter { filter.matches(series: sr[$0]) }
+            .sorted { a, b in
+                Self.order(sr[a].title, sr[a].year, sr[a].addedAt,
+                           sr[b].title, sr[b].year, sr[b].addedAt, filter.sort)
+            }
+        seriesOrderCache = (filter: filter, order: order)
+        return order
     }
 
     public func movies(filter: CatalogFilter, page: Int, pageSize: Int) -> [Movie] {
-        sortedFilteredMovies(filter).page(page, size: pageSize)
+        let mv = catalog.movies
+        return movieOrder(filter).page(page, size: pageSize).map { mv[$0] }
     }
 
     public func series(filter: CatalogFilter, page: Int, pageSize: Int) -> [Series] {
-        sortedFilteredSeries(filter).page(page, size: pageSize)
+        let sr = catalog.series
+        return seriesOrder(filter).page(page, size: pageSize).map { sr[$0] }
     }
 
-    public func moviesCount(filter: CatalogFilter) -> Int {
-        sortedFilteredMovies(filter).count
-    }
-    public func seriesCount(filter: CatalogFilter) -> Int {
-        sortedFilteredSeries(filter).count
-    }
+    public func moviesCount(filter: CatalogFilter) -> Int { movieOrder(filter).count }
+    public func seriesCount(filter: CatalogFilter) -> Int { seriesOrder(filter).count }
 
     /// First-letter jump targets for an A–Z browse list: the index in the
     /// sorted+filtered result where each initial letter starts.
     public func movieTitleAnchors(filter: CatalogFilter) -> [BrowseAnchor] {
-        Self.anchors(sortedFilteredMovies(filter).map(\.title))
+        let mv = catalog.movies
+        return Self.anchors(movieOrder(filter).map { mv[$0].title })
     }
     public func seriesTitleAnchors(filter: CatalogFilter) -> [BrowseAnchor] {
-        Self.anchors(sortedFilteredSeries(filter).map(\.title))
+        let sr = catalog.series
+        return Self.anchors(seriesOrder(filter).map { sr[$0].title })
     }
 
     private static func anchors(_ titles: [String]) -> [BrowseAnchor] {
@@ -304,7 +321,7 @@ public actor InMemoryCatalogRepository: CatalogRepository {
         // `series(id:)` reads `catalog.series[idx]` live, so mutating it here is
         // enough — no cached struct to refresh.
         if let j = seriesIndexByID[id] { catalog.series[j].seasons = seasons }
-        seriesQueryCache = nil
+        seriesOrderCache = nil
     }
 
     public func recentlyAdded(limit: Int) -> [SearchResult.Item] {
