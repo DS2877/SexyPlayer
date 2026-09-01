@@ -281,10 +281,25 @@ public actor MetadataService {
         }
     }
 
+    /// The enrichment cache is bounded. It grows one entry per title the viewer
+    /// browses (each with cast credits and overviews), it's re-decoded on every
+    /// launch, and on a 40k-title library it would otherwise grow forever.
+    /// Trimming keeps the most recently fetched — those are what the viewer is
+    /// actually looking at, and a dropped entry costs one re-fetch.
+    private static let maxCachedRecords = 4_000
+
+    private func trimIfNeeded() {
+        guard byID.count > Self.maxCachedRecords else { return }
+        let keep = byID.sorted { $0.value.fetchedAt > $1.value.fetchedAt }
+            .prefix(Self.maxCachedRecords * 3 / 4)
+        byID = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
+    }
+
     private func flush() {
         saveTask = nil
         guard dirty else { return }
         dirty = false
+        trimIfNeeded()
         if let data = try? JSONEncoder().encode(byID) {
             try? data.write(to: fileURL, options: .atomic)
         }
