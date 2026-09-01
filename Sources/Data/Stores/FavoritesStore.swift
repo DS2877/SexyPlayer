@@ -23,16 +23,13 @@ public final class FavoritesStore {
         byID.values.sorted { $0.addedAt > $1.addedAt }
     }
 
-    /// Changes whenever the *set* of favourites changes — not just its size, so
-    /// hearting one thing and unhearting another still registers. Cheap enough
-    /// to use as a SwiftUI `task(id:)` without sorting and copying the list on
-    /// every redraw.
-    public var revision: Int {
-        var hasher = Hasher()
-        hasher.combine(byID.count)
-        for key in byID.keys { hasher.combine(key) }
-        return hasher.finalize()
-    }
+    /// Bumped on every change, so hearting one thing and unhearting another
+    /// still registers where a count wouldn't.
+    ///
+    /// A *stored* counter, not a hash computed on read: SwiftUI evaluates a
+    /// `task(id:)` key on every redraw, and hashing the dictionary there would
+    /// put an O(favourites) walk in the render path.
+    public private(set) var revision = 0
 
     public func toggle(id: CatalogID, kind: ContentKind) {
         if byID[id.rawValue] != nil {
@@ -51,6 +48,7 @@ public final class FavoritesStore {
     }
 
     private func save() {
+        revision &+= 1
         guard let data = try? JSONEncoder().encode(Array(byID.values)) else { return }
         defaults.set(data, forKey: storageKey)
     }

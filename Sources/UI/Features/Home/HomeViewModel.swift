@@ -187,14 +187,22 @@ public final class HomeViewModel {
         guard !Task.isCancelled else { return }
         content = shaped
 
-        // Cache the finished screen for the next launch.
-        if let providerID = snapshotProviderID {
+        // Cache the finished screen for the next launch. Throttled: the catalog
+        // revision bumps repeatedly during an import, and each save is a JSON
+        // encode of several hundred cards. The last one before the app closes is
+        // the only one that matters.
+        if let providerID = snapshotProviderID,
+           Date().timeIntervalSince(lastSnapshotSave) > Self.snapshotInterval {
+            lastSnapshotSave = Date()
             let toCache = shaped
             Task.detached(priority: .background) {
                 HomeSnapshotStore.save(toCache, providerID: providerID)
             }
         }
     }
+
+    private var lastSnapshotSave = Date.distantPast
+    private static let snapshotInterval: TimeInterval = 20
 
     /// The newest played title that still carries genre tags — the "Because You
     /// Watched" anchor, resolved from the resume points the store already built.

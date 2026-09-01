@@ -85,8 +85,7 @@ struct GuideView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task {
-            guard model == nil else { return }
+        .task(id: models.generation) {
             let shared = models.guide(env)
             model = shared
             guard models.needsLoad(.guide, revision: env.catalogRevision) else { return }

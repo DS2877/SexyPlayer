@@ -32,7 +32,8 @@ struct SearchView: View {
             .appRouteDestinations()
         }
         // Shared, so coming back to Search still shows your last results.
-        .task { if model == nil { model = models.search(env) } }
+        // Re-fetched when the store resets (provider switch).
+        .task(id: models.generation) { model = models.search(env) }
     }
 
     @ViewBuilder

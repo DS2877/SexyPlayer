@@ -115,8 +115,21 @@ actor ImageCache {
     /// URLs that came back 404 / unreachable, and when. Provider artwork is full
     /// of dead links; without this every scroll past a broken poster fires the
     /// request again, competing with the images that *do* load.
+    ///
+    /// Bounded — a provider with tens of thousands of dead logos would otherwise
+    /// grow this forever. When it fills, the oldest half goes; the worst case is
+    /// that a long-dead URL gets retried once more.
     private var failures: [String: Date] = [:]
     private static let failureCooldown: TimeInterval = 10 * 60
+    private static let failureLimit = 600
+
+    private func noteFailure(_ key: String) {
+        if failures.count >= Self.failureLimit {
+            let keep = failures.sorted { $0.value > $1.value }.prefix(Self.failureLimit / 2)
+            failures = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
+        }
+        failures[key] = Date()
+    }
 
     func image(for url: URL, size: ImageSize = .poster) async -> UIImage? {
         if let hit = DecodedImageMemoryCache.shared.image(for: url, size: size) { return hit }
@@ -160,7 +173,7 @@ actor ImageCache {
         if let image {
             DecodedImageMemoryCache.shared.store(image, for: url, size: size)
         } else {
-            failures[urlKey] = Date()
+            noteFailure(urlKey)
         }
         return image
     }

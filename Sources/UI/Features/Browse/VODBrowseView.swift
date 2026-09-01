@@ -24,8 +24,9 @@ struct VODBrowseView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task {
-            guard model == nil else { return }
+        // Keyed on the store's generation so a provider switch re-fetches the
+        // handle rather than leaving it on the discarded model.
+        .task(id: models.generation) {
             let shared = models.vod(kind, env)
             model = shared
             // Already populated from an earlier visit against this same catalog

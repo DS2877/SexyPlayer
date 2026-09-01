@@ -155,8 +155,7 @@ struct LiveTVBrowseView: View {
             .appThemeBackground()
             .appRouteDestinations()
         }
-        .task {
-            guard model == nil else { return }
+        .task(id: models.generation) {
             let shared = models.liveTV(env)
             model = shared
             guard models.needsLoad(.liveTV, revision: env.catalogRevision) else { return }

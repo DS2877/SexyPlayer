@@ -41,20 +41,13 @@ public final class WatchProgressStore {
     /// Every stored progress entry — order unspecified. For `UpNext` and history.
     public func allEntries() -> [WatchProgress] { Array(byID.values) }
 
-    /// Changes whenever what's been watched changes — including a position move
-    /// on an item already in the list, which a plain count would miss. Keyed on
-    /// position rather than `updatedAt`: two writes can land in the same second,
-    /// and it's the position that decides what the screen shows. Cheap enough
-    /// for a SwiftUI `task(id:)`.
-    public var revision: Int {
-        var hasher = Hasher()
-        hasher.combine(byID.count)
-        for (key, value) in byID {
-            hasher.combine(key)
-            hasher.combine(value.positionSeconds)
-        }
-        return hasher.finalize()
-    }
+    /// Bumped on every write. Screens key their reload on this rather than
+    /// re-querying whenever they reappear.
+    ///
+    /// Deliberately a *stored* counter, not a hash computed on read: SwiftUI
+    /// evaluates a `task(id:)` key on every redraw, and hashing the whole
+    /// dictionary there would put an O(entries) walk in the render path.
+    public private(set) var revision = 0
 
     /// Everything the user has actually started or finished, most recent first.
     /// Momentary taps (< 30s, not finished) are treated as noise and excluded.
@@ -88,16 +81,18 @@ public final class WatchProgressStore {
 
     public func clear(id: CatalogID) {
         byID[id.rawValue] = nil
-        save()
+        save(immediately: true)
     }
 
     /// Wipe all watch history (Settings / History → Clear).
     public func clearAll() {
         byID.removeAll()
-        save()
+        save(immediately: true)
     }
 
     // MARK: - Persistence
+
+    private var writeTask: Task<Void, Never>?
 
     private func load() {
         guard let data = defaults.data(forKey: storageKey),
@@ -106,7 +101,22 @@ public final class WatchProgressStore {
         byID = Dictionary(uniqueKeysWithValues: decoded.map { ($0.itemID.rawValue, $0) })
     }
 
-    private func save() {
+    /// In-memory state and `revision` update at once; the encode + write is
+    /// coalesced. Playback reports a position every 10 seconds, and encoding the
+    /// whole history to `UserDefaults` on each of those is real work during the
+    /// one moment the device is busiest. A destructive edit writes immediately.
+    private func save(immediately: Bool = false) {
+        revision &+= 1
+        writeTask?.cancel()
+        guard !immediately else { writeTask = nil; flush(); return }
+        writeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.flush()
+        }
+    }
+
+    private func flush() {
         let list = Array(byID.values)
         guard let data = try? JSONEncoder().encode(list) else { return }
         defaults.set(data, forKey: storageKey)

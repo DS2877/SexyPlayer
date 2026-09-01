@@ -31,6 +31,12 @@ public final class SectionModels {
     /// leave you looking at the partial library it saw the first time.
     private var loadedRevision: [String: Int] = [:]
 
+    /// Bumped by `reset()`. The section views hold a `@State` *handle* on their
+    /// model, which would otherwise keep pointing at the discarded instance
+    /// after a provider switch — they key their setup task on this so the
+    /// handle is re-fetched.
+    public private(set) var generation = 0
+
     public init() {}
 
     /// `true` when this section has never loaded, or loaded against an older
@@ -108,6 +114,8 @@ public final class SectionModels {
     /// Drop everything — the library underneath these models is gone
     /// (provider switched or removed).
     public func reset() {
+        guard homeModel != nil || liveTVModel != nil || moviesModel != nil
+            || seriesModel != nil || guideModel != nil || searchModel != nil else { return }
         homeModel = nil
         liveTVModel = nil
         moviesModel = nil
@@ -115,5 +123,6 @@ public final class SectionModels {
         guideModel = nil
         searchModel = nil
         loadedRevision.removeAll()
+        generation += 1
     }
 }
