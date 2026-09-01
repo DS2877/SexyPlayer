@@ -291,10 +291,13 @@ public final class AppEnvironment {
             AppLog.app.info("VOD stage: \(m.count) movies · \(s.count) series in \(Int(Date().timeIntervalSince(started) * 1000)) ms.")
         case .guide(let raw):
             let started = Date()
-            let now = Date()
-            let lower = now.addingTimeInterval(-Self.epgWindowPast)
-            let upper = now.addingTimeInterval(Self.epgWindowFuture)
-            let windowed = raw.filter { $0.stop > lower && $0.start < upper }
+            // The provider clients already parse the XMLTV within EPGWindow, so
+            // `raw` is small; a light re-trim only matters for the default
+            // (non-streamed) fetch path.
+            let window = EPGWindow.current()
+            let windowed = raw.count > 50_000
+                ? raw.filter { $0.stop > window.start && $0.start < window.end }
+                : raw
             let events = await normalizer.normalizeGuide(windowed)
             guard providers.activeConfiguration?.id == providerID else { return }
             await repository.mergeEPG(events)

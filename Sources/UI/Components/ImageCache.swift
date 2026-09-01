@@ -11,7 +11,12 @@ final class DecodedImageMemoryCache: @unchecked Sendable {
 
     private let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
-        c.totalCostLimit = 140 * 1024 * 1024      // ~140 MB of decoded images
+        // Kept deliberately lean — the Apple TV's memory budget is tight and the
+        // raw bytes are still on disk, so an eviction just costs a ~10 ms
+        // re-decode on the next scroll, not a re-download. NSCache also drops
+        // everything on a system memory warning.
+        c.totalCostLimit = 80 * 1024 * 1024
+        c.countLimit = 48
         return c
     }()
 
@@ -45,9 +50,9 @@ actor ImageCache {
         config.timeoutIntervalForRequest = 15
         session = URLSession(configuration: config)
 
-        // Crude cap: if the on-disk cache has grown past ~600 MB, wipe it.
+        // Crude cap: if the on-disk cache has grown past ~400 MB, wipe it.
         if let size = try? FileManager.default.allocatedSizeOfDirectory(at: directory),
-           size > 600 * 1024 * 1024 {
+           size > 400 * 1024 * 1024 {
             try? FileManager.default.removeItem(at: directory)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
@@ -90,10 +95,12 @@ actor ImageCache {
 
     // MARK: - Helpers
 
-    /// Largest edge we ever keep in memory. A tvOS backdrop is ~1920px wide at
-    /// 1x; posters need ~480px. Provider artwork is frequently many megapixels —
-    /// downsampling on decode is the difference between ~1MB and ~20MB per image.
-    private static let maxPixelSize = 1400
+    /// Largest edge we ever keep in memory. The widest thing we show is the
+    /// Home hero backdrop (full width). Posters are ~520px at 2x. 1200 keeps the
+    /// hero crisp enough at TV viewing distance while a decoded 2:3 poster stays
+    /// ~7 MB instead of ~12 MB (it was 1400). Provider artwork is frequently many
+    /// megapixels — downsampling on decode is the whole point.
+    private static let maxPixelSize = 1200
 
     private static func decode(_ data: Data) -> UIImage? {
         let options: [CFString: Any] = [
