@@ -66,9 +66,33 @@ public struct Language: Hashable, Codable, Sendable, Comparable {
     public static let norwegian = Language(code: "no")!
     public static let danish = Language(code: "da")!
     public static let finnish = Language(code: "fi")!
+    public static let icelandic = Language(code: "is")!
     public static let german = Language(code: "de")!
-    public static let spanish = Language(code: "es")!
+    public static let dutch = Language(code: "nl")!
     public static let french = Language(code: "fr")!
+    public static let spanish = Language(code: "es")!
+    public static let italian = Language(code: "it")!
+    public static let portuguese = Language(code: "pt")!
+    public static let polish = Language(code: "pl")!
+    public static let czech = Language(code: "cs")!
+    public static let greek = Language(code: "el")!
+    public static let hungarian = Language(code: "hu")!
+    public static let romanian = Language(code: "ro")!
+    public static let turkish = Language(code: "tr")!
+    public static let russian = Language(code: "ru")!
+    public static let ukrainian = Language(code: "uk")!
+    public static let arabic = Language(code: "ar")!
+
+    /// The languages always offered in the personalize / settings pickers, so a
+    /// viewer can pick a preference the current library hasn't surfaced yet.
+    /// Nordic + the major European languages, plus the ones that show up most in
+    /// European IPTV bundles.
+    public static let commonPickerChoices: [Language] = [
+        .english, .swedish, .norwegian, .danish, .finnish, .icelandic,
+        .german, .dutch, .french, .spanish, .italian, .portuguese,
+        .polish, .czech, .greek, .hungarian, .romanian, .turkish,
+        .russian, .ukrainian, .arabic,
+    ]
 }
 
 // MARK: - Video quality

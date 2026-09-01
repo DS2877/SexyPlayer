@@ -18,12 +18,18 @@ struct PersonalizeView: View {
         var id: String { String(describing: self) }
     }
 
+    /// The common European set is always offered; anything the library surfaced
+    /// (or the viewer has already picked) is merged in so nothing disappears.
+    private func languageChoices(detected: [Language]) -> [Language] {
+        let picked = working.preferredAudioLanguages + (working.preferredSubtitleLanguage.map { [$0] } ?? [])
+        return Array(Set(Language.commonPickerChoices + detected + picked)).sorted()
+    }
+
     private var audioLanguages: [Language] {
-        let all = env.vocabulary.audioLanguages + env.vocabulary.subtitleLanguages
-        return Array(Set(all)).sorted()
+        languageChoices(detected: env.vocabulary.audioLanguages + env.vocabulary.subtitleLanguages)
     }
     private var subtitleLanguages: [Language] {
-        env.vocabulary.subtitleLanguages.isEmpty ? audioLanguages : env.vocabulary.subtitleLanguages.sorted()
+        languageChoices(detected: env.vocabulary.subtitleLanguages)
     }
 
     private let choiceColumns = [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: Metrics.space2)]
