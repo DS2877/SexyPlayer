@@ -114,8 +114,11 @@ public final class SectionModels {
     /// Drop everything — the library underneath these models is gone
     /// (provider switched or removed).
     public func reset() {
+        // No-op when there's nothing to drop, so the generation only moves when
+        // views actually need to re-fetch their handles.
         guard homeModel != nil || liveTVModel != nil || moviesModel != nil
-            || seriesModel != nil || guideModel != nil || searchModel != nil else { return }
+            || seriesModel != nil || guideModel != nil || searchModel != nil
+            || !loadedRevision.isEmpty else { return }
         homeModel = nil
         liveTVModel = nil
         moviesModel = nil
