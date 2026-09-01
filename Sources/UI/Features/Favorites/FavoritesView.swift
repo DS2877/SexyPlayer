@@ -66,6 +66,7 @@ struct FavoritesView: View {
     }
 
     private func reload() async {
+        let repo = env.repository
         let addedAt = Dictionary(env.favorites.all().map { ($0.itemID, $0.addedAt) },
                                  uniquingKeysWith: { a, _ in a })
         let ids = Array(addedAt.keys)
@@ -74,23 +75,23 @@ struct FavoritesView: View {
             items.sorted { (addedAt[id($0)] ?? .distantPast) > (addedAt[id($1)] ?? .distantPast) }
         }
 
-        async let movieHits = env.repository.movies(ids: ids)
-        async let seriesHits = env.repository.series(ids: ids)
-        async let channelHits = env.repository.channels(ids: ids)
+        let movieHits = await repo.movies(ids: ids)
+        let seriesHits = await repo.series(ids: ids)
+        let channelHits = await repo.channels(ids: ids)
 
-        let movies = byRecency(await movieHits, id: \.id).map { m in
+        let movies = byRecency(movieHits, id: \.id).map { m in
             FavItem(id: m.id, title: m.title,
                     subtitle: [m.year.map(String.init), m.genres.first?.displayName].compactMap { $0 }.joined(separator: " · "),
                     art: m.posterURL, route: .movie(m.id),
                     ref: ArtworkRef(id: m.id, title: m.title, year: m.year, isSeries: false))
         }
-        let series = byRecency(await seriesHits, id: \.id).map { s in
+        let series = byRecency(seriesHits, id: \.id).map { s in
             FavItem(id: s.id, title: s.title,
                     subtitle: "\(s.seasons.count) season\(s.seasons.count == 1 ? "" : "s")",
                     art: s.posterURL, route: .series(s.id),
                     ref: ArtworkRef(id: s.id, title: s.title, year: s.year, isSeries: true))
         }
-        let channels = byRecency(await channelHits, id: \.id).map { c in
+        let channels = byRecency(channelHits, id: \.id).map { c in
             FavItem(id: c.id, title: c.name, subtitle: c.category, art: c.logoURL, route: .channel(c.id))
         }
 

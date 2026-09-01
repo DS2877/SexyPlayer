@@ -68,18 +68,13 @@ public final class HomeViewModel {
         guard await repository.isReady() else { content = .empty; return }
         guard !Task.isCancelled else { return }
 
-        // Bounded shelf queries — never the whole catalog.
-        async let newestMoviesF = repository.newestMovies(limit: Slice.newestMovies)
-        async let newestSeriesF = repository.newestSeries(limit: Slice.newestSeries)
-        async let liveNowF = repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
-        async let guideChannelsF = repository.guideChannels(limit: Slice.guideChannels)
-        async let ratingsF = metadata.ratingsSnapshot()
-
-        var newestMovies = await newestMoviesF
-        var newestSeries = await newestSeriesF
-        let liveNow = await liveNowF
-        let guideChannels = await guideChannelsF
-        let ratings = await ratingsF
+        // Bounded shelf queries — never the whole catalog. The store serialises
+        // its reads anyway, so these run in sequence.
+        var newestMovies = await repository.newestMovies(limit: Slice.newestMovies)
+        var newestSeries = await repository.newestSeries(limit: Slice.newestSeries)
+        let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: 18)
+        let guideChannels = await repository.guideChannels(limit: Slice.guideChannels)
+        let ratings = await metadata.ratingsSnapshot()
         guard !Task.isCancelled else { return }
 
         // Resolve the containers Continue Watching / "Because You Watched" need.
