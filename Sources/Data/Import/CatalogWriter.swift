@@ -48,7 +48,7 @@ public actor CatalogWriter {
         try await database.setMeta(CatalogDatabase.MetaKey.epgCount, String(epgCount))
         try await database.setMeta(CatalogDatabase.MetaKey.importedAt, String(Date().timeIntervalSince1970))
         try await database.setMeta(CatalogDatabase.MetaKey.importComplete, "1")
-        try await database.updateRegionPriorities(homeRegions: homeRegions)
+        // `insertChannels` already stamped `region_priority`; nothing to recompute.
         try? await database.optimize()
     }
 

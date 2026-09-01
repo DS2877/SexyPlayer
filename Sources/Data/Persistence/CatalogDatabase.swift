@@ -737,6 +737,7 @@ public actor CatalogDatabase {
                 SQLiteValue(relevant),
             ]
         }
+        let genreClears = movies.map { [SQLiteValue.text($0.id.rawValue)] }
         let genreRows = movies.flatMap { movie in
             movie.genres.map { [SQLiteValue.text(movie.id.rawValue), .text($0.rawValue)] }
         }
@@ -748,6 +749,8 @@ public actor CatalogDatabase {
              added_at, is_adult, is_relevant)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, rows)
+            // Replace this batch's genre rows (a refresh may have changed them).
+            try connection.executeMany("DELETE FROM movie_genre WHERE movie_id = ?", genreClears)
             try connection.executeMany(
                 "INSERT OR IGNORE INTO movie_genre (movie_id, genre) VALUES (?,?)", genreRows
             )
@@ -779,6 +782,7 @@ public actor CatalogDatabase {
                 .integer(show.seasons.isEmpty ? 0 : 1),
             ]
         }
+        let genreClears = series.map { [SQLiteValue.text($0.id.rawValue)] }
         let genreRows = series.flatMap { show in
             show.genres.map { [SQLiteValue.text(show.id.rawValue), .text($0.rawValue)] }
         }
@@ -791,6 +795,7 @@ public actor CatalogDatabase {
              poster_url, backdrop_url, synopsis, provider_key, added_at, is_adult, is_relevant, seasons_loaded)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, rows)
+            try connection.executeMany("DELETE FROM series_genre WHERE series_id = ?", genreClears)
             try connection.executeMany(
                 "INSERT OR IGNORE INTO series_genre (series_id, genre) VALUES (?,?)", genreRows
             )
