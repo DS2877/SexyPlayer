@@ -11,12 +11,12 @@ final class DecodedImageMemoryCache: @unchecked Sendable {
 
     private let cache: NSCache<NSString, UIImage> = {
         let c = NSCache<NSString, UIImage>()
-        // Kept deliberately lean — the Apple TV's memory budget is tight and the
-        // raw bytes are still on disk, so an eviction just costs a ~10 ms
-        // re-decode on the next scroll, not a re-download. NSCache also drops
-        // everything on a system memory warning.
-        c.totalCostLimit = 80 * 1024 * 1024
-        c.countLimit = 48
+        // Deliberately small — the Apple TV's memory budget is tight and the raw
+        // bytes are still on disk, so an eviction costs a ~10 ms re-decode on the
+        // next scroll, not a re-download. NSCache also drops everything on a
+        // system memory warning.
+        c.totalCostLimit = 56 * 1024 * 1024
+        c.countLimit = 40
         return c
     }()
 
@@ -26,6 +26,38 @@ final class DecodedImageMemoryCache: @unchecked Sendable {
 
     func store(_ image: UIImage, for url: URL) {
         cache.setObject(image, forKey: url.absoluteString as NSString, cost: image.estimatedBytes)
+    }
+
+    func removeAll() { cache.removeAllObjects() }
+}
+
+/// Bounds how many images decode concurrently. A fast scroll or a rebuild storm
+/// can otherwise kick off dozens of `CGImageSourceCreateThumbnail` calls at
+/// once, each holding a multi-MB uncompressed bitmap — enough to jetsam the app
+/// on device. A small permit count keeps the transient decode footprint flat.
+actor DecodeLimiter {
+    static let shared = DecodeLimiter(permits: 3)
+
+    private var available: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(permits: Int) { self.available = permits }
+
+    func acquire() async {
+        if available > 0 {
+            available -= 1
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func release() {
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        } else {
+            available += 1
+        }
     }
 }
 
@@ -48,11 +80,12 @@ actor ImageCache {
         let config = URLSessionConfiguration.default
         config.requestCachePolicy = .returnCacheDataElseLoad
         config.timeoutIntervalForRequest = 15
+        config.httpMaximumConnectionsPerHost = 4
         session = URLSession(configuration: config)
 
-        // Crude cap: if the on-disk cache has grown past ~400 MB, wipe it.
+        // Crude cap: if the on-disk cache has grown past ~350 MB, wipe it.
         if let size = try? FileManager.default.allocatedSizeOfDirectory(at: directory),
-           size > 400 * 1024 * 1024 {
+           size > 350 * 1024 * 1024 {
             try? FileManager.default.removeItem(at: directory)
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
@@ -68,14 +101,20 @@ actor ImageCache {
         let session = self.session
         let task = Task<UIImage?, Never> {
             let fileURL = dir.appendingPathComponent(Self.filename(for: url))
-            if let data = try? Data(contentsOf: fileURL), let image = Self.decode(data) {
-                return image
+            var bytes = try? Data(contentsOf: fileURL)
+            if bytes == nil {
+                if let (data, response) = try? await session.data(from: url),
+                   let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) {
+                    bytes = data
+                    try? data.write(to: fileURL, options: .atomic)
+                }
             }
-            guard let (data, response) = try? await session.data(from: url),
-                  let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode),
-                  let image = Self.decode(data)
-            else { return nil }
-            try? data.write(to: fileURL, options: .atomic)
+            guard let bytes else { return nil }
+
+            // Gate the expensive part — the decode holds a big uncompressed bitmap.
+            await DecodeLimiter.shared.acquire()
+            let image = Self.decode(bytes)
+            await DecodeLimiter.shared.release()
             return image
         }
         inFlight[key] = task
@@ -85,22 +124,38 @@ actor ImageCache {
         return image
     }
 
-    /// Warm the cache for URLs about to scroll into view, so the first
-    /// screenful of a grid is already decoded when it renders.
+    /// Warm the cache for URLs about to scroll into view. Bounded to a couple of
+    /// workers so a big grid doesn't spawn hundreds of concurrent decodes.
     nonisolated func prefetch(_ urls: [URL]) {
-        for url in urls where DecodedImageMemoryCache.shared.image(for: url) == nil {
-            Task.detached(priority: .utility) { _ = await ImageCache.shared.image(for: url) }
+        let pending = urls.filter { DecodedImageMemoryCache.shared.image(for: $0) == nil }
+        guard !pending.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                var it = pending.makeIterator()
+                let workers = min(2, pending.count)
+                for _ in 0 ..< workers {
+                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u) } }
+                }
+                while await group.next() != nil {
+                    if let u = it.next() { group.addTask { _ = await ImageCache.shared.image(for: u) } }
+                }
+            }
         }
+    }
+
+    /// Drop the in-memory decoded images (e.g. on a memory warning).
+    nonisolated func flushMemory() {
+        DecodedImageMemoryCache.shared.removeAll()
     }
 
     // MARK: - Helpers
 
-    /// Largest edge we ever keep in memory. The widest thing we show is the
-    /// Home hero backdrop (full width). Posters are ~520px at 2x. 1200 keeps the
-    /// hero crisp enough at TV viewing distance while a decoded 2:3 poster stays
-    /// ~7 MB instead of ~12 MB (it was 1400). Provider artwork is frequently many
-    /// megapixels — downsampling on decode is the whole point.
-    private static let maxPixelSize = 1200
+    /// Largest edge we ever keep in memory. Posters display at ~520 px (2x); the
+    /// Home hero is the only full-width image. 900 keeps the hero acceptable at
+    /// TV viewing distance while a decoded 2:3 poster is ~4.9 MB (was ~12 MB at
+    /// 1400). Provider artwork is frequently many megapixels — downsampling on
+    /// decode is the whole point.
+    private static let maxPixelSize = 900
 
     private static func decode(_ data: Data) -> UIImage? {
         let options: [CFString: Any] = [
