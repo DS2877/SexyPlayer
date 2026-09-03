@@ -3,49 +3,69 @@ import XCTest
 
 final class RelevanceFilterTests: XCTestCase {
 
-    private func keep(_ code: String?, _ name: String = "", _ category: String = "") -> Bool {
-        RelevanceFilter.isRelevant(countryCode: code, name: name, category: category)
+    private func keep(
+        _ code: String?, _ name: String = "", _ category: String = "",
+        audio: [Language] = [], subs: [Language] = []
+    ) -> Bool {
+        RelevanceFilter.isRelevant(countryCode: code, name: name, category: category,
+                                   audioLanguages: audio, subtitleLanguages: subs)
     }
 
-    func testKeepsNordicAndEnglishCountryCodes() {
-        for c in ["SE", "NO", "DK", "FI", "IS", "GB", "IE", "US"] {
+    func testKeepsNordicEnglishAndEuropeanCountryCodes() {
+        for c in ["SE", "NO", "DK", "FI", "IS", "GB", "IE", "US",
+                  "DE", "FR", "ES", "IT", "PL", "NL", "GR", "RO", "PT", "HR"] {
             XCTAssertTrue(keep(c), "\(c) should be kept")
         }
     }
 
-    func testDropsForeignCountryCodes() {
-        for c in ["AR", "TR", "PL", "RO", "GR", "IN", "SA", "BR", "RU", "DE", "FR", "ES", "IT"] {
+    func testDropsNonEuropeanCountryCodes() {
+        for c in ["AR", "TR", "IN", "SA", "BR", "RU", "BY", "CN", "NG", "SO", "IR", "PK"] {
             XCTAssertFalse(keep(c), "\(c) should be dropped")
         }
+    }
+
+    func testEnglishOrNordicAudioOrSubtitlesKeepsAnythingAnywhere() {
+        // "…unless it has english or swedish speak and text."
+        XCTAssertTrue(keep("SA", "MBC Persia", "Movies", subs: [.english]))
+        XCTAssertTrue(keep("RU", "Kino", "Movies", audio: [.swedish]))
+        XCTAssertTrue(keep(nil, "MBC 2", "Arabic Movies", subs: [.swedish]))
+        XCTAssertTrue(keep("TR", "Kanal D", "Series", audio: [.english]))
+        // Arabic audio only, no English/Nordic anywhere → still dropped.
+        XCTAssertFalse(keep("SA", "MBC 1", "News", audio: [.arabic]))
     }
 
     func testUnknownCountryIsKeptWhenNoForeignMarker() {
         XCTAssertTrue(keep(nil, "beIN Sports 1 HD", "Sports"))
         XCTAssertTrue(keep(nil, "24/7 Friends", "Entertainment"))
         XCTAssertTrue(keep(nil, "Discovery Channel", "Documentary"))
+        // European-language markers no longer drop anything — Europe is kept.
+        XCTAssertTrue(keep(nil, "TVP Polska", "Polish"))
+        XCTAssertTrue(keep(nil, "Das Erste", "German"))
     }
 
     func testUnknownCountryIsDroppedOnAForeignMarker() {
         XCTAssertFalse(keep(nil, "MBC Masr", "News"))
         XCTAssertFalse(keep(nil, "Zee TV", "Bollywood"))
-        XCTAssertFalse(keep(nil, "TVP Polska", "Polish"))
         XCTAssertFalse(keep(nil, "OSN Yahala", "Arabic Movies"))
+        XCTAssertFalse(keep(nil, "Perviy Kanal", "Russian"))
+        XCTAssertFalse(keep(nil, "Somali National TV", "Africa"))
     }
 
     func testWholeWordMatchingAvoidsFalsePositives() {
         // "india" must not match inside "Indiana"
         XCTAssertTrue(keep(nil, "Indiana Jones Marathon", "Movies"))
-        // "iran" must not match "Tehrangeles"… nor "irate"
+        // "iran" must not match "Pirates"
         XCTAssertTrue(keep(nil, "Pirates of the Caribbean", "Movies"))
     }
 
-    func testPriorityRanksHomeThenNordicThenEnglish() {
+    func testPriorityRanksHomeThenNordicThenEuropeThenRest() {
         let home: Set<String> = ["SE"]
         XCTAssertEqual(RelevanceFilter.priority(countryCode: "SE", home: home), 0)
         XCTAssertEqual(RelevanceFilter.priority(countryCode: "NO", home: home), 1)
         XCTAssertEqual(RelevanceFilter.priority(countryCode: "GB", home: home), 2)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "DE", home: home), 2)
         XCTAssertEqual(RelevanceFilter.priority(countryCode: nil,  home: home), 2)
-        XCTAssertEqual(RelevanceFilter.priority(countryCode: "DE", home: home), 3)
+        XCTAssertEqual(RelevanceFilter.priority(countryCode: "SA", home: home), 3)
     }
 
     func testHomeRegionsFromLanguages() {

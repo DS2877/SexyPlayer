@@ -105,6 +105,11 @@ public final class CatalogDatabase: @unchecked Sendable {
         public static let movieCount = "movie_count"
         public static let seriesCount = "series_count"
         public static let epgCount = "epg_count"
+        // Facet cache — recomputed at the end of every import.
+        public static let facetGenres = "facet_genres"
+        public static let facetAudioLanguages = "facet_audio_langs"
+        public static let facetSubLanguages = "facet_sub_langs"
+        public static let facetChannelCategories = "facet_channel_cats"
     }
 
     public func metaValue(_ key: String) async throws -> String? {
@@ -283,22 +288,39 @@ public final class CatalogDatabase: @unchecked Sendable {
     }
 
     // MARK: - Facets
+    //
+    // The distinct genre / language / category sets are the same after every
+    // query and only change when the library does, so they're computed once at
+    // the end of an import (`refreshFacetCache`) and stashed in `meta`. Each
+    // accessor reads the cache and only falls back to a full-table scan when it's
+    // missing (an import from before this cache existed, or a partial library
+    // mid-import).
 
     public func channelCategories() async throws -> [String] {
-        try await read { conn in
+        if let cached = try await metaList(MetaKey.facetChannelCategories) { return ["All"] + cached }
+        return try await read { conn in
             ["All"] + (try conn.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) })
         }
     }
 
     public func presentGenres() async throws -> [Genre] {
-        try await read { conn in
-            let raw = Set(try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
-                          + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
-            return Genre.allCases.filter { raw.contains($0.rawValue) }
+        let raw: Set<String>
+        if let cached = try await metaList(MetaKey.facetGenres) {
+            raw = Set(cached)
+        } else {
+            raw = try await read { conn in
+                Set(try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
+                    + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
+            }
         }
+        return Genre.allCases.filter { raw.contains($0.rawValue) }
     }
 
     public func presentLanguages(subtitles: Bool) async throws -> [Language] {
+        let key = subtitles ? MetaKey.facetSubLanguages : MetaKey.facetAudioLanguages
+        if let cached = try await metaList(key) {
+            return cached.compactMap { Language(code: $0) }.sorted()
+        }
         let column = subtitles ? "sub_langs" : "audio_langs"
         return try await read { conn in
             let rows = try conn.query(
@@ -309,6 +331,45 @@ public final class CatalogDatabase: @unchecked Sendable {
             for wrapped in rows { for part in wrapped.split(separator: ",") { codes.insert(String(part)) } }
             return codes.compactMap { Language(code: $0) }.sorted()
         }
+    }
+
+    /// Recompute the facet cache from the current tables. Called at the end of an
+    /// import, on the writer connection.
+    public func refreshFacetCache() async throws {
+        try await write { conn in
+            let genres = try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
+                       + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) }
+
+            func langCodes(_ column: String) throws -> [String] {
+                let rows = try conn.query(
+                    "SELECT \(column) FROM movie WHERE \(column) <> '' " +
+                    "UNION SELECT \(column) FROM series WHERE \(column) <> ''"
+                ) { $0.string(0) }
+                var codes = Set<String>()
+                for wrapped in rows { for part in wrapped.split(separator: ",") { codes.insert(String(part)) } }
+                return codes.sorted()
+            }
+            let audio = try langCodes("audio_langs")
+            let subs = try langCodes("sub_langs")
+            let categories = try conn.query("SELECT DISTINCT category FROM channel ORDER BY category") { $0.string(0) }
+
+            func setList(_ key: String, _ values: [String]) throws {
+                _ = try conn.run(
+                    "INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    [.text(key), .text(values.joined(separator: "\n"))]
+                )
+            }
+            try setList(MetaKey.facetGenres, Array(Set(genres)).sorted())
+            try setList(MetaKey.facetAudioLanguages, audio)
+            try setList(MetaKey.facetSubLanguages, subs)
+            try setList(MetaKey.facetChannelCategories, categories)
+        }
+    }
+
+    /// A newline-delimited `meta` list, or `nil` when the key is unset.
+    private func metaList(_ key: String) async throws -> [String]? {
+        guard let raw = try await metaValue(key) else { return nil }
+        return raw.isEmpty ? [] : raw.split(separator: "\n").map(String.init)
     }
 
     // MARK: - Counts
@@ -331,6 +392,14 @@ public final class CatalogDatabase: @unchecked Sendable {
         try await read { conn in
             let (where_, params) = Self.channelWhere(category: category, scope)
             return try conn.scalarInt("SELECT count(*) FROM channel WHERE \(where_)", params)
+        }
+    }
+
+    /// `true` when the table has at least one row — an `EXISTS` probe, so it
+    /// stops at the first row instead of counting the whole table.
+    public func hasRows(_ table: String) async throws -> Bool {
+        try await read { conn in
+            try conn.scalarInt("SELECT EXISTS(SELECT 1 FROM \(table))") == 1
         }
     }
 
@@ -372,33 +441,66 @@ public final class CatalogDatabase: @unchecked Sendable {
         }
     }
 
-    // MARK: - Ordered title columns (for the A–Z rails)
+    // MARK: - A–Z rail anchors
+    //
+    // The rail needs, per first letter, the position of its first row in the
+    // sorted+filtered list. That's a `row_number()` window over the same order
+    // the grid pages in — computed in SQL so ~30 `(letter, index)` rows cross
+    // the boundary instead of every matching title.
 
-    public func movieTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) async throws -> [String] {
+    public func movieTitleAnchors(_ filter: CatalogFilter, _ scope: Scope) async throws -> [BrowseAnchor] {
         try await read { conn in
             let (where_, params) = Self.movieWhere(filter, scope)
-            return try conn.query(
-                "SELECT title FROM movie WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
-            ) { $0.string(0) }
+            return try Self.anchorRows(conn, table: "movie", where_: where_, params: params,
+                                       order: Self.orderClause(filter.sort))
         }
     }
 
-    public func seriesTitlesInOrder(_ filter: CatalogFilter, _ scope: Scope) async throws -> [String] {
+    public func seriesTitleAnchors(_ filter: CatalogFilter, _ scope: Scope) async throws -> [BrowseAnchor] {
         try await read { conn in
             let (where_, params) = Self.seriesWhere(filter, scope)
-            return try conn.query(
-                "SELECT title FROM series WHERE \(where_) ORDER BY \(Self.orderClause(filter.sort))", params
-            ) { $0.string(0) }
+            return try Self.anchorRows(conn, table: "series", where_: where_, params: params,
+                                       order: Self.orderClause(filter.sort))
         }
     }
 
-    public func channelNamesInOrder(category: String?, _ scope: Scope) async throws -> [String] {
+    public func channelNameAnchors(category: String?, _ scope: Scope) async throws -> [BrowseAnchor] {
         try await read { conn in
             let (where_, params) = Self.channelWhere(category: category, scope)
-            return try conn.query(
-                "SELECT name FROM channel WHERE \(where_) ORDER BY name_fold, sort_index", params
-            ) { $0.string(0) }
+            return try Self.anchorRows(conn, table: "channel", where_: where_, params: params,
+                                       order: "name_fold, sort_index", titleColumn: "name_fold")
         }
+    }
+
+    private static func anchorRows(
+        _ conn: SQLiteConnection, table: String, where_: String,
+        params: [SQLiteValue], order: String, titleColumn: String = "title_fold"
+    ) throws -> [BrowseAnchor] {
+        let sql = """
+        SELECT letter, MIN(rn) AS idx FROM (
+            SELECT substr(\(titleColumn), 1, 1) AS letter,
+                   (row_number() OVER (ORDER BY \(order))) - 1 AS rn
+            FROM \(table) WHERE \(where_)
+        ) WHERE letter <> '' GROUP BY letter ORDER BY idx
+        """
+        let raw = try conn.query(sql, params) { row -> (letter: String, index: Int) in
+            (letter: row.string(0), index: row.int(1))
+        }
+        return foldAnchors(raw)
+    }
+
+    /// Collapse first-character rows into display buckets: digits → `#`, letters
+    /// → uppercase. Keeps each bucket's lowest index and returns them in
+    /// list order.
+    static func foldAnchors(_ raw: [(letter: String, index: Int)]) -> [BrowseAnchor] {
+        var best: [String: Int] = [:]
+        for entry in raw {
+            guard let ch = entry.letter.first else { continue }
+            let bucket = ch.isNumber ? "#" : String(ch).uppercased()
+            best[bucket] = Swift.min(best[bucket] ?? entry.index, entry.index)
+        }
+        return best.map { BrowseAnchor(letter: $0.key, index: $0.value) }
+            .sorted { $0.index < $1.index }
     }
 
     // MARK: - By id
@@ -644,13 +746,18 @@ public final class CatalogDatabase: @unchecked Sendable {
         return try await read { conn in
             let (clause, params) = Self.scopeClause(scope)
             let ph = Array(repeating: "?", count: genres.count).joined(separator: ",")
+            let genreArgs = genres.map { SQLiteValue.text($0.rawValue) }
+            // Restrict to titles that share at least one genre *before* scoring —
+            // the correlated `shared` count then runs over that small candidate
+            // set, not the whole visible library.
             let sql = """
             SELECT \(Self.movieCardColumns), \
             (SELECT count(*) FROM movie_genre g WHERE g.movie_id = movie.id AND g.genre IN (\(ph))) AS shared
-            FROM movie WHERE \(clause) AND id <> ? AND shared > 0
+            FROM movie WHERE \(clause) AND id <> ? \
+            AND id IN (SELECT movie_id FROM movie_genre WHERE genre IN (\(ph)))
             ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
             """
-            let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
+            let args = params + genreArgs + [.text(id.rawValue)] + genreArgs + [.integer(Int64(limit))]
             return try conn.query(sql, args, Self.decodeMovie)
         }
     }
@@ -660,13 +767,15 @@ public final class CatalogDatabase: @unchecked Sendable {
         return try await read { conn in
             let (clause, params) = Self.scopeClause(scope)
             let ph = Array(repeating: "?", count: genres.count).joined(separator: ",")
+            let genreArgs = genres.map { SQLiteValue.text($0.rawValue) }
             let sql = """
             SELECT \(Self.seriesColumns), \
             (SELECT count(*) FROM series_genre g WHERE g.series_id = series.id AND g.genre IN (\(ph))) AS shared
-            FROM series WHERE \(clause) AND id <> ? AND shared > 0
+            FROM series WHERE \(clause) AND id <> ? \
+            AND id IN (SELECT series_id FROM series_genre WHERE genre IN (\(ph)))
             ORDER BY shared DESC, (added_at IS NULL), added_at DESC LIMIT ?
             """
-            let args = params + genres.map { SQLiteValue.text($0.rawValue) } + [.text(id.rawValue), .integer(Int64(limit))]
+            let args = params + genreArgs + [.text(id.rawValue)] + genreArgs + [.integer(Int64(limit))]
             return try conn.query(sql, args) { row in Self.decodeSeries(row, seasons: []) }
         }
     }
@@ -727,28 +836,38 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     // MARK: - WHERE builders (pure — no instance state)
 
+    /// The visibility predicate, written as plain equalities (not `(? OR …)`) so
+    /// SQLite can seek the composite `(is_relevant, is_adult, …)` indexes rather
+    /// than scanning past the filtered-out bulk of a large provider's dump.
+    /// Always a valid boolean expression — `"1"` when the scope constrains
+    /// nothing.
     private static func scopeClause(_ scope: Scope) -> (String, [SQLiteValue]) {
-        ("(? OR is_adult = 0) AND (? OR is_relevant = 1)",
-         [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)])
+        var parts: [String] = []
+        if !scope.allRegions { parts.append("is_relevant = 1") }
+        if !scope.showAdult { parts.append("is_adult = 0") }
+        return (parts.isEmpty ? "1" : parts.joined(separator: " AND "), [])
     }
 
     private static func movieWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
-        var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
-        var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
+        let (scopeExpr, scopeParams) = scopeClause(scope)
+        var clauses = [scopeExpr]
+        var params = scopeParams
         appendCommon(to: &clauses, params: &params, filter: filter, genreTable: "movie_genre", idColumn: "movie_id", hasDuration: true)
         return (clauses.joined(separator: " AND "), params)
     }
 
     private static func seriesWhere(_ filter: CatalogFilter, _ scope: Scope) -> (String, [SQLiteValue]) {
-        var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
-        var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
+        let (scopeExpr, scopeParams) = scopeClause(scope)
+        var clauses = [scopeExpr]
+        var params = scopeParams
         appendCommon(to: &clauses, params: &params, filter: filter, genreTable: "series_genre", idColumn: "series_id", hasDuration: false)
         return (clauses.joined(separator: " AND "), params)
     }
 
     private static func channelWhere(category: String?, _ scope: Scope) -> (String, [SQLiteValue]) {
-        var clauses = ["(? OR is_adult = 0)", "(? OR is_relevant = 1)"]
-        var params: [SQLiteValue] = [SQLiteValue(scope.showAdult), SQLiteValue(scope.allRegions)]
+        let (scopeExpr, scopeParams) = scopeClause(scope)
+        var clauses = [scopeExpr]
+        var params = scopeParams
         if let category, category != "All" {
             clauses.append("category = ?")
             params.append(.text(category))
@@ -824,6 +943,10 @@ public final class CatalogDatabase: @unchecked Sendable {
                 for table in ["channel", "movie", "movie_genre", "series", "series_genre", "episode", "epg_event"] {
                     try conn.execute("DELETE FROM \(table)")
                 }
+                for key in [MetaKey.facetGenres, MetaKey.facetAudioLanguages,
+                            MetaKey.facetSubLanguages, MetaKey.facetChannelCategories] {
+                    _ = try conn.run("DELETE FROM meta WHERE key = ?", [.text(key)])
+                }
             }
         }
     }
@@ -831,7 +954,10 @@ public final class CatalogDatabase: @unchecked Sendable {
     public func insertChannels(_ channels: [Channel], homeRegions: Set<String>, generation: Int = 1) async throws {
         let gen = Int64(generation)
         let rows = channels.map { channel -> [SQLiteValue] in
-            let relevant = RelevanceFilter.isRelevant(countryCode: channel.countryCode, name: channel.name, category: channel.category)
+            let relevant = RelevanceFilter.isRelevant(
+                countryCode: channel.countryCode, name: channel.name, category: channel.category,
+                audioLanguages: channel.audioLanguages, subtitleLanguages: channel.subtitleLanguages
+            )
             return [
                 .text(channel.id.rawValue),
                 .text(channel.name),
@@ -867,7 +993,9 @@ public final class CatalogDatabase: @unchecked Sendable {
         let gen = Int64(generation)
         let rows = movies.map { movie -> [SQLiteValue] in
             let relevant = RelevanceFilter.isRelevant(
-                countryCode: movie.countryCode, name: movie.title, category: movie.genres.first?.displayName ?? ""
+                countryCode: movie.countryCode, name: movie.title,
+                category: movie.genres.first?.displayName ?? "",
+                audioLanguages: movie.audioLanguages, subtitleLanguages: movie.subtitleLanguages
             )
             return [
                 .text(movie.id.rawValue),
@@ -915,7 +1043,9 @@ public final class CatalogDatabase: @unchecked Sendable {
         let gen = Int64(generation)
         let rows = series.map { show -> [SQLiteValue] in
             let relevant = RelevanceFilter.isRelevant(
-                countryCode: show.countryCode, name: show.title, category: show.genres.first?.displayName ?? ""
+                countryCode: show.countryCode, name: show.title,
+                category: show.genres.first?.displayName ?? "",
+                audioLanguages: show.audioLanguages, subtitleLanguages: show.subtitleLanguages
             )
             return [
                 .text(show.id.rawValue),

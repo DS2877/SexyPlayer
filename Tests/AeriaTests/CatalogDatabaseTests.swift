@@ -29,10 +29,11 @@ final class CatalogDatabaseTests: XCTestCase {
 
     private func movie(
         _ id: String, _ title: String, year: Int? = 2020, genres: [Genre] = [.drama],
-        added: Date? = Date(timeIntervalSince1970: 1_700_000_000), adult: Bool = false, country: String? = "SE"
+        added: Date? = Date(timeIntervalSince1970: 1_700_000_000), adult: Bool = false, country: String? = "SE",
+        audio: [Language] = [.english], subs: [Language] = [.swedish]
     ) -> Movie {
         Movie(id: .init(rawValue: id), title: title, year: year, genres: genres,
-              audioLanguages: [.english], subtitleLanguages: [.swedish],
+              audioLanguages: audio, subtitleLanguages: subs,
               countryCode: country, streamURL: stream, addedAt: added, isAdult: adult)
     }
 
@@ -116,7 +117,8 @@ final class CatalogDatabaseTests: XCTestCase {
         try await database.insertMovies([
             movie("m1", "Clean", country: "SE"),
             movie("m2", "Adult", adult: true, country: "SE"),
-            movie("m3", "Foreign", country: "DE"),
+            // Non-European, and nothing English/Nordic to hear or read → filtered.
+            movie("m3", "Foreign", country: "SA", audio: [.arabic], subs: []),
         ])
         let all = try await database.movieCount(.none, .init(showAdult: true, allRegions: true))
         XCTAssertEqual(all, 3)
@@ -124,8 +126,8 @@ final class CatalogDatabaseTests: XCTestCase {
         let noAdult = try await database.movieCount(.none, .init(showAdult: false, allRegions: true))
         XCTAssertEqual(noAdult, 2)
 
-        let nordicOnly = try await database.movieCount(.none, .init(showAdult: true, allRegions: false))
-        XCTAssertEqual(nordicOnly, 2)   // "Foreign" (DE) dropped
+        let regionOnly = try await database.movieCount(.none, .init(showAdult: true, allRegions: false))
+        XCTAssertEqual(regionOnly, 2)   // "Foreign" (SA, Arabic-only) dropped
     }
 
     // MARK: - A–Z rails
@@ -137,10 +139,59 @@ final class CatalogDatabaseTests: XCTestCase {
         ])
         var filter = CatalogFilter.none
         filter.sort = .titleAscending
-        let titles = try await database.movieTitlesInOrder(filter, .unfiltered)
-        let anchors = SQLiteCatalogRepository.anchors(titles)
+        let anchors = try await database.movieTitleAnchors(filter, .unfiltered)
         XCTAssertEqual(anchors.map(\.letter), ["#", "A", "B"])
         XCTAssertEqual(anchors.first { $0.letter == "B" }?.index, 3)
+    }
+
+    func testTitleAnchorsAddressTheSameOrderTheGridPages() async throws {
+        // A region-filtered set — the anchor indices must line up with the
+        // scoped, sorted page the grid actually shows.
+        try await database.insertMovies([
+            movie("m1", "Avatar", country: "SE"),
+            movie("m2", "Arrival", country: "SE"),
+            movie("m3", "Blade", country: "SA", audio: [.arabic], subs: []),   // filtered out
+            movie("m4", "Boyhood", country: "GB"),
+            movie("m5", "Cargo", country: "NO"),
+        ])
+        var filter = CatalogFilter.none
+        filter.sort = .titleAscending
+        let scope = CatalogDatabase.Scope(showAdult: true, allRegions: false)
+
+        let anchors = try await database.movieTitleAnchors(filter, scope)
+        XCTAssertEqual(anchors.map(\.letter), ["A", "B", "C"])
+
+        let page = try await database.movies(filter, scope, page: 0, pageSize: 50)
+        XCTAssertEqual(page.map(\.title), ["Arrival", "Avatar", "Boyhood", "Cargo"])
+        for anchor in anchors {
+            XCTAssertEqual(String(page[anchor.index].title.prefix(1)).uppercased(), anchor.letter)
+        }
+    }
+
+    // MARK: - Facet cache
+
+    func testRefreshFacetCacheServesFacetsWithoutARescan() async throws {
+        try await database.insertMovies([
+            movie("m1", "One", genres: [.horror], audio: [.english], subs: [.swedish]),
+            movie("m2", "Two", genres: [.comedy], audio: [.german], subs: []),
+        ])
+        try await database.insertChannels([
+            channel("c1", "SVT1", country: "SE", num: 1),
+        ], homeRegions: ["SE"])
+
+        try await database.refreshFacetCache()
+
+        let genres = try await database.presentGenres()
+        XCTAssertEqual(Set(genres), [.horror, .comedy])
+
+        let audio = try await database.presentLanguages(subtitles: false)
+        XCTAssertEqual(Set(audio.map(\.code)), ["en", "de"])
+
+        let subs = try await database.presentLanguages(subtitles: true)
+        XCTAssertEqual(subs.map(\.code), ["sv"])
+
+        let categories = try await database.channelCategories()
+        XCTAssertEqual(categories, ["All", "General"])
     }
 
     // MARK: - Channels
@@ -286,6 +337,43 @@ final class CatalogDatabaseTests: XCTestCase {
         XCTAssertGreaterThan(total, 0)
         XCTAssertLessThanOrEqual(page.count, 60)
         XCTAssertLessThan(elapsed, 0.5, "count + a deep page over 20k rows took \(elapsed)s")
+    }
+
+    /// The real-world default scope (region-limited + no adult) over a dump that
+    /// is mostly filtered out. Locks in that the scoped count / page / anchor
+    /// queries return exactly the visible slice (and stay quick).
+    func testRegionScopedQueriesReturnOnlyTheVisibleSlice() async throws {
+        let visible = 800
+        let noise = 12_000
+        for batch in stride(from: 0, to: visible, by: 2_000) {
+            let movies = (batch ..< min(batch + 2_000, visible)).map {
+                movie("v\($0)", "Visible \($0)", year: 1990 + $0 % 30, country: "SE")
+            }
+            try await database.insertMovies(movies)
+        }
+        for batch in stride(from: 0, to: noise, by: 2_000) {
+            let movies = (batch ..< min(batch + 2_000, noise)).map {
+                // Non-European, nothing English/Nordic → is_relevant = 0.
+                movie("n\($0)", "Noise \($0)", country: "SA", audio: [.arabic], subs: [])
+            }
+            try await database.insertMovies(movies)
+        }
+
+        let scope = CatalogDatabase.Scope(showAdult: false, allRegions: false)
+        var filter = CatalogFilter.none
+        filter.sort = .titleAscending
+
+        let start = Date()
+        let total = try await database.movieCount(filter, scope)
+        let page = try await database.movies(filter, scope, page: 0, pageSize: 60)
+        let anchors = try await database.movieTitleAnchors(filter, scope)
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertEqual(total, visible)
+        XCTAssertEqual(page.count, 60)
+        XCTAssertTrue(page.allSatisfy { $0.title.hasPrefix("Visible") })
+        XCTAssertEqual(anchors.map(\.letter), ["V"])
+        XCTAssertLessThan(elapsed, 1.0, "scoped count + page + anchors over a mostly-filtered 12.8k rows took \(elapsed)s")
     }
 
     func testCardProjectionKeepsWhatACardShows() async throws {

@@ -86,20 +86,23 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
 
         let keepChannel: (Channel) -> Bool = { [hideAdult, regionLimited] c in
             if hideAdult && c.isAdult { return false }
-            if regionLimited && !RelevanceFilter.isRelevant(countryCode: c.countryCode,
-                                                            name: c.name, category: c.category) { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(
+                countryCode: c.countryCode, name: c.name, category: c.category,
+                audioLanguages: c.audioLanguages, subtitleLanguages: c.subtitleLanguages) { return false }
             return true
         }
         let keepMovie: (Movie) -> Bool = { [hideAdult, regionLimited] m in
             if hideAdult && m.isAdult { return false }
-            if regionLimited && !RelevanceFilter.isRelevant(countryCode: m.countryCode,
-                                                            name: m.title, category: m.genres.first?.displayName ?? "") { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(
+                countryCode: m.countryCode, name: m.title, category: m.genres.first?.displayName ?? "",
+                audioLanguages: m.audioLanguages, subtitleLanguages: m.subtitleLanguages) { return false }
             return true
         }
         let keepSeries: (Series) -> Bool = { [hideAdult, regionLimited] s in
             if hideAdult && s.isAdult { return false }
-            if regionLimited && !RelevanceFilter.isRelevant(countryCode: s.countryCode,
-                                                            name: s.title, category: s.genres.first?.displayName ?? "") { return false }
+            if regionLimited && !RelevanceFilter.isRelevant(
+                countryCode: s.countryCode, name: s.title, category: s.genres.first?.displayName ?? "",
+                audioLanguages: s.audioLanguages, subtitleLanguages: s.subtitleLanguages) { return false }
             return true
         }
 

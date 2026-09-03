@@ -160,7 +160,13 @@ public final class AppEnvironment {
         // Nothing here may block the first frame — flip the app ready, then do
         // the rest (vocabulary, Top Shelf, staleness check) in the background.
         if !forceReload, await database.isReady(providerID: providerID) {
-            await applyPreferences()
+            // Only the two scope flags gate what the first queries return, and
+            // they're just in-memory booleans on the repository actor — set them
+            // now, flip the app interactive, and run the rest of
+            // `applyPreferences` (the region-priority rewrite, recent channels,
+            // API keys) behind the first frame.
+            await repository.setHideAdult(preferences.preferences.hideAdultContent)
+            await repository.setRegionLimit(preferences.preferences.limitToRelevantRegions)
             loadState = .ready
             hasLoadedOnce = true
             catalogComplete = true
@@ -170,6 +176,7 @@ public final class AppEnvironment {
 
             Task { [weak self] in
                 guard let self else { return }
+                await self.applyPreferences()
                 self.vocabulary = await self.repository.searchVocabulary()
                 self.startMetadataWarmUp()
                 await self.writeTopShelfSnapshot()

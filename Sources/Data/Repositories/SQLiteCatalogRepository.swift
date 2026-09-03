@@ -94,7 +94,7 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
     }
 
     public func channelTitleAnchors(in category: String?) async -> [BrowseAnchor] {
-        await read([]) { Self.anchors(try await database.channelNamesInOrder(category: category, scope)) }
+        await read([]) { try await database.channelNameAnchors(category: category, scope) }
     }
 
     public func allChannelCategories() async -> [String] {
@@ -124,11 +124,11 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
     }
 
     public func movieTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor] {
-        await read([]) { Self.anchors(try await database.movieTitlesInOrder(filter, scope)) }
+        await read([]) { try await database.movieTitleAnchors(filter, scope) }
     }
 
     public func seriesTitleAnchors(filter: CatalogFilter) async -> [BrowseAnchor] {
-        await read([]) { Self.anchors(try await database.seriesTitlesInOrder(filter, scope)) }
+        await read([]) { try await database.seriesTitleAnchors(filter, scope) }
     }
 
     public func movie(id: CatalogID) async -> Movie? {
@@ -284,16 +284,13 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
             let genres = try await database.presentGenres()
             let audio = try await database.presentLanguages(subtitles: false)
             let subs = try await database.presentLanguages(subtitles: true)
-            let movieCount = try await database.movieCount(.none, .unfiltered)
-            let seriesCount = try await database.seriesCount(.none, .unfiltered)
-            let channelCount = try await database.channelCount(category: nil, .unfiltered)
             return SearchVocabulary(
                 genres: genres.isEmpty ? Genre.allCases : genres.sorted { $0.rawValue < $1.rawValue },
                 audioLanguages: audio,
                 subtitleLanguages: subs,
-                hasMovies: movieCount > 0,
-                hasSeries: seriesCount > 0,
-                hasLiveTV: channelCount > 0
+                hasMovies: try await database.hasRows("movie"),
+                hasSeries: try await database.hasRows("series"),
+                hasLiveTV: try await database.hasRows("channel")
             )
         }
     }
@@ -302,26 +299,5 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
 
     public func artworkSeeds(movieLimit: Int, seriesLimit: Int) async -> [ArtworkSeed] {
         await read([]) { try await database.artworkSeeds(movieLimit: movieLimit, seriesLimit: seriesLimit) }
-    }
-
-    // MARK: - A–Z anchors (shared shape with the in-memory repository)
-
-    static func anchors(_ titlesInOrder: [String]) -> [BrowseAnchor] {
-        var result: [BrowseAnchor] = []
-        var seen = Set<String>()
-        for (index, title) in titlesInOrder.enumerated() {
-            let letter = anchorLetter(for: title)
-            if seen.insert(letter).inserted {
-                result.append(BrowseAnchor(letter: letter, index: index))
-            }
-        }
-        return result
-    }
-
-    private static func anchorLetter(for title: String) -> String {
-        let stripped = title.folding(options: .diacriticInsensitive, locale: nil)
-            .drop { !$0.isLetter && !$0.isNumber }
-        guard let first = stripped.first else { return "#" }
-        return first.isNumber ? "#" : first.uppercased()
     }
 }

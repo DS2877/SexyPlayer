@@ -47,6 +47,7 @@ public actor CatalogWriter {
 
     public func finish() async throws {
         try await database.finishGeneration(generation)
+        try await database.refreshFacetCache()
         try await database.setMeta(CatalogDatabase.MetaKey.channelCount, String(channelCount))
         try await database.setMeta(CatalogDatabase.MetaKey.movieCount, String(movieCount))
         try await database.setMeta(CatalogDatabase.MetaKey.seriesCount, String(seriesCount))

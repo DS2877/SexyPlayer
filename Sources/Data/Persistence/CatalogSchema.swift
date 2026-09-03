@@ -13,7 +13,11 @@ enum CatalogSchema {
 
     /// Bump when any `CREATE TABLE` / index / codec below changes shape.
     /// v2: `gen` column on every content table (generation-stamped imports).
-    static let version = 2
+    /// v3: composite indexes led by the visibility columns (`is_relevant`,
+    ///     `is_adult`) so the region/adult-filtered browse and shelf queries
+    ///     walk a tight index instead of scanning past the filtered-out bulk of
+    ///     a large provider's dump.
+    static let version = 3
 
     /// Bring `connection` up to `version`, wiping catalog data on any change.
     static func migrate(_ connection: SQLiteConnection) throws {
@@ -60,8 +64,8 @@ enum CatalogSchema {
         sort_index   INTEGER NOT NULL DEFAULT 0,
         is_adult     INTEGER NOT NULL DEFAULT 0,
         is_relevant  INTEGER NOT NULL DEFAULT 1,
-        -- 0 = home country, 1 = other Nordic, 2 = English/generic, 3 = other.
-        -- Recomputed by an UPDATE when the home regions change.
+        -- 0 = home country, 1 = other Nordic, 2 = English / European / generic,
+        -- 3 = other. Recomputed by an UPDATE when the home regions change.
         region_priority INTEGER NOT NULL DEFAULT 2,
         -- Recency rank of a recently-watched channel (0 = most recent), else NULL.
         recent_rank  INTEGER,
@@ -71,10 +75,13 @@ enum CatalogSchema {
     ) WITHOUT ROWID;
     CREATE INDEX channel_category   ON channel(category);
     CREATE INDEX channel_epg_id     ON channel(epg_id);
-    CREATE INDEX channel_sort_index ON channel(sort_index);
     CREATE INDEX channel_name_fold  ON channel(name_fold);
-    CREATE INDEX channel_for_you    ON channel(region_priority, sort_index);
     CREATE INDEX channel_gen        ON channel(gen);
+    -- Visibility-led composites: the region/adult filter seeks straight to the
+    -- visible slice, in the order the screen wants it.
+    CREATE INDEX channel_visible_order ON channel(is_relevant, is_adult, region_priority, sort_index, name_fold);
+    CREATE INDEX channel_visible_name  ON channel(is_relevant, is_adult, name_fold, sort_index);
+    CREATE INDEX channel_visible_cat   ON channel(is_relevant, is_adult, category, region_priority, sort_index);
 
     CREATE TABLE movie (
         id           TEXT PRIMARY KEY,
@@ -100,8 +107,13 @@ enum CatalogSchema {
     ) WITHOUT ROWID;
     CREATE INDEX movie_title_fold ON movie(title_fold);
     CREATE INDEX movie_added_at   ON movie(added_at);
-    CREATE INDEX movie_year       ON movie(year);
     CREATE INDEX movie_gen        ON movie(gen);
+    -- Visibility-led composites, one per browse/shelf sort order. The region +
+    -- adult filter seeks to the visible slice and the ORDER BY is then a plain
+    -- index walk — O(page), not O(library).
+    CREATE INDEX movie_visible_added ON movie(is_relevant, is_adult, added_at);
+    CREATE INDEX movie_visible_title ON movie(is_relevant, is_adult, title_fold);
+    CREATE INDEX movie_visible_year  ON movie(is_relevant, is_adult, year);
 
     CREATE TABLE movie_genre (
         movie_id TEXT NOT NULL,
@@ -133,6 +145,9 @@ enum CatalogSchema {
     CREATE INDEX series_title_fold ON series(title_fold);
     CREATE INDEX series_added_at   ON series(added_at);
     CREATE INDEX series_gen        ON series(gen);
+    CREATE INDEX series_visible_added ON series(is_relevant, is_adult, added_at);
+    CREATE INDEX series_visible_title ON series(is_relevant, is_adult, title_fold);
+    CREATE INDEX series_visible_year  ON series(is_relevant, is_adult, year);
 
     CREATE TABLE series_genre (
         series_id TEXT NOT NULL,
