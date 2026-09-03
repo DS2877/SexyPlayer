@@ -78,6 +78,32 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertEqual(content.heroes.first?.kind, .series)
     }
 
+    func testMyListRowFollowsFavouriteOrder() {
+        let a = movie("a", "Alpha", genres: [.drama])
+        let b = movie("b", "Bravo", genres: [.comedy])
+        let sID = CatalogID(providerID: "p", kind: .series, providerItemKey: "s")
+        let s = Series(id: sID, title: "Charlie", genres: [.drama], seasons: [])
+        let catalog = Catalog(movies: [a, b], series: [s])
+
+        let content = HomeViewModel.makeContent(
+            catalog: catalog, epg: [:], progress: [],
+            prefs: UserPreferences(), ratings: [:], liveNow: [], now: .now,
+            favoriteIDs: [b.id, sID, a.id]
+        )
+        let row = content.rows.first { $0.id == HomeRowKind.myList.rawValue }
+        XCTAssertEqual(row?.title, "My List")
+        XCTAssertEqual(row?.cards.map(\.title), ["Bravo", "Charlie", "Alpha"])
+    }
+
+    func testMyListRowAbsentWithoutFavourites() {
+        let a = movie("a", "Alpha", genres: [.drama])
+        let content = HomeViewModel.makeContent(
+            catalog: Catalog(movies: [a]), epg: [:], progress: [],
+            prefs: UserPreferences(), ratings: [:], liveNow: [], now: .now
+        )
+        XCTAssertNil(content.rows.first { $0.id == HomeRowKind.myList.rawValue })
+    }
+
     func testMakeContentProducesABecauseYouWatchedRow() {
         let watched = movie("seed", "Seed", genres: [.action])
         let siblings = (0..<6).map { movie("s\($0)", "Sibling \($0)", genres: [.action]) }

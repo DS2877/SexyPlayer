@@ -76,6 +76,12 @@ struct HomeView: View {
             guard path.isEmpty else { return }
             Task { await model?.rebuild() }
         }
+        .onChange(of: favoritesRevisionAtRoot) { _, _ in
+            // Hearted / unhearted something — refresh the My List row. Only while
+            // Home is the visible screen, like the watch-progress rebuild.
+            guard path.isEmpty else { return }
+            Task { await model?.rebuild() }
+        }
         .onChange(of: environment.isRefreshing) { _, refreshing in
             // A background library refresh just finished — rebuild shelves.
             if !refreshing { Task { await model?.rebuild() } }
@@ -100,6 +106,10 @@ struct HomeView: View {
     /// in a detail screen scrubbing through something.
     private var watchRevisionAtRoot: Int {
         path.isEmpty ? environment.watchProgress.revision : -1
+    }
+
+    private var favoritesRevisionAtRoot: Int {
+        path.isEmpty ? environment.favorites.revision : -1
     }
 
     /// Changes when the shape of the screen changes (skeleton ↔ content, or a

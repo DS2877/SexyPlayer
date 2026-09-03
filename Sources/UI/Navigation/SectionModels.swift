@@ -61,7 +61,8 @@ public final class SectionModels {
             watchProgress: env.watchProgress,
             preferences: env.preferences,
             metadata: env.metadata,
-            channelHistory: env.channelHistory
+            channelHistory: env.channelHistory,
+            favorites: env.favorites
         )
         if let providerID = env.activeProvider?.id { model.restoreSnapshot(providerID: providerID) }
         homeModel = model

@@ -4,6 +4,7 @@ import Foundation
 /// are enabled during onboarding and in Settings.
 public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
     case continueWatching
+    case myList
     case liveNow
     case tonight
     case topRated
@@ -19,6 +20,7 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
     public var title: String {
         switch self {
         case .continueWatching:  return "Continue Watching"
+        case .myList:            return "My List"
         case .liveNow:           return "Live Now"
         case .tonight:           return "Tonight"
         case .topRated:          return "Top Rated"
@@ -34,6 +36,7 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
     public var explanation: String {
         switch self {
         case .continueWatching:  return "Pick up where you left off"
+        case .myList:            return "Everything you've added to Favorites"
         case .liveNow:           return "What's on across your channels"
         case .tonight:           return "Upcoming programmes this evening"
         case .topRated:          return "The highest-rated films and shows in your library"
