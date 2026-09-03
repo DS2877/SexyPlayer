@@ -189,12 +189,14 @@ struct SearchView: View {
                                subtitle: [m.year.map(String.init), m.genres.first?.displayName].compactMap { $0 }.joined(separator: " · "),
                                artworkURL: m.posterURL,
                                ref: ArtworkRef(id: m.id, title: m.title, year: m.year, isSeries: false),
+                               isNew: CatalogFreshness.isNew(m.addedAt),
                                action: { path.append(.movie(m.id)) })
                 case .series(let s):
                     PosterCard(title: s.title,
                                subtitle: "\(s.seasons.count) season\(s.seasons.count == 1 ? "" : "s")",
                                artworkURL: s.posterURL,
                                ref: ArtworkRef(id: s.id, title: s.title, year: s.year, isSeries: true),
+                               isNew: CatalogFreshness.isNew(s.addedAt),
                                action: { path.append(.series(s.id)) })
                 case .channel(let c):
                     PosterCard(title: c.name, subtitle: c.category, artworkURL: c.logoURL,

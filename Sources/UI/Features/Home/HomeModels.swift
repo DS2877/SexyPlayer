@@ -23,8 +23,11 @@ public struct HomeCard: Identifiable, Sendable, Codable {
     /// watched (an episode or movie id), distinct from `id` (the container the
     /// card taps through to). `nil` for every other card.
     public let resumeItemID: CatalogID?
+    /// Added to the library within the last `CatalogFreshness.newWindow` — shows
+    /// a NEW pill.
+    public let isNew: Bool
 
-    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, liveProgress: Double? = nil, eyebrow: String? = nil, resumeItemID: CatalogID? = nil) {
+    public init(id: CatalogID, kind: Kind, title: String, subtitle: String?, artworkURL: URL?, year: Int? = nil, badge: String? = nil, progress: Double? = nil, liveProgress: Double? = nil, eyebrow: String? = nil, resumeItemID: CatalogID? = nil, isNew: Bool = false) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -36,6 +39,7 @@ public struct HomeCard: Identifiable, Sendable, Codable {
         self.liveProgress = liveProgress
         self.eyebrow = eyebrow
         self.resumeItemID = resumeItemID
+        self.isNew = isNew
     }
 
     /// A TMDB match reference for movie / series cards (nil for channels).

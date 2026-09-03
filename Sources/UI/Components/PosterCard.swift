@@ -10,6 +10,7 @@ public struct PosterCard: View {
     let ref: ArtworkRef?
     let badge: String?
     let progress: Double?
+    let isNew: Bool
     let action: () -> Void
 
     public init(
@@ -19,6 +20,7 @@ public struct PosterCard: View {
         ref: ArtworkRef? = nil,
         badge: String? = nil,
         progress: Double? = nil,
+        isNew: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -27,6 +29,7 @@ public struct PosterCard: View {
         self.ref = ref
         self.badge = badge
         self.progress = progress
+        self.isNew = isNew
         self.action = action
     }
 
@@ -37,6 +40,7 @@ public struct PosterCard: View {
 
     private var accessibilityLabel: String {
         var parts = [title]
+        if isNew, (progress ?? 0) == 0 { parts.append("New") }
         if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
         if progress != nil { parts.append("\(Int((clampedProgress * 100).rounded()))% watched") }
         return parts.joined(separator: ", ")
@@ -84,6 +88,16 @@ public struct PosterCard: View {
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
+                        .overlay(alignment: .topLeading) {
+                            if isNew, (progress ?? 0) == 0 {
+                                Text("NEW")
+                                    .font(.dsTag)
+                                    .foregroundStyle(Palette.canvas)
+                                    .padding(.horizontal, 8).padding(.vertical, 3)
+                                    .background(Palette.accent, in: Capsule())
+                                    .padding(Metrics.space1)
+                            }
+                        }
 
                     if let badge {
                         Text(badge)

@@ -55,7 +55,7 @@ public final class VODBrowseViewModel {
             changed = true
             return BrowseCard(id: card.id, route: card.route, title: card.title,
                               subtitle: card.subtitle, posterURL: card.posterURL,
-                              progress: fresh, year: card.year, isSeries: card.isSeries)
+                              progress: fresh, year: card.year, isSeries: card.isSeries, isNew: card.isNew)
         }
         if changed { cards = updated }
     }

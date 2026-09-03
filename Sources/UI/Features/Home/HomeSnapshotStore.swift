@@ -14,7 +14,8 @@ import Foundation
 enum HomeSnapshotStore {
 
     /// Bump when `HomeContent`'s shape changes so old files are ignored.
-    private static let version = 1
+    /// v2: `HomeCard.isNew`.
+    private static let version = 2
 
     private struct Envelope: Codable {
         let version: Int

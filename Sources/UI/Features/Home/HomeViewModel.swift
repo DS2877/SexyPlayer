@@ -436,7 +436,8 @@ public final class HomeViewModel {
 
     nonisolated static func card(for movie: Movie) -> HomeCard {
         HomeCard(id: movie.id, kind: .movie, title: movie.title,
-                 subtitle: metadataSubtitle(for: movie), artworkURL: movie.posterURL, year: movie.year)
+                 subtitle: metadataSubtitle(for: movie), artworkURL: movie.posterURL, year: movie.year,
+                 isNew: CatalogFreshness.isNew(movie.addedAt))
     }
 
     nonisolated static func channelCard(_ channel: Channel, epg: EPGIndex, now: Date) -> HomeCard {
@@ -458,7 +459,8 @@ public final class HomeViewModel {
             subtitle = "\(series.seasons.count) season\(series.seasons.count == 1 ? "" : "s")"
         }
         return HomeCard(id: series.id, kind: .series, title: series.title,
-                        subtitle: subtitle, artworkURL: series.posterURL, year: series.year)
+                        subtitle: subtitle, artworkURL: series.posterURL, year: series.year,
+                        isNew: CatalogFreshness.isNew(series.addedAt))
     }
 
     /// The newest movie / series the viewer has played that still carries genre

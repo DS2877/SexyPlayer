@@ -86,6 +86,7 @@ struct VODBrowseView: View {
                                     artworkURL: card.posterURL,
                                     ref: card.artworkRef,
                                     progress: card.progress,
+                                    isNew: card.isNew,
                                     action: { path.append(card.route) }
                                 )
                                 .task { await model.loadMoreIfNeeded(currentItem: card) }

@@ -214,6 +214,7 @@ struct HomeView: View {
                 ref: card.artworkRef,
                 badge: card.badge,
                 progress: card.progress,
+                isNew: card.isNew,
                 action: { navigate(card) }
             )
             .contextMenu {

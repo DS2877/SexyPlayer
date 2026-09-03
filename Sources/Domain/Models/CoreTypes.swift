@@ -95,6 +95,21 @@ public struct Language: Hashable, Codable, Sendable, Comparable {
     ]
 }
 
+// MARK: - Freshness
+
+/// Whether a catalog item counts as a "new" addition — drives the NEW badge on
+/// cards and could later gate a "New this week" shelf.
+public enum CatalogFreshness {
+    /// Titles the provider added within this window are flagged new.
+    public static let newWindow: TimeInterval = 12 * 24 * 3600
+
+    public static func isNew(_ addedAt: Date?, now: Date = .now) -> Bool {
+        guard let addedAt else { return false }
+        let age = now.timeIntervalSince(addedAt)
+        return age >= 0 && age < newWindow
+    }
+}
+
 // MARK: - Video quality
 
 public enum VideoQuality: String, Codable, Sendable, CaseIterable, Comparable {

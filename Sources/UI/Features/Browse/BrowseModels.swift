@@ -22,9 +22,11 @@ public struct BrowseCard: Identifiable, Sendable {
     public let progress: Double?
     public let year: Int?
     public let isSeries: Bool
+    /// Added to the library recently — shows a NEW pill.
+    public let isNew: Bool
 
     public init(id: CatalogID, route: AppRoute, title: String, subtitle: String?,
-                posterURL: URL?, progress: Double?, year: Int?, isSeries: Bool) {
+                posterURL: URL?, progress: Double?, year: Int?, isSeries: Bool, isNew: Bool = false) {
         self.id = id
         self.route = route
         self.title = title
@@ -33,6 +35,7 @@ public struct BrowseCard: Identifiable, Sendable {
         self.progress = progress
         self.year = year
         self.isSeries = isSeries
+        self.isNew = isNew
     }
 
     public var artworkRef: ArtworkRef {
@@ -51,7 +54,8 @@ extension BrowseCard {
             posterURL: movie.posterURL,
             progress: progress,
             year: movie.year,
-            isSeries: false
+            isSeries: false,
+            isNew: CatalogFreshness.isNew(movie.addedAt)
         )
     }
 
@@ -65,7 +69,8 @@ extension BrowseCard {
             posterURL: series.posterURL,
             progress: nil,
             year: series.year,
-            isSeries: true
+            isSeries: true,
+            isNew: CatalogFreshness.isNew(series.addedAt)
         )
     }
 }
