@@ -1,7 +1,11 @@
 import SwiftUI
 
-/// The app's main navigation — a fixed left sidebar (premium tvOS pattern, à la
-/// Plex / Infuse / the Apple TV app) with the selected section on the right.
+/// The app's main navigation — a left rail that sits **collapsed to icons while
+/// you're in the content** and expands with labels, over the content, the moment
+/// focus returns to it (the Apple TV app pattern). The selected section's screen
+/// fills the rest; screens you've visited stay mounted behind the current one,
+/// so switching sections is instant and keeps scroll position and focus.
+///
 /// Non-blocking: if the library is still importing, a slim status pill appears
 /// over the content instead of locking the user out.
 struct SidebarShell: View {
@@ -41,15 +45,25 @@ struct SidebarShell: View {
 
     private static let primary: [Section] = [.home, .search, .liveTV, .guide, .movies, .series, .favorites, .history]
 
+    /// Rail widths — the content keeps a permanent `collapsed`-wide gutter and
+    /// the rail draws over it when it expands, so the content never reflows.
+    private static let collapsed: CGFloat = 116
+    private static let expanded: CGFloat = 300
+
     @State private var selection: Section = .home
     @FocusState private var focusedItem: Section?
-    /// Section view models outlive the `switch` below, so revisiting a screen
-    /// shows what it already had instead of re-querying.
+    /// Sections the user has opened at least once — kept mounted from then on.
+    @State private var visited: Set<Section> = [.home]
+    /// Section view models outlive the view tree, so revisiting a screen shows
+    /// what it already had instead of re-querying.
     @State private var models = SectionModels()
+
+    /// The rail is expanded whenever it owns focus.
+    private var railExpanded: Bool { focusedItem != nil }
 
     var body: some View {
         HStack(spacing: 0) {
-            sidebar
+            Color.clear.frame(width: Self.collapsed)   // permanent gutter
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .top) {
@@ -59,11 +73,11 @@ struct SidebarShell: View {
                     }
                     .animation(.easeInOut, value: env.network.isOnline)
                 }
-                // Its own focus region — pressing → from anywhere in the sidebar
-                // lands on the content's last-focused element regardless of
-                // vertical alignment (the tvOS two-column pattern).
+                // Its own focus region — pressing → from anywhere in the rail
+                // lands on the content's last-focused element (the tvOS
+                // two-column pattern).
                 .focusSection()
-                // Menu from a section root moves focus back to the sidebar (the
+                // Menu from a section root moves focus back to the rail (the
                 // Apple TV convention). On Home, Menu is left alone so it
                 // backgrounds the app, per the HIG. A pushed detail screen's
                 // NavigationStack still gets Menu first and pops as usual.
@@ -72,59 +86,127 @@ struct SidebarShell: View {
                 })
         }
         .background(Palette.canvas.ignoresSafeArea())
+        .overlay(alignment: .leading) { rail }
         .environment(models)
+        .defaultFocus($focusedItem, .home)   // start with the rail open, then it tucks away
         .onChange(of: env.activeProvider?.id) { _, _ in
             // A different library — nothing the old models hold is valid.
             models.reset()
+            visited = [selection]
         }
         .onChange(of: focusedItem) { _, item in
-            // Focus-driven sidebar, the way the Apple TV app works: moving up/down
-            // the list switches the content live.
-            if let item { selection = item }
+            // Focus-driven, the way the Apple TV app works: moving up/down the
+            // rail switches the content live. Cheap now that panels stay mounted.
+            if let item {
+                selection = item
+                visited.insert(item)
+            }
         }
         .onChange(of: env.pendingRoute) { _, route in
             // A Top Shelf deep link lands here — Home owns the nav stack that
             // shows detail screens.
-            if route != nil { selection = .home; focusedItem = .home }
+            if route != nil {
+                selection = .home
+                visited.insert(.home)
+                focusedItem = .home
+            }
         }
     }
 
-    // MARK: Sidebar
+    // MARK: Rail
 
-    private var sidebar: some View {
+    private var rail: some View {
         VStack(alignment: .leading, spacing: Metrics.space1) {
-            Wordmark(size: 30)
-                .padding(.horizontal, Metrics.space2)
+            railHeader
                 .padding(.top, Metrics.space4)
                 .padding(.bottom, Metrics.space3)
-                .accessibilityHidden(true)
 
             ForEach(Self.primary) { item in
-                SidebarItem(section: item, isSelected: selection == item) { select(item) }
-                    .focused($focusedItem, equals: item)
+                SidebarItem(section: item, isSelected: selection == item, expanded: railExpanded) {
+                    select(item)
+                }
+                .focused($focusedItem, equals: item)
             }
 
             Spacer(minLength: 0)
 
-            SidebarItem(section: .settings, isSelected: selection == .settings) { select(.settings) }
-                .focused($focusedItem, equals: .settings)
-                .padding(.bottom, Metrics.space4)
+            SidebarItem(section: .settings, isSelected: selection == .settings, expanded: railExpanded) {
+                select(.settings)
+            }
+            .focused($focusedItem, equals: .settings)
+            .padding(.bottom, Metrics.space4)
         }
-        .frame(width: 320)
+        .frame(width: railExpanded ? Self.expanded : Self.collapsed, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Palette.surface.opacity(0.5).ignoresSafeArea())
+        .background(railBackground)
+        .shadow(color: .black.opacity(railExpanded ? 0.55 : 0), radius: 40, x: 12)
+        .animation(Metrics.focusAnimation, value: railExpanded)
         .focusSection()
+    }
+
+    @ViewBuilder
+    private var railHeader: some View {
+        Group {
+            if railExpanded {
+                Wordmark(size: 30).padding(.leading, 34)
+            } else {
+                Text("A+")
+                    .font(.system(size: 26, weight: .heavy))
+                    .foregroundStyle(Wordmark.chrome)
+                    .frame(width: Self.collapsed, alignment: .center)
+            }
+        }
+        .transition(.opacity)
+        .accessibilityHidden(true)
+    }
+
+    private var railBackground: some View {
+        ZStack {
+            // Collapsed: a soft leading scrim so the icons stay legible over
+            // bright artwork without reading as a panel.
+            LinearGradient(colors: [Palette.canvas.opacity(0.9), Palette.canvas.opacity(0)],
+                           startPoint: .leading, endPoint: .trailing)
+                .opacity(railExpanded ? 0 : 1)
+            // Expanded: a solid floating panel.
+            Rectangle().fill(Palette.surface.opacity(0.55))
+                .background(Palette.canvas)
+                .opacity(railExpanded ? 1 : 0)
+        }
+        .ignoresSafeArea()
     }
 
     private func select(_ item: Section) {
         selection = item
+        visited.insert(item)
     }
 
     // MARK: Content
 
-    @ViewBuilder
     private var content: some View {
-        switch selection {
+        ZStack {
+            ForEach(Section.allCases) { section in
+                if shouldMount(section) {
+                    sectionView(section)
+                        .opacity(section == selection ? 1 : 0)
+                        .allowsHitTesting(section == selection)
+                        .accessibilityHidden(section != selection)
+                        .disabled(section != selection)
+                        .zIndex(section == selection ? 1 : 0)
+                }
+            }
+        }
+    }
+
+    /// The selected screen is always mounted. A screen you've visited stays
+    /// mounted too — but only once the library has finished loading, so a cold
+    /// import isn't shaping several off-screen screens at once.
+    private func shouldMount(_ section: Section) -> Bool {
+        section == selection || (visited.contains(section) && env.catalogComplete)
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: Section) -> some View {
+        switch section {
         case .home:      HomeView()
         case .search:    SearchView()
         case .liveTV:    LiveTVBrowseView()
@@ -157,19 +239,29 @@ private struct MenuReturnsToSidebar: ViewModifier {
 private struct SidebarItem: View {
     let section: SidebarShell.Section
     let isSelected: Bool
+    let expanded: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Metrics.space2) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 24))
-                    .frame(width: 32)
-                Text(section.title).font(.dsBody)
+                    .font(.system(size: 25))
+                    .frame(width: 44, height: 30)
+                if expanded {
+                    Text(section.title)
+                        .font(.dsBody)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .transition(.opacity)
+                }
                 Spacer(minLength: 0)
             }
+            .padding(.leading, 36)   // keeps the icon column fixed across states
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
-        .buttonStyle(SidebarButtonStyle(isSelected: isSelected))
+        .buttonStyle(SidebarButtonStyle(isSelected: isSelected, expanded: expanded))
         .accessibilityLabel(section.title)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
@@ -177,37 +269,47 @@ private struct SidebarItem: View {
 
 private struct SidebarButtonStyle: ButtonStyle {
     let isSelected: Bool
+    let expanded: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        SidebarButtonBody(configuration: configuration, isSelected: isSelected)
+        SidebarButtonBody(configuration: configuration, isSelected: isSelected, expanded: expanded)
     }
 }
 
 private struct SidebarButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let isSelected: Bool
+    let expanded: Bool
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
         configuration.label
-            .padding(.horizontal, Metrics.space2)
-            .padding(.vertical, Metrics.space1 + 5)
+            .padding(.vertical, Metrics.space1 + 4)
             .foregroundStyle(textColor)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill)
-            )
+            .background(alignment: .leading) { highlight }
             .overlay(alignment: .leading) {
                 // Slim brand marker on the active section (not while focused).
                 if isSelected && !isFocused {
                     Capsule().fill(Palette.accent)
-                        .frame(width: 4, height: 22)
-                        .offset(x: -2)
+                        .frame(width: 4, height: 24)
+                        .offset(x: 10)
                 }
             }
-            .padding(.horizontal, Metrics.space2)
-            .scaleEffect(isFocused ? 1.03 : 1)
-            .shadow(color: .black.opacity(isFocused ? 0.35 : 0), radius: isFocused ? 20 : 0, y: isFocused ? 10 : 0)
+            .scaleEffect(isFocused ? 1.04 : 1)
+            .shadow(color: .black.opacity(isFocused ? 0.3 : 0), radius: isFocused ? 18 : 0, y: isFocused ? 8 : 0)
             .animation(Metrics.focusAnimation, value: isFocused)
+    }
+
+    /// Collapsed: a compact rounded backing behind the icon. Expanded: a
+    /// full-width pill inset from the rail edges.
+    @ViewBuilder
+    private var highlight: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(fill)
+            .frame(maxWidth: expanded ? .infinity : 72, alignment: .leading)
+            .frame(height: 56)
+            .padding(.leading, expanded ? Metrics.space2 : 22)
+            .padding(.trailing, expanded ? Metrics.space2 : 0)
     }
 
     private var textColor: Color {
@@ -218,7 +320,7 @@ private struct SidebarButtonBody: View {
 
     private var fill: Color {
         if isFocused { return Palette.focusFill }
-        if isSelected { return .white.opacity(0.07) }
+        if isSelected { return .white.opacity(0.08) }
         return .clear
     }
 }
@@ -297,4 +399,3 @@ private struct LibraryStatusPill: View {
             .overlay(Capsule().strokeBorder(Palette.hairline))
     }
 }
-
