@@ -158,6 +158,8 @@ struct SeriesDetailView: View {
 
     @ViewBuilder
     private func header(_ series: Series) -> some View {
+        let watched = episodesWatched(in: series)
+
         VStack(alignment: .leading, spacing: Metrics.space2) {
             Text(series.title).font(.dsHero).tracking(Metrics.heroTracking).lineLimit(2)
 
@@ -178,7 +180,28 @@ struct SeriesDetailView: View {
                     .font(.dsBody.italic())
                     .foregroundStyle(Palette.textTertiary)
             }
+
+            if watched.total > 0, watched.done > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(watched.done >= watched.total
+                         ? "All \(watched.total) episodes watched"
+                         : "\(watched.done) of \(watched.total) episodes watched")
+                        .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                    ProgressView(value: Double(watched.done), total: Double(watched.total))
+                        .tint(Palette.accent)
+                        .frame(maxWidth: 360)
+                }
+                .padding(.top, 4)
+                .accessibilityElement(children: .combine)
+            }
         }
+    }
+
+    /// Episodes marked finished across every loaded season.
+    private func episodesWatched(in series: Series) -> (done: Int, total: Int) {
+        let all = series.seasons.flatMap(\.episodes)
+        let done = all.filter { env.watchProgress.progress(for: $0.id)?.isFinished == true }.count
+        return (done, all.count)
     }
 
     @ViewBuilder
@@ -253,8 +276,14 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private func episodes(_ series: Series, season: Season?) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
-            if series.seasons.count > 1 {
-                seasonPicker(series)
+            HStack(spacing: Metrics.space2) {
+                if series.seasons.count > 1 {
+                    seasonPicker(series)
+                }
+                Spacer(minLength: 0)
+                if let season, !season.episodes.isEmpty {
+                    seasonWatchedButton(season)
+                }
             }
 
             if loadingEpisodes {
@@ -286,6 +315,24 @@ struct SeriesDetailView: View {
             Text(names.joined(separator: ", "))
                 .font(.dsCaption).foregroundStyle(Palette.textSecondary)
         }
+    }
+
+    /// Toggles the whole visible season between watched and unwatched.
+    private func seasonWatchedButton(_ season: Season) -> some View {
+        let ids = season.episodes.map(\.id)
+        let allWatched = ids.allSatisfy { env.watchProgress.progress(for: $0)?.isFinished == true }
+        return Button {
+            if allWatched {
+                ids.forEach { env.markUnwatched(id: $0) }
+            } else {
+                env.markEpisodesWatched(ids)
+            }
+        } label: {
+            Label(allWatched ? "Mark season unwatched" : "Mark season watched",
+                  systemImage: allWatched ? "arrow.uturn.backward" : "checkmark.circle")
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .accessibilityLabel(allWatched ? "Mark whole season unwatched" : "Mark whole season watched")
     }
 
     private func seasonPicker(_ series: Series) -> some View {
@@ -356,6 +403,17 @@ struct SeriesDetailView: View {
             }
         }
         .buttonStyle(RowButtonStyle())
+        .contextMenu {
+            if watched {
+                Button {
+                    env.markUnwatched(id: episode.id)
+                } label: { Label("Mark as Unwatched", systemImage: "arrow.uturn.backward") }
+            } else {
+                Button {
+                    env.markEpisodesWatched([episode.id])
+                } label: { Label("Mark as Watched", systemImage: "checkmark.circle") }
+            }
+        }
         .accessibilityLabel("\(episode.code), \(episode.title)\(watched ? ", watched" : "")")
     }
 }

@@ -443,6 +443,23 @@ public final class AppEnvironment {
         Task { await writeTopShelfSnapshot() }
     }
 
+    /// Clear an item's resume point / watched flag entirely.
+    public func markUnwatched(id: CatalogID) {
+        watchProgress.clear(id: id)
+        Task { await writeTopShelfSnapshot() }
+    }
+
+    /// Mark a batch of episodes finished in one go (a whole season). Records
+    /// them all, then writes the Top Shelf hand-off once.
+    public func markEpisodesWatched(_ ids: [CatalogID]) {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            let duration = watchProgress.progress(for: id)?.durationSeconds ?? 1
+            watchProgress.record(id: id, kind: .series, positionSeconds: duration, durationSeconds: duration)
+        }
+        Task { await writeTopShelfSnapshot() }
+    }
+
     // MARK: - Deep links (Top Shelf)
 
     /// Handle an `aeria://…` URL opened from the Top Shelf. Shown as a cover over
