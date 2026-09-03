@@ -12,6 +12,10 @@ public final class SearchViewModel {
     public private(set) var hasSearched = false
     public private(set) var interpretedFrom = ""
 
+    /// A few titles to show on the empty search screen — recent additions,
+    /// best-rated first. Loaded once per session.
+    public private(set) var trending: [SearchResult] = []
+
     /// The last handful of queries the viewer actually ran, newest first.
     public private(set) var recentQueries: [String] = []
     private let recentKey = "search.recent.v1"
@@ -53,6 +57,16 @@ public final class SearchViewModel {
     public func runRecent(_ text: String, vocabulary: SearchVocabulary) async {
         query = text
         await search(vocabulary: vocabulary)
+    }
+
+    /// Populate `trending` from the newest additions, ranked by TMDB rating
+    /// where one is known.
+    public func loadTrending(ratings: [String: Double]) async {
+        let items = await repository.recentlyAdded(limit: 30).map { SearchResult(item: $0, score: 0) }
+        trending = items
+            .sorted { (ratings[$0.id.rawValue] ?? 0) > (ratings[$1.id.rawValue] ?? 0) }
+            .prefix(14)
+            .map { $0 }
     }
 
     public func clearRecents() {

@@ -34,6 +34,9 @@ struct SearchView: View {
         // Shared, so coming back to Search still shows your last results.
         // Re-fetched when the store resets (provider switch).
         .task(id: models.generation) { model = models.search(env) }
+        .task(id: env.catalogRevision) {
+            await models.search(env).loadTrending(ratings: await env.metadata.ratingsSnapshot())
+        }
     }
 
     @ViewBuilder
@@ -55,6 +58,12 @@ struct SearchView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, Metrics.space4)
                 } else if !model.hasSearched {
+                    if !model.trending.isEmpty {
+                        VStack(alignment: .leading, spacing: Metrics.space2) {
+                            Text("New to your library").font(.dsSectionHeader)
+                            posterGrid(model.trending)
+                        }
+                    }
                     exampleQueries(model)
                 } else if model.results.isEmpty, env.loadState.isImporting {
                     LibraryLoadingPlaceholder().frame(minHeight: 360)
@@ -90,7 +99,14 @@ struct SearchView: View {
                 .textFieldStyle(.plain)
                 .font(.dsCardTitle)
                 .focused($searchFieldFocused)
-                .onSubmit { Task { await model.search(vocabulary: env.vocabulary) } }
+                .onSubmit {
+                    Task {
+                        await model.search(vocabulary: env.vocabulary)
+                        // Drop keyboard focus so the remote's next press lands on
+                        // the results, not back in the field.
+                        searchFieldFocused = false
+                    }
+                }
                 .task {
                     // Land on the field the first time Search opens, the way the
                     // Apple TV search screens do. Not on every return trip.
@@ -181,8 +197,13 @@ struct SearchView: View {
     }
 
     private func results(_ model: SearchViewModel) -> some View {
+        posterGrid(model.results)
+    }
+
+    @ViewBuilder
+    private func posterGrid(_ items: [SearchResult]) -> some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
-            ForEach(model.results) { result in
+            ForEach(items) { result in
                 switch result.item {
                 case .movie(let m):
                     PosterCard(title: m.title,
@@ -204,5 +225,6 @@ struct SearchView: View {
                 }
             }
         }
+        .focusSection()
     }
 }
