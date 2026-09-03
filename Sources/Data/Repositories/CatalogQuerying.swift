@@ -44,6 +44,10 @@ public protocol CatalogQuerying: Sendable {
     func movie(id: CatalogID) async -> Movie?
     /// The series with its full season / episode tree attached.
     func series(id: CatalogID) async -> Series?
+
+    /// A random visible movie / series matching `filter` — for "Surprise Me".
+    func randomMovie(filter: CatalogFilter) async -> Movie?
+    func randomSeries(filter: CatalogFilter) async -> Series?
     /// Replace one series' episodes after an on-demand fetch (Xtream).
     func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) async
     func hasEpisodes(seriesID: CatalogID) async -> Bool

@@ -417,6 +417,28 @@ public final class CatalogDatabase: @unchecked Sendable {
         }
     }
 
+    /// A single random matching movie — `ORDER BY random() LIMIT 1` over the
+    /// filtered set. Card projection (opened via the detail screen anyway).
+    public func randomMovie(_ filter: CatalogFilter, _ scope: Scope) async throws -> Movie? {
+        try await read { conn in
+            let (where_, params) = Self.movieWhere(filter, scope)
+            return try conn.queryOne(
+                "SELECT \(Self.movieCardColumns) FROM movie WHERE \(where_) ORDER BY random() LIMIT 1",
+                params, Self.decodeMovie
+            )
+        }
+    }
+
+    public func randomSeries(_ filter: CatalogFilter, _ scope: Scope) async throws -> Series? {
+        try await read { conn in
+            let (where_, params) = Self.seriesWhere(filter, scope)
+            return try conn.queryOne(
+                "SELECT \(Self.seriesColumns) FROM series WHERE \(where_) ORDER BY random() LIMIT 1",
+                params, { row in Self.decodeSeries(row, seasons: []) }
+            )
+        }
+    }
+
     public func series(_ filter: CatalogFilter, _ scope: Scope, page: Int, pageSize: Int) async throws -> [Series] {
         try await read { conn in
             let (where_, params) = Self.seriesWhere(filter, scope)

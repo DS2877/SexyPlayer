@@ -319,6 +319,14 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
     public func series(id: CatalogID) -> Series? { seriesIndexByID[id].map { catalog.series[$0] } }
     public func channel(id: CatalogID) -> Channel? { channelIndexByID[id].map { catalog.channels[$0] } }
 
+    public func randomMovie(filter: CatalogFilter) -> Movie? {
+        movieOrder(filter).randomElement().map { catalog.movies[$0] }
+    }
+
+    public func randomSeries(filter: CatalogFilter) -> Series? {
+        seriesOrder(filter).randomElement().map { catalog.series[$0] }
+    }
+
     public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) {
         if let i = source.series.firstIndex(where: { $0.id == id }) { source.series[i].seasons = seasons }
         // `series(id:)` reads `catalog.series[idx]` live, so mutating it here is

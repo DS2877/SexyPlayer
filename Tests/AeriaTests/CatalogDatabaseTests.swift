@@ -168,6 +168,25 @@ final class CatalogDatabaseTests: XCTestCase {
         }
     }
 
+    func testRandomMovieStaysInsideTheFilteredScope() async throws {
+        try await database.insertMovies([
+            movie("m1", "Kept One", genres: [.horror], country: "SE"),
+            movie("m2", "Kept Two", genres: [.horror], country: "SE"),
+            movie("m3", "Wrong Genre", genres: [.comedy], country: "SE"),
+            movie("m4", "Foreign", genres: [.horror], country: "SA", audio: [.arabic], subs: []),
+        ])
+        var filter = CatalogFilter.none
+        filter.genres = [.horror]
+        let scope = CatalogDatabase.Scope(showAdult: true, allRegions: false)
+
+        for _ in 0..<20 {
+            let pick = try await database.randomMovie(filter, scope)
+            XCTAssertNotNil(pick)
+            XCTAssertTrue(["Kept One", "Kept Two"].contains(pick?.title ?? ""),
+                          "random pick \(pick?.title ?? "nil") escaped the filter/scope")
+        }
+    }
+
     // MARK: - Facet cache
 
     func testRefreshFacetCacheServesFacetsWithoutARescan() async throws {

@@ -139,6 +139,14 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
         await readOptional { try await database.series(id: id) }
     }
 
+    public func randomMovie(filter: CatalogFilter) async -> Movie? {
+        await readOptional { try await database.randomMovie(filter, scope) }
+    }
+
+    public func randomSeries(filter: CatalogFilter) async -> Series? {
+        await readOptional { try await database.randomSeries(filter, scope) }
+    }
+
     public func attachSeasons(_ seasons: [Season], toSeriesID id: CatalogID) async {
         try? await database.replaceSeasons(seasons, seriesID: id)
     }
