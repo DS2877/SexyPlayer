@@ -83,7 +83,7 @@ struct VLCPlayerScreen: View {
             switch direction {
             case .left:  scrub(by: -1)
             case .right: scrub(by: 1)
-            case .up:    if hasTracks { showTracks = true }
+            case .up:    if hasTracks || !item.isLive { showTracks = true }
             default:     break
             }
         }
@@ -106,6 +106,7 @@ struct VLCPlayerScreen: View {
                 onProgress(played.id, played.kind, position, duration)
             }
             m.onFinished = { dismiss() }
+            m.onSleepFired = { dismiss() }
             model = m
             surfaceFocused = true
             flashControls()
@@ -194,8 +195,8 @@ struct VLCPlayerScreen: View {
                     Text("LIVE").font(.dsTag).foregroundStyle(Palette.accent)
                 }
 
-                Text(hasTracks
-                     ? "‹ ›  scrub      ▮▮  play/pause      ▲  audio & subtitles      Menu  exit"
+                Text((hasTracks || !item.isLive)
+                     ? "‹ ›  scrub      ▮▮  play/pause      ▲  options      Menu  exit"
                      : "‹ ›  scrub      ▮▮  play/pause      Menu  exit")
                     .font(.dsCaption).foregroundStyle(.white.opacity(0.45))
                     .padding(.top, Metrics.space1)
@@ -235,6 +236,9 @@ private struct VLCTrackSheet: View {
                             model.selectSubtitle($0); dismiss()
                         }
                     }
+                    if !model.item.isLive {
+                        sleepSection
+                    }
                 }
                 .frame(maxWidth: 900, alignment: .leading)
                 .padding(.horizontal, Metrics.screenMargin)
@@ -242,6 +246,27 @@ private struct VLCTrackSheet: View {
             }
         }
         .onExitCommand { dismiss() }
+    }
+
+    private var sleepSection: some View {
+        VStack(alignment: .leading, spacing: Metrics.space2) {
+            Text("Sleep timer").font(.dsSectionHeader).foregroundStyle(Palette.textPrimary)
+            ForEach([nil, 15, 30, 45, 60] as [Int?], id: \.self) { minutes in
+                Button {
+                    model.setSleepTimer(minutes: minutes)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Image(systemName: model.sleepMinutes == minutes ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(model.sleepMinutes == minutes ? Palette.accent : Palette.textTertiary)
+                        Text(minutes.map { "\($0) minutes" } ?? "Off")
+                            .font(.dsBody).foregroundStyle(Palette.textPrimary)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(RowButtonStyle())
+            }
+        }
     }
 
     @ViewBuilder

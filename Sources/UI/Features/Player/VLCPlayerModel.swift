@@ -45,6 +45,11 @@ public final class VLCPlayerModel {
     @ObservationIgnored
     private let onProgress: @MainActor (_ item: PlaybackItem, _ position: Double, _ duration: Double) -> Void
     @ObservationIgnored public var onFinished: (@MainActor () -> Void)?
+    @ObservationIgnored public var onSleepFired: (@MainActor () -> Void)?
+
+    /// Minutes remaining on the sleep timer, or `nil` when off.
+    public private(set) var sleepMinutes: Int?
+    @ObservationIgnored private var sleepTask: Task<Void, Never>?
 
     public init(
         item: PlaybackItem,
@@ -73,6 +78,20 @@ public final class VLCPlayerModel {
 
     public func togglePlayPause() {
         if player.isPlaying { player.pause() } else { player.play() }
+    }
+
+    /// Start (or, with `nil`, cancel) a sleep timer.
+    public func setSleepTimer(minutes: Int?) {
+        sleepTask?.cancel()
+        guard let minutes, minutes > 0 else { sleepMinutes = nil; return }
+        sleepMinutes = minutes
+        sleepTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Double(minutes) * 60))
+            guard !Task.isCancelled, let self else { return }
+            self.sleepMinutes = nil
+            self.player.pause()
+            self.onSleepFired?()
+        }
     }
 
     /// Relative seek in seconds.
@@ -137,6 +156,7 @@ public final class VLCPlayerModel {
     }
 
     public func teardown() {
+        sleepTask?.cancel()
         reportProgress()
         loadTimeout?.cancel()
         player.delegate = nil

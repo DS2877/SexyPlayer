@@ -68,7 +68,8 @@ struct PlayerScreen: View {
                             openList: { showChannelPanel = true },
                             next: { zap(offset: 1) },
                             previous: { zap(offset: -1) }
-                        ) : nil
+                        ) : nil,
+                        onSleep: item.isLive ? nil : { model.setSleepTimer(minutes: $0) }
                     )
                     .ignoresSafeArea()
 
@@ -116,6 +117,7 @@ struct PlayerScreen: View {
                     onProgress(played.id, played.kind, position, duration)
                 }
                 m.onFinished = { dismiss() }
+                m.onSleepFired = { dismiss() }
                 model = m
                 m.play()
             }
@@ -202,6 +204,8 @@ private struct PlaybackLoadingOverlay: View {
 struct SystemPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
     var channelActions: ChannelActions? = nil
+    /// Set a sleep timer (minutes), or `nil` to turn it off. VOD only.
+    var onSleep: ((Int?) -> Void)? = nil
 
     struct ChannelActions {
         var openList: () -> Void
@@ -209,11 +213,15 @@ struct SystemPlayerView: UIViewControllerRepresentable {
         var previous: () -> Void
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(actions: channelActions) }
+    func makeCoordinator() -> Coordinator { Coordinator(actions: channelActions, onSleep: onSleep) }
 
     final class Coordinator {
         var actions: ChannelActions?
-        init(actions: ChannelActions?) { self.actions = actions }
+        var onSleep: ((Int?) -> Void)?
+        init(actions: ChannelActions?, onSleep: ((Int?) -> Void)?) {
+            self.actions = actions
+            self.onSleep = onSleep
+        }
     }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
@@ -222,9 +230,11 @@ struct SystemPlayerView: UIViewControllerRepresentable {
         controller.videoGravity = .resizeAspect
         controller.showsPlaybackControls = true
 
+        let coordinator = context.coordinator
+        var items: [UIMenuElement] = []
+
         if channelActions != nil {
-            let coordinator = context.coordinator
-            controller.transportBarCustomMenuItems = [
+            items += [
                 UIAction(title: "Previous Channel",
                          image: UIImage(systemName: "backward.end.fill")) { _ in coordinator.actions?.previous() },
                 UIAction(title: "Channels",
@@ -233,11 +243,26 @@ struct SystemPlayerView: UIViewControllerRepresentable {
                          image: UIImage(systemName: "forward.end.fill")) { _ in coordinator.actions?.next() },
             ]
         }
+
+        if onSleep != nil {
+            var options: [UIMenuElement] = [15, 30, 45, 60].map { minutes in
+                UIAction(title: "\(minutes) minutes") { _ in coordinator.onSleep?(minutes) }
+            }
+            options.append(UIAction(title: "Off") { _ in coordinator.onSleep?(nil) })
+            items.append(UIMenu(title: "Sleep Timer",
+                                image: UIImage(systemName: "moon.zzz"),
+                                children: options))
+        }
+
+        if !items.isEmpty {
+            controller.transportBarCustomMenuItems = items
+        }
         return controller
     }
 
     func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {
         context.coordinator.actions = channelActions
+        context.coordinator.onSleep = onSleep
         if controller.player !== player {
             controller.player = player
         }

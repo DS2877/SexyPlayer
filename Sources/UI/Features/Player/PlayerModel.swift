@@ -46,6 +46,13 @@ public final class PlayerModel {
     /// "up next" take over.
     @ObservationIgnored public var onFinished: (@MainActor () -> Void)?
 
+    /// Fired when the sleep timer elapses — the host dismisses the player.
+    @ObservationIgnored public var onSleepFired: (@MainActor () -> Void)?
+
+    /// Minutes remaining on the sleep timer, or `nil` when it's off.
+    public private(set) var sleepMinutes: Int?
+    @ObservationIgnored private var sleepTask: Task<Void, Never>?
+
     /// The user's preferred spoken / subtitle languages, applied once the item
     /// is ready. Empty / nil means "leave the stream's default".
     @ObservationIgnored private let preferredAudio: [Language]
@@ -130,6 +137,21 @@ public final class PlayerModel {
 
     public func play() {
         player.play()
+    }
+
+    /// Start (or, with `nil`, cancel) a sleep timer. When it elapses the player
+    /// pauses and the host is asked to dismiss.
+    public func setSleepTimer(minutes: Int?) {
+        sleepTask?.cancel()
+        guard let minutes, minutes > 0 else { sleepMinutes = nil; return }
+        sleepMinutes = minutes
+        sleepTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Double(minutes) * 60))
+            guard !Task.isCancelled, let self else { return }
+            self.sleepMinutes = nil
+            self.player.pause()
+            self.onSleepFired?()
+        }
     }
 
     public func retry() {
@@ -295,6 +317,7 @@ public final class PlayerModel {
 
     /// Call from the view's `onDisappear`.
     public func teardown() {
+        sleepTask?.cancel()
         reportProgress()
         player.pause()
         removeObservers()
