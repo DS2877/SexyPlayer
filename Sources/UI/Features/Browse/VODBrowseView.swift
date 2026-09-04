@@ -61,11 +61,15 @@ struct VODBrowseView: View {
     private func grid(_ model: VODBrowseViewModel) -> some View {
         ScrollViewReader { proxy in
         VStack(spacing: 0) {
-            // The header is a fixed bar flush to the top — not a pinned section
-            // header (which leaves a dark strip above it as it pins).
+            // A fixed bar flush to the top — not a pinned section header (which
+            // leaves a dark strip above it as it pins). `zIndex(1)` keeps it
+            // painting over the grid: the ScrollView below has clipping disabled
+            // (so a focused poster can scale past the edge), which otherwise lets
+            // rows scroll *over* the header instead of under it.
             header(model, proxy: proxy)
                 .background(Palette.canvas)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .zIndex(1)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Metrics.space3) {

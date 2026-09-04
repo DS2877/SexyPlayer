@@ -174,9 +174,13 @@ struct LiveTVBrowseView: View {
     private func content(_ model: LiveTVBrowseViewModel) -> some View {
         ScrollViewReader { proxy in
         VStack(spacing: 0) {
+            // Fixed bar, flush to the top. `zIndex(1)` keeps it over the grid —
+            // the ScrollView below disables clipping (focused cards scale past
+            // the edge), which otherwise lets rows scroll over the header.
             header(model, proxy: proxy)
                 .background(Palette.canvas)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .zIndex(1)
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Metrics.space3) {

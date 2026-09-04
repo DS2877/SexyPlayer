@@ -125,6 +125,7 @@ struct GuideView: View {
                 .padding(.bottom, Metrics.space2)
                 .background(Palette.canvas)
                 .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .zIndex(1)
 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Metrics.space3) {
