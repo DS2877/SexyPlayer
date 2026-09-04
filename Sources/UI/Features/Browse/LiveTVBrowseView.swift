@@ -175,7 +175,7 @@ struct LiveTVBrowseView: View {
         ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
-                Color.clear.frame(height: 1).id("live-top")
+                Color.clear.frame(height: Metrics.space5).id("live-top")
                 Section {
                     if model.rows.isEmpty && !model.isLoading && env.loadState.isImporting {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
@@ -272,9 +272,13 @@ struct LiveTVBrowseView: View {
             }
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space5)
+        .padding(.top, Metrics.space2)
         .padding(.bottom, Metrics.space3)
-        .background(Palette.canvas.opacity(0.98))
+        .background(
+            Palette.canvas
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .ignoresSafeArea(edges: .top)
+        )
         .focusSection()
     }
 }

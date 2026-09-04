@@ -5,6 +5,9 @@ import SwiftUI
 struct DetailScaffold<Content: View>: View {
     let title: String
     let backdropURL: URL?
+    /// How wide the content column may grow. Series pass a wider value so the
+    /// episode list doesn't float in a narrow strip.
+    var contentMaxWidth: CGFloat = 1320
     @ViewBuilder let content: () -> Content
 
     private var hasBackdrop: Bool { backdropURL != nil }
@@ -21,7 +24,7 @@ struct DetailScaffold<Content: View>: View {
                 }
                 .padding(.horizontal, Metrics.screenMargin)
                 .padding(.bottom, Metrics.space7)
-                .frame(maxWidth: 1320, alignment: .leading)
+                .frame(maxWidth: contentMaxWidth, alignment: .leading)
             }
         }
         .background(Palette.canvas.ignoresSafeArea())

@@ -115,6 +115,7 @@ struct GuideView: View {
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
+                    Color.clear.frame(height: Metrics.space4)
                     Section {
                         ForEach(model.rows) { row in
                             channelRow(row, now: model.now)
@@ -133,9 +134,13 @@ struct GuideView: View {
                                 .font(.dsCaption).foregroundStyle(Palette.textTertiary)
                         }
                         .padding(.horizontal, Metrics.screenMargin)
-                        .padding(.top, Metrics.space4)
+                        .padding(.top, Metrics.space2)
                         .padding(.bottom, Metrics.space2)
-                        .background(Palette.canvas.opacity(0.98))
+                        .background(
+                            Palette.canvas
+                                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                                .ignoresSafeArea(edges: .top)
+                        )
                     }
                 }
                 .padding(.bottom, Metrics.space7)

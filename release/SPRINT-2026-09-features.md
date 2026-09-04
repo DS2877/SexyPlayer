@@ -270,13 +270,12 @@ Prioritised. `[S]`/`[M]`/`[L]` = effort.
 - **`[M]` Remember the last sidebar section** across launches (`@AppStorage`).
 - **`[S]` Channel-number chip** on `ChannelCard` (from `Channel.sortIndex`) — IPTV
   users navigate by number.
-- **`[S]` "Mark movie watched / unwatched"** context menu on movie cards & detail
-  (episodes have it now; movies don't).
 - **`[M]` Trailer** — TMDB `/videos` endpoint → a YouTube key. tvOS can't play
   YouTube directly, so this needs a plan (web view or skip).
-- **`[L]` Multi-profile** — one Apple TV, several viewers. Post-1.0.
 - **`[S]` "Because you watched" for series** — the row exists for the newest
   played title; it could rotate through a few anchors.
+
+*(Multi-profile — out of scope, per the user.)*
 
 ### UX / polish
 - **`[S]` Search** — add "trending" ranked by TMDB rating properly (it currently

@@ -128,7 +128,7 @@ struct SeriesDetailView: View {
 
         let backdrop = series.backdropURL ?? enriched?.backdropURL ?? series.posterURL ?? enriched?.posterURL
 
-        DetailScaffold(title: series.title, backdropURL: backdrop) {
+        DetailScaffold(title: series.title, backdropURL: backdrop, contentMaxWidth: 1600) {
             titleBlock(series)
             actions(series)
             info(series)
@@ -278,12 +278,25 @@ struct SeriesDetailView: View {
 
     @ViewBuilder
     private func episodes(_ series: Series, season: Season?) -> some View {
-        VStack(alignment: .leading, spacing: Metrics.space2) {
-            if series.seasons.count > 1 {
-                seasonPicker(series)
+        VStack(alignment: .leading, spacing: Metrics.space3) {
+            // Heading: "Season 2  ·  10 episodes" + the season toggle, right-aligned.
+            HStack(alignment: .center, spacing: Metrics.space2) {
+                Text(season.map { "Season \($0.number)" } ?? "Episodes")
+                    .font(.dsSectionHeader)
+                    .foregroundStyle(Palette.textPrimary)
+                if let season, !season.episodes.isEmpty {
+                    Text("·  \(season.episodes.count) episode\(season.episodes.count == 1 ? "" : "s")")
+                        .font(.dsCaption)
+                        .foregroundStyle(Palette.textTertiary)
+                }
+                Spacer(minLength: Metrics.space2)
+                if let season, !season.episodes.isEmpty {
+                    seasonWatchedButton(season)
+                }
             }
-            if let season, !season.episodes.isEmpty {
-                seasonWatchedButton(season)
+
+            if series.seasons.count > 1 {
+                seasonSelector(series)
             }
 
             if loadingEpisodes {
@@ -297,8 +310,10 @@ struct SeriesDetailView: View {
             }
 
             if let season {
-                ForEach(season.episodes) { episode in
-                    episodeRow(episode, seriesTitle: series.title)
+                VStack(spacing: Metrics.space2) {
+                    ForEach(season.episodes) { episode in
+                        episodeRow(episode, seriesTitle: series.title)
+                    }
                 }
             }
         }
@@ -335,20 +350,25 @@ struct SeriesDetailView: View {
         .accessibilityLabel(allWatched ? "Mark whole season unwatched" : "Mark whole season watched")
     }
 
-    private func seasonPicker(_ series: Series) -> some View {
+    private func seasonSelector(_ series: Series) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Metrics.space1) {
+            HStack(spacing: Metrics.space2) {
                 ForEach(series.seasons) { season in
-                    FilterChip(
-                        label: "Season \(season.number)",
-                        isSelected: season.number == selectedSeason
-                    ) {
+                    Button {
                         selectedSeason = season.number
+                    } label: {
+                        Text("Season \(season.number)")
                     }
+                    .buttonStyle(SeasonButtonStyle(isSelected: season.number == selectedSeason))
+                    .accessibilityAddTraits(season.number == selectedSeason ? [.isButton, .isSelected] : .isButton)
                 }
             }
+            .padding(.vertical, Metrics.space1)
+            .padding(.horizontal, 2)
         }
+        .scrollClipDisabled()
         .focusSection()
+        .accessibilityLabel("Choose a season")
     }
 
     private func episodeRow(_ episode: Episode, seriesTitle: String) -> some View {
@@ -360,46 +380,59 @@ struct SeriesDetailView: View {
         return Button {
             playback = env.playback(forEpisode: episode, seriesTitle: seriesTitle)
         } label: {
-            HStack(spacing: Metrics.space3) {
+            HStack(alignment: .top, spacing: Metrics.space4) {
                 ZStack {
                     ArtworkView(url: still, title: episode.title, aspect: 16.0 / 9.0, style: .backdrop)
-                        .frame(width: 260, height: 146)
+                        .frame(width: 320, height: 180)
+                        .opacity(watched ? 0.5 : 1)
+                        .overlay(alignment: .bottom) {
+                            if let progress, progress.isResumable {
+                                GeometryReader { geo in
+                                    ZStack(alignment: .leading) {
+                                        Rectangle().fill(.white.opacity(0.2))
+                                        Rectangle().fill(Palette.accent)
+                                            .frame(width: geo.size.width * progress.fraction)
+                                    }
+                                }
+                                .frame(height: 4)
+                            }
+                        }
                         .clipShape(RoundedRectangle(cornerRadius: Metrics.cardCornerRadius, style: .continuous))
-                        .opacity(watched ? 0.55 : 1)
                     Image(systemName: watched ? "checkmark.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 40))
+                        .font(.system(size: 44))
                         .foregroundStyle(watched ? Palette.accent : .white.opacity(0.92))
                         .shadow(radius: 8)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("\(episode.code)  ·  \(episode.title)")
-                        .font(.dsCardTitle)
-                        .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(1)
-
-                    HStack(spacing: Metrics.space2) {
+                VStack(alignment: .leading, spacing: Metrics.space1) {
+                    HStack(alignment: .firstTextBaseline, spacing: Metrics.space2) {
+                        Text(episode.code).font(.dsTag).foregroundStyle(Palette.textTertiary)
+                        Text(episode.title)
+                            .font(.dsCardTitle).foregroundStyle(Palette.textPrimary).lineLimit(1)
+                        Spacer(minLength: 0)
                         if let mins = episode.durationMinutes, mins > 0 {
                             Text("\(mins) min").font(.dsTag).foregroundStyle(Palette.textTertiary)
                         }
                         if watched {
-                            Text("Watched").font(.dsTag).foregroundStyle(Palette.accent)
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.dsCaption).foregroundStyle(Palette.accent)
                         }
                     }
 
-                    if let overview = episode.overview {
+                    if let overview = episode.overview, !overview.isEmpty {
                         Text(overview)
                             .font(.dsCaption)
-                            .foregroundStyle(Palette.textTertiary)
-                            .lineLimit(2)
+                            .foregroundStyle(Palette.textSecondary)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if let progress, progress.isResumable {
-                        ProgressView(value: progress.fraction)
-                            .tint(Palette.accent)
-                            .frame(maxWidth: 320)
+                        Text("Resume from \(Int(progress.fraction * 100))%")
+                            .font(.dsTag).foregroundStyle(Palette.accent)
+                            .padding(.top, 2)
                     }
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .buttonStyle(RowButtonStyle())
@@ -415,5 +448,46 @@ struct SeriesDetailView: View {
             }
         }
         .accessibilityLabel("\(episode.code), \(episode.title)\(watched ? ", watched" : "")")
+    }
+}
+
+/// A season chip in the series episode selector — bigger and clearer than a
+/// generic `FilterChip`, with a solid accent fill when it's the chosen season.
+private struct SeasonButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        Body(configuration: configuration, isSelected: isSelected)
+    }
+
+    private struct Body: View {
+        let configuration: ButtonStyleConfiguration
+        let isSelected: Bool
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            configuration.label
+                .font(.dsBody)
+                .foregroundStyle(fg)
+                .padding(.horizontal, Metrics.space3)
+                .padding(.vertical, Metrics.space1 + 4)
+                .background(Capsule().fill(bg))
+                .overlay(Capsule().strokeBorder(isFocused || isSelected ? Palette.accent : Palette.hairline,
+                                                lineWidth: 2))
+                .scaleEffect(isFocused ? 1.06 : 1)
+                .shadow(color: .black.opacity(isFocused ? 0.3 : 0), radius: isFocused ? 16 : 0, y: isFocused ? 8 : 0)
+                .animation(Metrics.focusAnimation, value: isFocused)
+        }
+
+        private var fg: Color {
+            if isFocused { return Palette.canvas }
+            if isSelected { return Palette.textPrimary }
+            return Palette.textSecondary
+        }
+        private var bg: Color {
+            if isFocused { return Palette.focusFill }
+            if isSelected { return Palette.accent.opacity(0.22) }
+            return Palette.surface
+        }
     }
 }

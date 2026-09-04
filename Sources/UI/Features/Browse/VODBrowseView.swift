@@ -62,7 +62,9 @@ struct VODBrowseView: View {
         ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
-                Color.clear.frame(height: 1).id("vod-top")
+                // Breathing room above the title that scrolls away — so the
+                // pinned header sits flush to the top, not below a dark gap.
+                Color.clear.frame(height: Metrics.space5).id("vod-top")
                 Section {
                     if model.cards.isEmpty && !model.isLoading && (env.loadState.isImporting || !env.catalogComplete) {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
@@ -189,9 +191,13 @@ struct VODBrowseView: View {
             letterRail(model, proxy: proxy)
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space5)
+        .padding(.top, Metrics.space2)
         .padding(.bottom, Metrics.space3)
-        .background(Palette.canvas.opacity(0.98))
+        .background(
+            Palette.canvas
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                .ignoresSafeArea(edges: .top)
+        )
         // One region: pressing ↑ from the grid lands on the last-used control
         // here (a chip or Filters), ↓ returns to the grid.
         .focusSection()
