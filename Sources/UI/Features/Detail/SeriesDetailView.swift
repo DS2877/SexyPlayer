@@ -279,14 +279,11 @@ struct SeriesDetailView: View {
     @ViewBuilder
     private func episodes(_ series: Series, season: Season?) -> some View {
         VStack(alignment: .leading, spacing: Metrics.space2) {
-            HStack(spacing: Metrics.space2) {
-                if series.seasons.count > 1 {
-                    seasonPicker(series)
-                }
-                Spacer(minLength: 0)
-                if let season, !season.episodes.isEmpty {
-                    seasonWatchedButton(season)
-                }
+            if series.seasons.count > 1 {
+                seasonPicker(series)
+            }
+            if let season, !season.episodes.isEmpty {
+                seasonWatchedButton(season)
             }
 
             if loadingEpisodes {
@@ -326,7 +323,7 @@ struct SeriesDetailView: View {
         let allWatched = ids.allSatisfy { env.watchProgress.progress(for: $0)?.isFinished == true }
         return Button {
             if allWatched {
-                ids.forEach { env.markUnwatched(id: $0) }
+                env.markEpisodesUnwatched(ids)
             } else {
                 env.markEpisodesWatched(ids)
             }

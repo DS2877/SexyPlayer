@@ -245,7 +245,7 @@ struct SystemPlayerView: UIViewControllerRepresentable {
         }
 
         if onSleep != nil {
-            var options: [UIMenuElement] = [15, 30, 45, 60].map { minutes in
+            var options: [UIMenuElement] = [15, 30, 45, 60].map { minutes -> UIMenuElement in
                 UIAction(title: "\(minutes) minutes") { _ in coordinator.onSleep?(minutes) }
             }
             options.append(UIAction(title: "Off") { _ in coordinator.onSleep?(nil) })
