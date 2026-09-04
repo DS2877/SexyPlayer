@@ -45,10 +45,16 @@ struct SidebarShell: View {
 
     private static let primary: [Section] = [.home, .search, .liveTV, .guide, .movies, .series, .favorites, .history]
 
-    /// Rail widths — the content keeps a permanent `collapsed`-wide gutter and
-    /// the rail draws over it when it expands, so the content never reflows.
-    private static let collapsed: CGFloat = 116
-    private static let expanded: CGFloat = 300
+    /// Rail widths. The content keeps a permanent `collapsed`-wide gutter; when
+    /// the rail expands it draws over the gutter *and* the content scales back
+    /// out of its way (the Apple TV app move) so nothing is ever hidden.
+    private static let collapsed: CGFloat = 108
+    private static let expanded: CGFloat = 292
+
+    /// How far the content is pushed + how much it shrinks while the rail is
+    /// open. Tuned so the content's leading edge clears the expanded rail.
+    private static let contentInsetShift: CGFloat = expanded - collapsed
+    private static let railAnimation: Animation = .easeOut(duration: 0.26)
 
     @State private var selection: Section = .home
     @FocusState private var focusedItem: Section?
@@ -73,6 +79,18 @@ struct SidebarShell: View {
                     }
                     .animation(.easeInOut, value: env.network.isOnline)
                 }
+                // While the rail is open: nudge the content right and shrink it
+                // toward its trailing edge so its leading edge clears the rail,
+                // and dim it so the menu clearly has focus.
+                .offset(x: railExpanded ? Self.contentInsetShift * 0.32 : 0)
+                .scaleEffect(railExpanded ? 0.92 : 1, anchor: .trailing)
+                .overlay {
+                    Rectangle().fill(.black)
+                        .opacity(railExpanded ? 0.42 : 0)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+                .animation(Self.railAnimation, value: railExpanded)
                 // Its own focus region — pressing → from anywhere in the rail
                 // lands on the content's last-focused element (the tvOS
                 // two-column pattern).
@@ -82,13 +100,13 @@ struct SidebarShell: View {
                 // backgrounds the app, per the HIG. A pushed detail screen's
                 // NavigationStack still gets Menu first and pops as usual.
                 .modifier(MenuReturnsToSidebar(enabled: selection != .home) {
-                    withAnimation(Metrics.focusAnimation) { focusedItem = selection }
+                    withAnimation(Self.railAnimation) { focusedItem = selection }
                 })
         }
         .background(Palette.canvas.ignoresSafeArea())
         .overlay(alignment: .leading) { rail }
         .environment(models)
-        .defaultFocus($focusedItem, .home)   // start with the rail open, then it tucks away
+        .defaultFocus($focusedItem, .home)
         .onChange(of: env.activeProvider?.id) { _, _ in
             // A different library — nothing the old models hold is valid.
             models.reset()
@@ -139,8 +157,8 @@ struct SidebarShell: View {
         .frame(width: railExpanded ? Self.expanded : Self.collapsed, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(railBackground)
-        .shadow(color: .black.opacity(railExpanded ? 0.55 : 0), radius: 40, x: 12)
-        .animation(Metrics.focusAnimation, value: railExpanded)
+        .shadow(color: .black.opacity(railExpanded ? 0.6 : 0), radius: 44, x: 14)
+        .animation(Self.railAnimation, value: railExpanded)
         .focusSection()
     }
 
@@ -178,6 +196,10 @@ struct SidebarShell: View {
     private func select(_ item: Section) {
         selection = item
         visited.insert(item)
+        // Clicking a rail item commits it and dives into the content (the
+        // section already switched on focus). Moving up/down without clicking
+        // keeps you in the rail to browse.
+        withAnimation(Self.railAnimation) { focusedItem = nil }
     }
 
     // MARK: Content
@@ -195,6 +217,9 @@ struct SidebarShell: View {
                 }
             }
         }
+        // A quick crossfade between sections instead of a hard cut as focus
+        // moves down the rail.
+        .animation(.easeInOut(duration: 0.16), value: selection)
     }
 
     /// The selected screen is always mounted. A screen you've visited stays
