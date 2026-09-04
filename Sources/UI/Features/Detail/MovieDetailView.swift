@@ -129,6 +129,22 @@ struct MovieDetailView: View {
                     Label(progress?.isResumable == true ? "Resume" : "Play", systemImage: "play.fill")
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .contextMenu {
+                    if progress?.isFinished == true {
+                        Button {
+                            env.markUnwatched(id: movie.id)
+                        } label: { Label("Mark as Unwatched", systemImage: "arrow.uturn.backward") }
+                    } else {
+                        Button {
+                            env.markWatched(id: movie.id, kind: .movie)
+                        } label: { Label("Mark as Watched", systemImage: "checkmark.circle") }
+                    }
+                    if progress?.isResumable == true {
+                        Button(role: .destructive) {
+                            env.removeFromContinueWatching(id: movie.id)
+                        } label: { Label("Clear resume point", systemImage: "minus.circle") }
+                    }
+                }
 
                 if progress?.isResumable == true {
                     Button {
