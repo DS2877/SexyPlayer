@@ -18,6 +18,8 @@ public protocol CatalogQuerying: Sendable {
     func setHideAdult(_ hide: Bool) async
     /// Hide foreign-region items everywhere (see `RelevanceFilter`).
     func setRegionLimit(_ limited: Bool) async
+    /// How wide a net Live TV / Guide / the Home live rows cast for channels.
+    func setChannelRegionScope(_ scope: ChannelRegionScope) async
     /// The viewer's home country codes — channels from these sort first.
     func setHomeRegions(_ regions: Set<String>) async
     /// Recently-watched channel ids, most recent first — they float to the top
@@ -62,6 +64,9 @@ public protocol CatalogQuerying: Sendable {
 
     func movies(ids: [CatalogID]) async -> [Movie]
     func series(ids: [CatalogID]) async -> [Series]
+    /// Series without their season / episode trees — for cards / shelves that
+    /// only show the title + poster (much cheaper than `series(ids:)`).
+    func seriesShells(ids: [CatalogID]) async -> [Series]
     func channels(ids: [CatalogID]) async -> [Channel]
     func episode(id: CatalogID) async -> Episode?
 

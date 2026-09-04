@@ -74,6 +74,42 @@ final class RelevanceFilterTests: XCTestCase {
         XCTAssertEqual(RelevanceFilter.homeRegions(for: [.norwegian, .danish]), ["NO", "DK"])
     }
 
+    func testChannelCountryCodesByScope() {
+        let home: Set<String> = ["SE"]
+        XCTAssertEqual(RelevanceFilter.channelCountryCodes(for: .homeCountry, home: home), ["SE"])
+        XCTAssertEqual(RelevanceFilter.channelCountryCodes(for: .nordic, home: home),
+                       ["SE", "NO", "DK", "FI", "IS"])
+        XCTAssertTrue(RelevanceFilter.channelCountryCodes(for: .european, home: home)?.contains("DE") ?? false)
+        XCTAssertNil(RelevanceFilter.channelCountryCodes(for: .all, home: home))
+    }
+
+    @MainActor
+    func testChannelRegionScopeFiltersLiveTV() async {
+        let repo = InMemoryCatalogRepository()
+        let url = URL(string: "https://x/s")!
+        func ch(_ id: String, _ name: String, _ code: String?) -> Channel {
+            Channel(id: .init(rawValue: id), name: name, category: "General",
+                    countryCode: code, streamURL: url)
+        }
+        await repo.load(Catalog(channels: [
+            ch("se1", "SVT1", "SE"), ch("no1", "NRK1", "NO"),
+            ch("de1", "Das Erste", "DE"), ch("gen", "24/7 Nature", nil),
+        ]))
+        await repo.setHomeRegions(["SE"])
+
+        await repo.setChannelRegionScope(.homeCountry)
+        var names = Set(await repo.channels(in: nil, sort: .nameAsc, page: 0, pageSize: 50).map(\.name))
+        XCTAssertEqual(names, ["SVT1", "24/7 Nature"])   // home country + generic feeds
+
+        await repo.setChannelRegionScope(.nordic)
+        names = Set(await repo.channels(in: nil, sort: .nameAsc, page: 0, pageSize: 50).map(\.name))
+        XCTAssertEqual(names, ["SVT1", "NRK1", "24/7 Nature"])
+
+        await repo.setChannelRegionScope(.all)
+        let all = await repo.channels(in: nil, sort: .nameAsc, page: 0, pageSize: 50)
+        XCTAssertEqual(all.count, 4)
+    }
+
     @MainActor
     func testChannelSortPutsHomeCountryAndRegularsFirst() async {
         let repo = InMemoryCatalogRepository()

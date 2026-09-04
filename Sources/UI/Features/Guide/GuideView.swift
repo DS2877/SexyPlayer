@@ -113,10 +113,22 @@ struct GuideView: View {
                 message: "Your provider didn't include EPG data, or it hasn't matched your channels yet."
             )
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
-                    Color.clear.frame(height: Metrics.space5)
-                    Section {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("TV Guide").font(.dsTitle).accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    Text(model.now.formatted(date: .abbreviated, time: .shortened))
+                        .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                }
+                .padding(.horizontal, Metrics.screenMargin)
+                .padding(.top, Metrics.space3)
+                .padding(.bottom, Metrics.space2)
+                .background(Palette.canvas)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: Metrics.space3) {
+                        Color.clear.frame(height: Metrics.space3)
                         ForEach(model.rows) { row in
                             channelRow(row, now: model.now)
                         }
@@ -126,18 +138,9 @@ struct GuideView: View {
                                 .padding(.horizontal, Metrics.screenMargin)
                                 .padding(.top, Metrics.space2)
                         }
-                    } header: {
-                        HStack {
-                            Text("TV Guide").font(.dsTitle).accessibilityAddTraits(.isHeader)
-                            Spacer()
-                            Text(model.now.formatted(date: .abbreviated, time: .shortened))
-                                .font(.dsCaption).foregroundStyle(Palette.textTertiary)
-                        }
-                        .padding(.horizontal, Metrics.screenMargin)
-                        .pinnedHeaderStyle()
                     }
+                    .padding(.bottom, Metrics.space7)
                 }
-                .padding(.bottom, Metrics.space7)
             }
         }
     }

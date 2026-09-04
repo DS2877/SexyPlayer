@@ -23,9 +23,15 @@ public final class CatalogDatabase: @unchecked Sendable {
     public struct Scope: Sendable, Equatable {
         public var showAdult: Bool
         public var allRegions: Bool
-        public init(showAdult: Bool = true, allRegions: Bool = true) {
+        /// ISO country codes a *channel* may carry to be visible (channels with
+        /// no country are always kept). `nil` = no channel-country filter.
+        /// Ignored for movie / series queries.
+        public var channelCountries: Set<String>?
+        public init(showAdult: Bool = true, allRegions: Bool = true,
+                    channelCountries: Set<String>? = nil) {
             self.showAdult = showAdult
             self.allRegions = allRegions
+            self.channelCountries = channelCountries
         }
         public static let unfiltered = Scope(showAdult: true, allRegions: true)
     }
@@ -728,9 +734,12 @@ public final class CatalogDatabase: @unchecked Sendable {
 
     public func guideChannels(limit: Int, _ scope: Scope) async throws -> [Channel] {
         try await read { conn in
-            let (clause, params) = Self.scopeClause(scope)
+            var clauses = [Self.scopeClause(scope).0]
+            var params: [SQLiteValue] = []
+            Self.appendChannelCountry(to: &clauses, params: &params, scope: scope)
+            clauses.append("epg_id IS NOT NULL AND epg_id <> ''")
             return try conn.query(
-                "SELECT \(Self.channelColumns) FROM channel WHERE \(clause) AND epg_id IS NOT NULL AND epg_id <> '' " +
+                "SELECT \(Self.channelColumns) FROM channel WHERE \(clauses.joined(separator: " AND ")) " +
                 "ORDER BY (recent_rank IS NULL), recent_rank, region_priority, sort_index, name_fold LIMIT ?",
                 params + [.integer(Int64(limit))], Self.decodeChannel
             )
@@ -901,11 +910,22 @@ public final class CatalogDatabase: @unchecked Sendable {
         let (scopeExpr, scopeParams) = scopeClause(scope)
         var clauses = [scopeExpr]
         var params = scopeParams
+        appendChannelCountry(to: &clauses, params: &params, scope: scope)
         if let category, category != "All" {
             clauses.append("category = ?")
             params.append(.text(category))
         }
         return (clauses.joined(separator: " AND "), params)
+    }
+
+    /// Adds `AND (country_code IS NULL OR country_code IN (…))` when the scope
+    /// limits channel countries. No-country channels (generic feeds) always pass.
+    private static func appendChannelCountry(to clauses: inout [String], params: inout [SQLiteValue], scope: Scope) {
+        guard let countries = scope.channelCountries, !countries.isEmpty else { return }
+        let ordered = countries.sorted()
+        let ph = Array(repeating: "?", count: ordered.count).joined(separator: ",")
+        clauses.append("(country_code IS NULL OR country_code IN (\(ph)))")
+        params += ordered.map { SQLiteValue.text($0) }
     }
 
     private static func appendCommon(

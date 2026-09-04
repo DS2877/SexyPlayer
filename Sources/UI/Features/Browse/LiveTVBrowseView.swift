@@ -173,10 +173,14 @@ struct LiveTVBrowseView: View {
     @ViewBuilder
     private func content(_ model: LiveTVBrowseViewModel) -> some View {
         ScrollViewReader { proxy in
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
-                Color.clear.frame(height: Metrics.space5).id("live-top")
-                Section {
+        VStack(spacing: 0) {
+            header(model, proxy: proxy)
+                .background(Palette.canvas)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Metrics.space3) {
+                    Color.clear.frame(height: Metrics.space3).id("live-top")
                     if model.rows.isEmpty && !model.isLoading && env.loadState.isImporting {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
                     } else if model.rows.isEmpty && !model.isLoading {
@@ -194,18 +198,18 @@ struct LiveTVBrowseView: View {
                                     nowProgress: row.nowProgress,
                                     action: { path.append(.channel(row.id)) }
                                 )
+                                .id(row.id)
                                 .task { await model.loadMoreIfNeeded(currentItem: row) }
                             }
                         }
                         .padding(.horizontal, Metrics.screenMargin)
                         .padding(.bottom, Metrics.space7)
                     }
-                } header: {
-                    header(model, proxy: proxy)
                 }
             }
+            .scrollClipDisabled()
+            .focusSection()
         }
-        .scrollClipDisabled()
         .onChange(of: model.selectedCategory) { _, _ in
             withAnimation { proxy.scrollTo("live-top", anchor: .top) }
             Task { await model.reload() }
@@ -272,7 +276,8 @@ struct LiveTVBrowseView: View {
             }
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .pinnedHeaderStyle()
+        .padding(.top, Metrics.space3)
+        .padding(.bottom, Metrics.space2)
         .focusSection()
     }
 }

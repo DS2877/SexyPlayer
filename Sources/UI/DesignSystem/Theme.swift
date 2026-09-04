@@ -13,23 +13,6 @@ public struct AppThemeBackground: ViewModifier {
 
 public extension View {
     func appThemeBackground() -> some View { modifier(AppThemeBackground()) }
-
-    /// Backing for a `pinnedViews: [.sectionHeaders]` header. An opaque canvas
-    /// fill plus a 1px bottom hairline, so a scrolled-under header reads as a
-    /// clean bar flush to the top instead of a translucent strip that ghosts
-    /// the content sliding behind it. Pair with a scroll-away spacer above the
-    /// `Section` for the at-rest breathing room.
-    func pinnedHeaderStyle() -> some View {
-        self
-            .padding(.top, Metrics.space2)
-            .padding(.bottom, Metrics.space3)
-            .background(alignment: .bottom) {
-                ZStack(alignment: .bottom) {
-                    Palette.canvas
-                    Rectangle().fill(Palette.hairline).frame(height: 1)
-                }
-            }
-    }
 }
 
 /// Standard card surface with a focus-driven elevation + lift. tvOS's `.card`

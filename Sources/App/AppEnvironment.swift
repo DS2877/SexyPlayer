@@ -86,11 +86,16 @@ public final class AppEnvironment {
 
     /// Push the current preferences into the parts of the app that need them.
     /// Call after a load and whenever preferences change.
-    public func applyPreferences() async {
+    ///
+    /// `bumpRevision` nudges every feature screen to re-query — right after a
+    /// user toggles a filter, yes; on the launch fast path, no (nothing changed
+    /// and an extra `catalogRevision` bump there costs a full Home rebuild).
+    public func applyPreferences(bumpRevision: Bool = true) async {
         let prefs = preferences.preferences
         await repository.setHideAdult(prefs.hideAdultContent)
         await repository.setRegionLimit(prefs.limitToRelevantRegions)
         await repository.setHomeRegions(RelevanceFilter.homeRegions(for: prefs.preferredAudioLanguages))
+        await repository.setChannelRegionScope(prefs.channelRegionScope)
         await repository.setRecentChannels(channelHistory.recent())
         await aiService.setMode(prefs.aiAssistedSearch ? .assisted : .onDeviceOnly)
 
@@ -100,7 +105,7 @@ public final class AppEnvironment {
 
         // A toggle (adult / region) may have re-filtered the catalog — nudge the
         // feature screens to re-query.
-        if hasLoadedOnce { catalogRevision += 1 }
+        if bumpRevision, hasLoadedOnce { catalogRevision += 1 }
     }
 
     /// A key entered in Settings wins; otherwise the bundled default.
@@ -167,6 +172,8 @@ public final class AppEnvironment {
             // API keys) behind the first frame.
             await repository.setHideAdult(preferences.preferences.hideAdultContent)
             await repository.setRegionLimit(preferences.preferences.limitToRelevantRegions)
+            await repository.setHomeRegions(RelevanceFilter.homeRegions(for: preferences.preferences.preferredAudioLanguages))
+            await repository.setChannelRegionScope(preferences.preferences.channelRegionScope)
             loadState = .ready
             hasLoadedOnce = true
             catalogComplete = true
@@ -176,7 +183,7 @@ public final class AppEnvironment {
 
             Task { [weak self] in
                 guard let self else { return }
-                await self.applyPreferences()
+                await self.applyPreferences(bumpRevision: false)
                 self.vocabulary = await self.repository.searchVocabulary()
                 self.startMetadataWarmUp()
                 await self.writeTopShelfSnapshot()

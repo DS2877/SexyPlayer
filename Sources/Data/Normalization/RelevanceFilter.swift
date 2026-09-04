@@ -52,6 +52,20 @@ public enum RelevanceFilter {
         return codes.isEmpty ? ["SE"] : codes
     }
 
+    /// ISO country codes whose channels pass the given scope. `nil` means "no
+    /// country filter — keep everything". Channels with no detected country are
+    /// always kept (they're generic / international feeds, already marker-scanned
+    /// by `is_relevant`); this only gates channels that *do* carry a country.
+    public static func channelCountryCodes(for scope: ChannelRegionScope,
+                                           home: Set<String>) -> Set<String>? {
+        switch scope {
+        case .homeCountry: return home
+        case .nordic:      return home.union(nordic)
+        case .european:    return home.union(nordic).union(english).union(europe)
+        case .all:         return nil
+        }
+    }
+
     /// Single-word foreign-region markers that show up in provider category /
     /// channel names even when no clean country token was parsed. Matched as
     /// whole words (tokenised, not substring). European markers are intentionally

@@ -89,7 +89,7 @@ struct SettingsView: View {
             parts.append(p.preferredAudioLanguages.map(\.displayName).joined(separator: ", "))
         }
         if let s = p.preferredSubtitleLanguage { parts.append("\(s.displayName) subs") }
-        if p.limitToRelevantRegions { parts.append("Nordic & English") }
+        parts.append("Channels: \(p.channelRegionScope.title)")
         if p.hideAdultContent { parts.append("Adult hidden") }
         if env.parental.isEnabled { parts.append("PIN on") }
         return parts.isEmpty ? "Not set" : parts.joined(separator: " · ")

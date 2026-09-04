@@ -79,6 +79,17 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
         rebuildVisible()
     }
 
+    /// Off here (like `regionLimited`) so tests see the raw catalog; the app
+    /// sets it from `UserPreferences` via `applyPreferences()`.
+    private var channelCountries: Set<String>?
+
+    public func setChannelRegionScope(_ scope: ChannelRegionScope) {
+        let next = RelevanceFilter.channelCountryCodes(for: scope, home: homeRegions)
+        guard next != channelCountries else { return }
+        channelCountries = next
+        channelOrderCache = nil
+    }
+
     private func rebuildVisible() {
         movieOrderCache = nil
         seriesOrderCache = nil
@@ -174,6 +185,12 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
         var order = Array(ch.indices)
         if let category {
             order = order.filter { ch[$0].category == category }
+        }
+        if let allowed = channelCountries {
+            order = order.filter { i in
+                guard let code = ch[i].countryCode else { return true }   // generic feeds always pass
+                return allowed.contains(code)
+            }
         }
         switch sort {
         case .number:
@@ -288,8 +305,7 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
         return first.isNumber ? "#" : first.uppercased()
     }
     public func channelsCount(in category: String?) -> Int {
-        guard let category, category != "All" else { return catalog.channels.count }
-        return catalog.channels.reduce(0) { $1.category == category ? $0 + 1 : $0 }
+        channelOrder(in: category, sort: .number).count
     }
 
     public func availableGenres() -> [Genre] { facetGenres }
@@ -419,6 +435,8 @@ public actor InMemoryCatalogRepository: CatalogQuerying {
         let want = Set(ids)
         return catalog.series.filter { want.contains($0.id) }
     }
+
+    public func seriesShells(ids: [CatalogID]) -> [Series] { series(ids: ids) }
 
     public func channels(ids: [CatalogID]) -> [Channel] {
         let want = Set(ids)

@@ -110,8 +110,8 @@ public final class HomeViewModel {
         guard !Task.isCancelled else { return }
 
         // ── Fast pass ────────────────────────────────────────────────────────
-        // Five small queries, then paint. Everything visible without scrolling
-        // comes from here.
+        // A handful of small queries, then paint. Everything visible without
+        // scrolling comes from here.
         let newestMovies = await repository.newestMovies(limit: Slice.fastMovies)
         let newestSeries = await repository.newestSeries(limit: Slice.fastSeries)
         let liveNow = await repository.channels(in: nil, sort: .number, page: 0, pageSize: Slice.liveNow)
@@ -120,9 +120,10 @@ public final class HomeViewModel {
         let resume = await repository.resumePoints(progress: progress, limit: 12)
         let ratings = await metadata.ratingsSnapshot()
         // My List sits near the top, so its containers are resolved in the fast
-        // pass. Favourites are deliberate and few — two bounded id-batch lookups.
+        // pass. Favourites are deliberate and few — two bounded id-batch lookups,
+        // and the series come back as shells (the cards only show a poster).
         let favMovies = await repository.movies(ids: favoriteIDs)
-        let favSeries = await repository.series(ids: favoriteIDs)
+        let favSeries = await repository.seriesShells(ids: favoriteIDs)
         guard !Task.isCancelled else { return }
 
         // Only the Live Now strip needs "on now" for the first paint.
@@ -178,7 +179,7 @@ public final class HomeViewModel {
 
         // Continue Watching containers, so the shaper can resolve their cards.
         let resumeMovies = await repository.movies(ids: resume.filter { !$0.isSeries }.map(\.containerID))
-        let resumeSeries = await repository.series(ids: resume.filter(\.isSeries).map(\.containerID))
+        let resumeSeries = await repository.seriesShells(ids: resume.filter(\.isSeries).map(\.containerID))
         guard !Task.isCancelled else { return }
 
         let allMovies = Self.uniqued(favMovies + newestMovies + resumeMovies + genreMovies + langMovies + subMovies + becauseMovies)

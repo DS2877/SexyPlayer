@@ -14,6 +14,10 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
     private var hideAdult = false
     private var regionLimited = false
     private var homeRegions: Set<String> = ["SE"]
+    /// Country codes a channel may carry to be visible in Live TV / Guide / the
+    /// Home live rows. `nil` = no channel-country filter. Set from
+    /// `UserPreferences` on every launch before the app goes interactive.
+    private var channelCountries: Set<String>?
 
     public init(database: CatalogDatabase, searchEngine: SearchEngine = SearchEngine()) {
         self.database = database
@@ -21,7 +25,8 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
     }
 
     private var scope: CatalogDatabase.Scope {
-        CatalogDatabase.Scope(showAdult: !hideAdult, allRegions: !regionLimited)
+        CatalogDatabase.Scope(showAdult: !hideAdult, allRegions: !regionLimited,
+                              channelCountries: channelCountries)
     }
 
     /// Run a throwing database read, logging and falling back on failure — a
@@ -54,6 +59,12 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
 
     public func setHideAdult(_ hide: Bool) async { hideAdult = hide }
     public func setRegionLimit(_ limited: Bool) async { regionLimited = limited }
+
+    /// How wide a net channel queries cast, resolved against the current home
+    /// regions. Purely a query-time filter — no re-import, no column rewrite.
+    public func setChannelRegionScope(_ scope: ChannelRegionScope) async {
+        channelCountries = RelevanceFilter.channelCountryCodes(for: scope, home: homeRegions)
+    }
 
     /// Both of these rewrite a column across the whole `channel` table, so they
     /// are gated on the value actually changing — otherwise every launch pays a
@@ -177,6 +188,10 @@ public actor SQLiteCatalogRepository: CatalogQuerying {
 
     public func series(ids: [CatalogID]) async -> [Series] {
         await read([]) { try await database.seriesWithSeasons(ids: ids) }
+    }
+
+    public func seriesShells(ids: [CatalogID]) async -> [Series] {
+        await read([]) { try await database.seriesByID(ids) }
     }
 
     public func channels(ids: [CatalogID]) async -> [Channel] {

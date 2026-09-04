@@ -74,11 +74,24 @@ struct PersonalizeView: View {
                         }
                     }
 
+                    PersonalizeSection("Live TV channels", "Which countries' channels appear in Live TV, the Guide and the Home live rows. Search always looks everywhere.") {
+                        LazyVGrid(columns: choiceColumns, alignment: .leading, spacing: Metrics.space2) {
+                            ForEach(ChannelRegionScope.allCases) { option in
+                                ChoiceCard(title: option.title,
+                                           isSelected: working.channelRegionScope == option) {
+                                    working.channelRegionScope = option
+                                }
+                            }
+                        }
+                        Text(working.channelRegionScope.note)
+                            .font(.dsCaption).foregroundStyle(Palette.textTertiary)
+                    }
+
                     PersonalizeSection("Playback & content", nil) {
                         VStack(spacing: Metrics.space2) {
                             OptionRow(icon: "globe.europe.africa",
-                                      title: "Nordic & English only",
-                                      note: "Hides the flood of channels and titles from other regions. Turn off to see the provider's full catalogue.",
+                                      title: "Europe & English films only",
+                                      note: "Hides movies and series from other regions. Turn off to see the provider's full VOD catalogue. (Channels are set above.)",
                                       isOn: working.limitToRelevantRegions) { working.limitToRelevantRegions.toggle() }
                             OptionRow(icon: "eye.slash",
                                       title: "Hide adult categories",

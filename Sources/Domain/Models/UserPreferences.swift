@@ -52,6 +52,41 @@ public enum HomeRowKind: String, Codable, CaseIterable, Sendable, Identifiable {
     public static let defaultEnabled: [HomeRowKind] = allCases
 }
 
+/// How wide a net Live TV / Guide / the Home live rows cast for channels.
+/// Sweden-first by default — a typical provider carries thousands of channels
+/// from every country, and the vast majority are noise for this audience.
+public enum ChannelRegionScope: String, Codable, Sendable, CaseIterable, Identifiable {
+    /// The viewer's own country (from their language) plus generic/international
+    /// feeds with no country tag. The default.
+    case homeCountry
+    /// …plus the other Nordic countries.
+    case nordic
+    /// …plus the English-speaking world and the rest of Europe.
+    case european
+    /// Every channel the provider carries.
+    case all
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .homeCountry: return "My country only"
+        case .nordic:      return "Nordic countries"
+        case .european:    return "Europe & English"
+        case .all:         return "Everything"
+        }
+    }
+
+    public var note: String {
+        switch self {
+        case .homeCountry: return "Just channels from your country, plus international feeds"
+        case .nordic:      return "Your country and the other Nordic countries"
+        case .european:    return "The Nordics, the English-speaking world and the rest of Europe"
+        case .all:         return "No filter — every channel in the provider's list"
+        }
+    }
+}
+
 /// Everything the user has decided about how the app behaves. Persisted as JSON.
 public struct UserPreferences: Codable, Sendable, Equatable {
     /// Languages the user cares about — used to prioritise content and power the
@@ -64,10 +99,14 @@ public struct UserPreferences: Codable, Sendable, Equatable {
     /// Keep adult categories out of Home, browsing and search.
     public var hideAdultContent: Bool
 
-    /// Hide channels / movies / series from regions outside the Nordics and the
-    /// English-speaking world (see `RelevanceFilter`). On by default — a typical
-    /// provider is 90% noise for this audience.
+    /// Hide movies / series from regions outside Europe and the English-speaking
+    /// world (see `RelevanceFilter`). On by default — a typical provider is 90%
+    /// noise for this audience.
     public var limitToRelevantRegions: Bool
+
+    /// How wide a net Live TV / Guide / the Home live rows cast. Sweden-first by
+    /// default; independent of `limitToRelevantRegions` (which governs VOD).
+    public var channelRegionScope: ChannelRegionScope
 
     /// Which Home rows to show, in order.
     public var homeRows: [HomeRowKind]
@@ -89,6 +128,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         preferredSubtitleLanguage: Language? = nil,
         hideAdultContent: Bool = true,
         limitToRelevantRegions: Bool = true,
+        channelRegionScope: ChannelRegionScope = .homeCountry,
         homeRows: [HomeRowKind] = HomeRowKind.defaultEnabled,
         defaultSort: BrowseSort = .recentlyAdded,
         autoPlayNextEpisode: Bool = true,
@@ -99,6 +139,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         self.preferredSubtitleLanguage = preferredSubtitleLanguage
         self.hideAdultContent = hideAdultContent
         self.limitToRelevantRegions = limitToRelevantRegions
+        self.channelRegionScope = channelRegionScope
         self.homeRows = homeRows
         self.defaultSort = defaultSort
         self.autoPlayNextEpisode = autoPlayNextEpisode
@@ -110,6 +151,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case preferredAudioLanguages, preferredSubtitleLanguage, hideAdultContent, limitToRelevantRegions
+        case channelRegionScope
         case homeRows, defaultSort, autoPlayNextEpisode, aiAssistedSearch, hasOnboarded
     }
 
@@ -122,6 +164,7 @@ public struct UserPreferences: Codable, Sendable, Equatable {
         preferredSubtitleLanguage = try c.decodeIfPresent(Language.self, forKey: .preferredSubtitleLanguage) ?? d.preferredSubtitleLanguage
         hideAdultContent          = try c.decodeIfPresent(Bool.self, forKey: .hideAdultContent) ?? d.hideAdultContent
         limitToRelevantRegions    = try c.decodeIfPresent(Bool.self, forKey: .limitToRelevantRegions) ?? d.limitToRelevantRegions
+        channelRegionScope        = try c.decodeIfPresent(ChannelRegionScope.self, forKey: .channelRegionScope) ?? d.channelRegionScope
         homeRows                  = try c.decodeIfPresent([HomeRowKind].self, forKey: .homeRows) ?? d.homeRows
         defaultSort               = try c.decodeIfPresent(BrowseSort.self, forKey: .defaultSort) ?? d.defaultSort
         autoPlayNextEpisode       = try c.decodeIfPresent(Bool.self, forKey: .autoPlayNextEpisode) ?? d.autoPlayNextEpisode

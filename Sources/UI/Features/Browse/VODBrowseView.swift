@@ -60,12 +60,16 @@ struct VODBrowseView: View {
     @ViewBuilder
     private func grid(_ model: VODBrowseViewModel) -> some View {
         ScrollViewReader { proxy in
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: Metrics.space3, pinnedViews: [.sectionHeaders]) {
-                // Breathing room above the title that scrolls away — so the
-                // pinned header sits flush to the top, not below a dark gap.
-                Color.clear.frame(height: Metrics.space5).id("vod-top")
-                Section {
+        VStack(spacing: 0) {
+            // The header is a fixed bar flush to the top — not a pinned section
+            // header (which leaves a dark strip above it as it pins).
+            header(model, proxy: proxy)
+                .background(Palette.canvas)
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Metrics.space3) {
+                    Color.clear.frame(height: Metrics.space3).id("vod-top")
                     if model.cards.isEmpty && !model.isLoading && (env.loadState.isImporting || !env.catalogComplete) {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
                     } else if model.cards.isEmpty && !model.isLoading {
@@ -91,18 +95,18 @@ struct VODBrowseView: View {
                                     isNew: card.isNew,
                                     action: { path.append(card.route) }
                                 )
+                                .id(card.id)
                                 .task { await model.loadMoreIfNeeded(currentItem: card) }
                             }
                         }
                         .padding(.horizontal, Metrics.screenMargin)
                         .padding(.bottom, Metrics.space7)
                     }
-                } header: {
-                    header(model, proxy: proxy)
                 }
             }
+            .scrollClipDisabled()
+            .focusSection()
         }
-        .scrollClipDisabled()
         .onChange(of: model.filter) { old, new in
             // A narrowing change (genre / language / year) resets the list —
             // snap to the top. A pure sort change keeps position.
@@ -191,7 +195,8 @@ struct VODBrowseView: View {
             letterRail(model, proxy: proxy)
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .pinnedHeaderStyle()
+        .padding(.top, Metrics.space3)
+        .padding(.bottom, Metrics.space2)
         // One region: pressing ↑ from the grid lands on the last-used control
         // here (a chip or Filters), ↓ returns to the grid.
         .focusSection()
