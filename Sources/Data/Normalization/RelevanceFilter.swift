@@ -58,20 +58,20 @@ public enum RelevanceFilter {
     /// absent — Europe is kept.
     private static let foreignMarkers: Set<String> = [
         "arab", "arabic", "mbc", "osn", "rotana",
-        "turk", "turkish", "turkce", "turkiye",
-        "hindi", "tamil", "telugu", "punjabi", "desi", "bollywood", "india", "indian",
+        "turkish", "turkce", "turkiye",
+        "hindi", "tamil", "telugu", "punjabi", "desi", "bollywood",
         "urdu", "pakistan", "bangla", "bengali", "afghan",
-        "farsi", "persian", "iran", "kurd", "kurdi", "kurdish",
-        "hebrew", "israel", "israeli",
-        "latino", "latinos", "latin", "mexico", "mexican",
+        "farsi", "persian", "kurdi", "kurdish",
+        "hebrew", "israeli",
+        "latino", "latinos", "espanol", "mexican",
         "brasil", "brazil", "brazilian",
-        "russia", "russian", "russkie", "rossiya",
+        "russian", "russkie", "rossiya",
         "belarus",
-        "china", "chinese", "mandarin", "cantonese",
-        "japan", "japanese", "korea", "korean",
-        "thai", "vietnam", "vietnamese", "filipino", "pinoy", "indonesia", "malaysia", "khmer",
-        "africa", "african", "nigeria", "nollywood", "ghana", "ethiopia", "amharic",
-        "somali", "somalia", "swahili", "kenya", "uganda", "tanzania",
+        "chinese", "mandarin", "cantonese",
+        "japanese", "korean",
+        "vietnamese", "filipino", "pinoy", "indonesia", "malaysia", "khmer",
+        "nigeria", "nollywood", "ghana", "ethiopia", "amharic",
+        "somali", "somalia", "swahili",
     ]
 
     /// Hyphenated / spaced markers that whole-word tokenising splits apart.

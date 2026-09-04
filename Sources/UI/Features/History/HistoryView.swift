@@ -7,8 +7,11 @@ struct HistoryView: View {
     @State private var groups: [HistoryGroup] = []
     @State private var path: [AppRoute] = []
     @State private var confirmClear = false
+    @State private var playback: PlaybackItem?
 
     struct HistoryRow: Identifiable {
+        enum Resume { case movie(CatalogID), episode(Episode, seriesTitle: String) }
+
         let id: String
         let progressID: CatalogID
         let title: String
@@ -17,6 +20,7 @@ struct HistoryView: View {
         let fraction: Double
         let finished: Bool
         let route: AppRoute
+        let resume: Resume
     }
 
     struct HistoryGroup: Identifiable {
@@ -47,6 +51,7 @@ struct HistoryView: View {
                                             HistoryRowView(
                                                 row: row,
                                                 onOpen: { path.append(row.route) },
+                                                onResume: { Task { await resume(row) } },
                                                 onRemove: { remove(row) }
                                             )
                                         }
@@ -65,6 +70,24 @@ struct HistoryView: View {
         // Keyed on what's actually been watched — so playing something updates
         // the list, and merely returning from a detail screen doesn't.
         .task(id: env.watchProgress.revision) { await reload() }
+        .fullScreenCover(item: $playback) { item in
+            PlayerScreen(
+                item: item,
+                preferredAudio: env.preferences.preferences.preferredAudioLanguages,
+                preferredSubtitle: env.preferences.preferences.preferredSubtitleLanguage
+            ) { id, kind, position, duration in
+                env.recordProgress(id: id, kind: kind, position: position, duration: duration)
+            }
+        }
+    }
+
+    private func resume(_ row: HistoryRow) async {
+        switch row.resume {
+        case .movie(let id):
+            playback = await env.playback(forMovie: id)
+        case .episode(let episode, let seriesTitle):
+            playback = env.playback(forEpisode: episode, seriesTitle: seriesTitle)
+        }
     }
 
     private var header: some View {
@@ -146,7 +169,8 @@ struct HistoryView: View {
                 art: movie.posterURL,
                 fraction: entry.fraction,
                 finished: entry.isFinished,
-                route: .movie(movie.id)
+                route: .movie(movie.id),
+                resume: .movie(movie.id)
             )
         case .series:
             guard let (series, episode) = episodeIndex[entry.itemID] else { return nil }
@@ -158,7 +182,8 @@ struct HistoryView: View {
                 art: episode.stillURL ?? series.posterURL,
                 fraction: entry.fraction,
                 finished: entry.isFinished,
-                route: .series(series.id)
+                route: .series(series.id),
+                resume: .episode(episode, seriesTitle: series.title)
             )
         case .liveChannel:
             return nil
@@ -169,10 +194,11 @@ struct HistoryView: View {
 private struct HistoryRowView: View {
     let row: HistoryView.HistoryRow
     let onOpen: () -> Void
+    let onResume: () -> Void
     let onRemove: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
+        Button(action: row.finished ? onOpen : onResume) {
             HStack(spacing: Metrics.space3) {
                 ArtworkView(url: row.art, title: row.title, aspect: 16.0 / 9.0)
                     .frame(width: 240, height: 135)
@@ -203,11 +229,15 @@ private struct HistoryRowView: View {
         }
         .buttonStyle(.card)
         .contextMenu {
+            if !row.finished {
+                Button(action: onResume) { Label("Resume", systemImage: "play.fill") }
+            }
+            Button(action: onOpen) { Label("Go to \(row.title)", systemImage: "info.circle") }
             Button(role: .destructive, action: onRemove) {
                 Label("Remove from History", systemImage: "trash")
             }
         }
         .accessibilityLabel("\(row.title), \(row.subtitle)")
-        .accessibilityHint(row.finished ? "Watched" : "In progress")
+        .accessibilityHint(row.finished ? "Opens details" : "Resumes playback. Press and hold for more.")
     }
 }

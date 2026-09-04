@@ -304,14 +304,15 @@ public final class CatalogDatabase: @unchecked Sendable {
     }
 
     public func presentGenres() async throws -> [Genre] {
-        let raw: Set<String>
+        // The cache stores genres already ordered by prevalence — keep that order
+        // so the filter chips lead with the genres the library actually has most
+        // of. The scan fallback keeps the stable `allCases` order.
         if let cached = try await metaList(MetaKey.facetGenres) {
-            raw = Set(cached)
-        } else {
-            raw = try await read { conn in
-                Set(try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
-                    + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
-            }
+            return cached.compactMap { Genre(rawValue: $0) }
+        }
+        let raw: Set<String> = try await read { conn in
+            Set(try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
+                + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) })
         }
         return Genre.allCases.filter { raw.contains($0.rawValue) }
     }
@@ -337,8 +338,16 @@ public final class CatalogDatabase: @unchecked Sendable {
     /// import, on the writer connection.
     public func refreshFacetCache() async throws {
         try await write { conn in
-            let genres = try conn.query("SELECT DISTINCT genre FROM movie_genre") { $0.string(0) }
-                       + conn.query("SELECT DISTINCT genre FROM series_genre") { $0.string(0) }
+            // Genres, ordered by how many titles carry each — the filter chips
+            // then lead with what the library has most of.
+            var genreCounts: [String: Int] = [:]
+            for table in ["movie_genre", "series_genre"] {
+                let rows = try conn.query("SELECT genre, count(*) FROM \(table) GROUP BY genre") { row -> (String, Int) in
+                    (row.string(0), row.int(1))
+                }
+                for row in rows { genreCounts[row.0, default: 0] += row.1 }
+            }
+            let genres = genreCounts.sorted { $0.value > $1.value }.map(\.key)
 
             func langCodes(_ column: String) throws -> [String] {
                 let rows = try conn.query(
@@ -359,7 +368,7 @@ public final class CatalogDatabase: @unchecked Sendable {
                     [.text(key), .text(values.joined(separator: "\n"))]
                 )
             }
-            try setList(MetaKey.facetGenres, Array(Set(genres)).sorted())
+            try setList(MetaKey.facetGenres, genres)
             try setList(MetaKey.facetAudioLanguages, audio)
             try setList(MetaKey.facetSubLanguages, subs)
             try setList(MetaKey.facetChannelCategories, categories)

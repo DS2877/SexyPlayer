@@ -43,10 +43,14 @@ struct MovieDetailView: View {
         movie = found
         notFound = found == nil && env.catalogComplete
         guard let found else { return }
-        related = await env.repository
+        var picks = await env.repository
             .similarMovies(to: found.id, genres: found.genres, limit: 18)
-            .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
-                               posterURL: $0.posterURL, isSeries: false) }
+        if picks.isEmpty {
+            // No genre tags (or nothing shares one) — fall back to fresh arrivals.
+            picks = await env.repository.newestMovies(limit: 18).filter { $0.id != found.id }
+        }
+        related = picks.map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                                          posterURL: $0.posterURL, isSeries: false) }
         enriched = await env.metadata.details(
             for: found.id, title: found.title, year: found.year, isSeries: false
         )

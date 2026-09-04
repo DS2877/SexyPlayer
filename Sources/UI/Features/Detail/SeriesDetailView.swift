@@ -65,10 +65,13 @@ struct SeriesDetailView: View {
         series = found
         selectedSeason = resumeEpisode(in: found)?.seasonNumber ?? found?.seasons.first?.number
         guard let found else { return }
-        related = await env.repository
+        var picks = await env.repository
             .similarSeries(to: found.id, genres: found.genres, limit: 18)
-            .map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
-                               posterURL: $0.posterURL, isSeries: true) }
+        if picks.isEmpty {
+            picks = await env.repository.newestSeries(limit: 18).filter { $0.id != found.id }
+        }
+        related = picks.map { RelatedItem(id: $0.id, title: $0.title, year: $0.year,
+                                          posterURL: $0.posterURL, isSeries: true) }
         enriched = await env.metadata.details(
             for: found.id, title: found.title, year: found.year, isSeries: true
         )
