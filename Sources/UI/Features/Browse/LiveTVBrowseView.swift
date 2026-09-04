@@ -272,13 +272,7 @@ struct LiveTVBrowseView: View {
             }
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space2)
-        .padding(.bottom, Metrics.space3)
-        .background(
-            Palette.canvas
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                .ignoresSafeArea(edges: .top)
-        )
+        .pinnedHeaderStyle()
         .focusSection()
     }
 }

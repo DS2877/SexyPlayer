@@ -13,8 +13,9 @@ public final class SearchViewModel {
     public private(set) var interpretedFrom = ""
 
     /// A few titles to show on the empty search screen — recent additions,
-    /// best-rated first. Loaded once per session.
+    /// best-rated first.
     public private(set) var trending: [SearchResult] = []
+    private var trendingRevision = -1
 
     /// The last handful of queries the viewer actually ran, newest first.
     public private(set) var recentQueries: [String] = []
@@ -60,8 +61,11 @@ public final class SearchViewModel {
     }
 
     /// Populate `trending` from the newest additions, ranked by TMDB rating
-    /// where one is known.
-    public func loadTrending(ratings: [String: Double]) async {
+    /// where one is known. A no-op until the catalog revision actually changes,
+    /// so the staged-import revision storm doesn't re-query it repeatedly.
+    public func loadTrending(ratings: [String: Double], revision: Int) async {
+        guard revision != trendingRevision else { return }
+        trendingRevision = revision
         let items = await repository.recentlyAdded(limit: 30).map { SearchResult(item: $0, score: 0) }
         trending = items
             .sorted { (ratings[$0.id.rawValue] ?? 0) > (ratings[$1.id.rawValue] ?? 0) }

@@ -191,13 +191,7 @@ struct VODBrowseView: View {
             letterRail(model, proxy: proxy)
         }
         .padding(.horizontal, Metrics.screenMargin)
-        .padding(.top, Metrics.space2)
-        .padding(.bottom, Metrics.space3)
-        .background(
-            Palette.canvas
-                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                .ignoresSafeArea(edges: .top)
-        )
+        .pinnedHeaderStyle()
         // One region: pressing ↑ from the grid lands on the last-used control
         // here (a chip or Filters), ↓ returns to the grid.
         .focusSection()

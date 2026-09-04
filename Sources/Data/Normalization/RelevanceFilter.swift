@@ -74,9 +74,6 @@ public enum RelevanceFilter {
         "somali", "somalia", "swahili",
     ]
 
-    /// Hyphenated / spaced markers that whole-word tokenising splits apart.
-    private static let foreignPhrases: [String] = ["ex-yu", "ex yu", "exyu"]
-
     /// `true` when the item should stay in the catalog under the region limit.
     public static func isRelevant(
         countryCode: String?,
@@ -97,10 +94,9 @@ public enum RelevanceFilter {
         // No parsed country — a whole-word scan of the strings the provider gave
         // us (handles stale caches and messy tags). Tokenise once, then a single
         // set-disjoint test instead of ~80 regex passes per row.
-        let lowered = (name + " " + category).lowercased()
-        let tokens = Set(lowered.split { !$0.isLetter && !$0.isNumber }.map(String.init))
-        if !foreignMarkers.isDisjoint(with: tokens) { return false }
-        if foreignPhrases.contains(where: { lowered.contains($0) }) { return false }
-        return true
+        let tokens = Set((name + " " + category).lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init))
+        return foreignMarkers.isDisjoint(with: tokens)
     }
 }

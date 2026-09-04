@@ -35,7 +35,8 @@ struct SearchView: View {
         // Re-fetched when the store resets (provider switch).
         .task(id: models.generation) { model = models.search(env) }
         .task(id: env.catalogRevision) {
-            await models.search(env).loadTrending(ratings: await env.metadata.ratingsSnapshot())
+            await models.search(env).loadTrending(ratings: await env.metadata.ratingsSnapshot(),
+                                                  revision: env.catalogRevision)
         }
     }
 

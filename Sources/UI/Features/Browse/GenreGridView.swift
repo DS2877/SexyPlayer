@@ -48,9 +48,9 @@ struct GenreGridView: View {
             .padding(.horizontal, Metrics.screenMargin)
         }
         .appThemeBackground()
-        .task(id: env.catalogRevision) {
-            if cards.isEmpty { await reload() }
-        }
+        // Reloads on first appearance and whenever the catalog changes underneath
+        // it (a background refresh finishing, a provider switch).
+        .task(id: env.catalogRevision) { await reload() }
     }
 
     private func poster(_ card: BrowseCard) -> some View {

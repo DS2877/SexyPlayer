@@ -288,12 +288,13 @@ struct HomeView: View {
         case .movie:
             playback = await environment.playback(forMovie: itemID)
         case .series:
-            guard let episode = await environment.repository.episode(id: itemID),
-                  let series = await environment.repository.series(id: card.id) else {
-                navigate(card)   // fall back to the detail screen
+            // `card.title` is already the series title; the episode lookup is the
+            // only thing we need from the store.
+            guard let episode = await environment.repository.episode(id: itemID) else {
+                navigate(card)   // episode is gone — fall back to the detail screen
                 return
             }
-            playback = environment.playback(forEpisode: episode, seriesTitle: series.title)
+            playback = environment.playback(forEpisode: episode, seriesTitle: card.title)
         case .channel:
             navigate(card)
         }

@@ -368,10 +368,12 @@ public final class CatalogDatabase: @unchecked Sendable {
                     [.text(key), .text(values.joined(separator: "\n"))]
                 )
             }
-            try setList(MetaKey.facetGenres, genres)
-            try setList(MetaKey.facetAudioLanguages, audio)
-            try setList(MetaKey.facetSubLanguages, subs)
-            try setList(MetaKey.facetChannelCategories, categories)
+            try conn.transaction {
+                try setList(MetaKey.facetGenres, genres)
+                try setList(MetaKey.facetAudioLanguages, audio)
+                try setList(MetaKey.facetSubLanguages, subs)
+                try setList(MetaKey.facetChannelCategories, categories)
+            }
         }
     }
 
