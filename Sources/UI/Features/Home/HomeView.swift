@@ -7,6 +7,8 @@ struct HomeView: View {
     /// returning to Home doesn't rebuild the screen.
     @State private var model: HomeViewModel?
     @State private var path: [AppRoute] = []
+    /// Playing a Continue Watching card straight from Home, no detail detour.
+    @State private var playback: PlaybackItem?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -37,6 +39,15 @@ struct HomeView: View {
             .animation(.easeInOut(duration: 0.32), value: contentFingerprint)
             .appThemeBackground()
             .appRouteDestinations()
+        }
+        .fullScreenCover(item: $playback) { item in
+            PlayerScreen(
+                item: item,
+                preferredAudio: environment.preferences.preferences.preferredAudioLanguages,
+                preferredSubtitle: environment.preferences.preferences.preferredSubtitleLanguage
+            ) { id, kind, position, duration in
+                environment.recordProgress(id: id, kind: kind, position: position, duration: duration)
+            }
         }
         // Grab the shared model. On a first launch it restores the cached screen
         // from the last session — the "instant" frame. On a return visit it
@@ -225,10 +236,21 @@ struct HomeView: View {
                 badge: card.badge,
                 progress: card.progress,
                 isNew: card.isNew,
-                action: { navigate(card) }
+                // A Continue Watching card plays where you left off; every other
+                // card opens the detail screen.
+                action: {
+                    if card.resumeItemID != nil {
+                        Task { await resume(card) }
+                    } else {
+                        navigate(card)
+                    }
+                }
             )
             .contextMenu {
                 if let itemID = card.resumeItemID {
+                    Button { navigate(card) } label: {
+                        Label("Go to \(card.title)", systemImage: "info.circle")
+                    }
                     Button {
                         environment.markWatched(id: itemID, kind: card.kind == .series ? .series : .movie)
                         Task { await model?.rebuild() }
@@ -248,6 +270,25 @@ struct HomeView: View {
         case .movie:   path.append(.movie(card.id))
         case .series:  path.append(.series(card.id))
         case .channel: path.append(.channel(card.id))
+        }
+    }
+
+    /// Resume a Continue Watching card in place. `card.id` is the container
+    /// (movie / series), `card.resumeItemID` is what actually plays.
+    private func resume(_ card: HomeCard) async {
+        guard let itemID = card.resumeItemID else { return }
+        switch card.kind {
+        case .movie:
+            playback = await environment.playback(forMovie: itemID)
+        case .series:
+            guard let episode = await environment.repository.episode(id: itemID),
+                  let series = await environment.repository.series(id: card.id) else {
+                navigate(card)   // fall back to the detail screen
+                return
+            }
+            playback = environment.playback(forEpisode: episode, seriesTitle: series.title)
+        case .channel:
+            navigate(card)
         }
     }
 }
