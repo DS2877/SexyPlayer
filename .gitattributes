@@ -6,3 +6,6 @@
 *.plist   text eol=lf
 *.pbxproj text eol=lf
 *.xcconfig text eol=lf
+# Shell scripts MUST be LF — CRLF breaks the shebang / commands on macOS
+# (Xcode Cloud runs ci_scripts/*.sh).
+*.sh      text eol=lf
