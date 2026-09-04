@@ -457,37 +457,37 @@ private struct SeasonButtonStyle: ButtonStyle {
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration, isSelected: isSelected)
+        SeasonButtonBody(configuration: configuration, isSelected: isSelected)
+    }
+}
+
+private struct SeasonButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let isSelected: Bool
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        configuration.label
+            .font(.dsBody)
+            .foregroundStyle(fg)
+            .padding(.horizontal, Metrics.space3)
+            .padding(.vertical, Metrics.space1 + 4)
+            .background(Capsule().fill(bg))
+            .overlay(Capsule().strokeBorder(isFocused || isSelected ? Palette.accent : Palette.hairline,
+                                            lineWidth: 2))
+            .scaleEffect(isFocused ? 1.06 : 1)
+            .shadow(color: .black.opacity(isFocused ? 0.3 : 0), radius: isFocused ? 16 : 0, y: isFocused ? 8 : 0)
+            .animation(Metrics.focusAnimation, value: isFocused)
     }
 
-    private struct Body: View {
-        let configuration: ButtonStyleConfiguration
-        let isSelected: Bool
-        @Environment(\.isFocused) private var isFocused
-
-        var body: some View {
-            configuration.label
-                .font(.dsBody)
-                .foregroundStyle(fg)
-                .padding(.horizontal, Metrics.space3)
-                .padding(.vertical, Metrics.space1 + 4)
-                .background(Capsule().fill(bg))
-                .overlay(Capsule().strokeBorder(isFocused || isSelected ? Palette.accent : Palette.hairline,
-                                                lineWidth: 2))
-                .scaleEffect(isFocused ? 1.06 : 1)
-                .shadow(color: .black.opacity(isFocused ? 0.3 : 0), radius: isFocused ? 16 : 0, y: isFocused ? 8 : 0)
-                .animation(Metrics.focusAnimation, value: isFocused)
-        }
-
-        private var fg: Color {
-            if isFocused { return Palette.canvas }
-            if isSelected { return Palette.textPrimary }
-            return Palette.textSecondary
-        }
-        private var bg: Color {
-            if isFocused { return Palette.focusFill }
-            if isSelected { return Palette.accent.opacity(0.22) }
-            return Palette.surface
-        }
+    private var fg: Color {
+        if isFocused { return Palette.canvas }
+        if isSelected { return Palette.textPrimary }
+        return Palette.textSecondary
+    }
+    private var bg: Color {
+        if isFocused { return Palette.focusFill }
+        if isSelected { return Palette.accent.opacity(0.22) }
+        return Palette.surface
     }
 }

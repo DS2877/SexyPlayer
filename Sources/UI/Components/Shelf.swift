@@ -66,16 +66,18 @@ public struct Shelf<Item: Identifiable, Card: View>: View {
 
 /// A shelf's "see all" header link — a restrained focus tint + lift, no card fill.
 private struct SeeAllLinkStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Body(configuration: configuration) }
+    func makeBody(configuration: Configuration) -> some View {
+        SeeAllLinkBody(configuration: configuration)
+    }
+}
 
-    private struct Body: View {
-        let configuration: ButtonStyleConfiguration
-        @Environment(\.isFocused) private var isFocused
-        var body: some View {
-            configuration.label
-                .foregroundStyle(isFocused ? Palette.accent : Palette.textTertiary)
-                .scaleEffect(isFocused ? 1.03 : 1, anchor: .leading)
-                .animation(Metrics.focusAnimation, value: isFocused)
-        }
+private struct SeeAllLinkBody: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isFocused) private var isFocused
+    var body: some View {
+        configuration.label
+            .foregroundStyle(isFocused ? Palette.accent : Palette.textTertiary)
+            .scaleEffect(isFocused ? 1.03 : 1, anchor: .leading)
+            .animation(Metrics.focusAnimation, value: isFocused)
     }
 }
