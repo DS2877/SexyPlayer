@@ -22,7 +22,10 @@ settings:
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: targeted
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # Fallback build number for local archives. Xcode Cloud overrides this per
+    # build via ci_scripts/ci_pre_xcodebuild.sh (CI_BUILD_NUMBER). Keep it ahead
+    # of every number already uploaded to App Store Connect.
+    CURRENT_PROJECT_VERSION: "3"
     # Apple Developer Team ID (developer.apple.com → Membership).
     # Safe to commit — it's embedded in every shipped app anyway.
     DEVELOPMENT_TEAM: "4YJN2S39Q4"
