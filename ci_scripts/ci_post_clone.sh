@@ -8,6 +8,12 @@
 #  committed (see .gitignore). Without this, `xcodebuild` fails with
 #  "Aeria.xcodeproj does not exist". So: install XcodeGen and generate the
 #  project at the repo root.
+#
+#  Xcode Cloud also resolves Swift packages with automatic resolution OFF, so it
+#  needs a committed Package.resolved *inside* the generated project. XcodeGen
+#  never writes one, so we keep the pins at ci_scripts/Package.resolved and copy
+#  them into place below. Regenerate that file (see its header comment) whenever
+#  a package version in project.yml changes.
 
 set -e
 
@@ -42,3 +48,15 @@ echo "--- Generated ---"
 ls -d Aeria.xcodeproj
 ls -la Sources/App/Info.plist Sources/App/Aeria.entitlements \
        Sources/TopShelf/Info.plist Sources/TopShelf/AeriaTopShelf.entitlements
+
+# Seed the SPM pins so Xcode Cloud doesn't try (and fail) to resolve from scratch.
+RESOLVED_SRC="ci_scripts/Package.resolved"
+RESOLVED_DST="Aeria.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+if [ ! -f "$RESOLVED_SRC" ]; then
+    echo "error: $RESOLVED_SRC is missing — commit it (see its regeneration note)." >&2
+    exit 1
+fi
+mkdir -p "$(dirname "$RESOLVED_DST")"
+cp "$RESOLVED_SRC" "$RESOLVED_DST"
+echo "--- Seeded $RESOLVED_DST ---"
+cat "$RESOLVED_DST"
