@@ -204,7 +204,8 @@ struct HomeView: View {
                         }
 
                         ForEach(model.content.rows) { row in
-                            Shelf(title: row.title, subtitle: row.subtitle, items: row.cards) { card in
+                            Shelf(title: row.title, subtitle: row.subtitle, items: row.cards,
+                                  headerRoute: Self.genre(for: row).map { AppRoute.genre($0) }) { card in
                                 cardView(card)
                             }
                         }
@@ -271,6 +272,12 @@ struct HomeView: View {
         case .series:  path.append(.series(card.id))
         case .channel: path.append(.channel(card.id))
         }
+    }
+
+    /// The genre a genre-shelf row names — its id is `"genre-<rawValue>"`.
+    private static func genre(for row: HomeRow) -> Genre? {
+        guard row.id.hasPrefix("genre-") else { return nil }
+        return Genre(rawValue: String(row.id.dropFirst("genre-".count)))
     }
 
     /// Resume a Continue Watching card in place. `card.id` is the container

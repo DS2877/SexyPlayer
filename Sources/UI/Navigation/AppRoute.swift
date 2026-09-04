@@ -5,12 +5,15 @@ public enum AppRoute: Hashable, Sendable, Identifiable {
     case movie(CatalogID)
     case series(CatalogID)
     case channel(CatalogID)
+    /// A "see all" grid for one genre (movies + series).
+    case genre(Genre)
 
     public var id: String {
         switch self {
         case .movie(let x):   return "movie:\(x.rawValue)"
         case .series(let x):  return "series:\(x.rawValue)"
         case .channel(let x): return "channel:\(x.rawValue)"
+        case .genre(let g):   return "genre:\(g.rawValue)"
         }
     }
 
@@ -39,6 +42,7 @@ struct RouteDestinations: ViewModifier {
             case .movie(let id):   MovieDetailView(movieID: id)
             case .series(let id):  SeriesDetailView(seriesID: id)
             case .channel(let id): ChannelDetailView(channelID: id)
+            case .genre(let g):    GenreGridView(genre: g)
             }
         }
     }
