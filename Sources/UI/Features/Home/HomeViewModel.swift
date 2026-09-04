@@ -96,6 +96,9 @@ public final class HomeViewModel {
     private func performRebuild(now: Date) async {
         isBuilding = true
         defer { isBuilding = false }
+        // Timed so a "Home is slow" report can be pinned to a phase from the
+        // device console (filter: subsystem com.aeriaplus.appletv, category app).
+        let startedAt = Date()
 
         let prefs = preferences.preferences
         let progress = watchProgress.allEntries()
@@ -140,6 +143,7 @@ public final class HomeViewModel {
                                    prefs: prefs, ratings: ratings, liveNow: liveNow,
                                    recentChannelIDs: recentChannelIDs, now: now,
                                    resumePoints: resume, favoriteIDs: favoriteIDs)
+        AppLog.app.info("Home fast pass painted in \(Int(Date().timeIntervalSince(startedAt) * 1000), privacy: .public) ms · \(self.content.rows.count, privacy: .public) rows")
 
         // ── Full pass ────────────────────────────────────────────────────────
         // Everything below the fold. The screen is already interactive; this
@@ -198,6 +202,7 @@ public final class HomeViewModel {
                                       resumePoints: resume, favoriteIDs: favoriteIDs)
         guard !Task.isCancelled else { return }
         content = shaped
+        AppLog.app.info("Home full pass in \(Int(Date().timeIntervalSince(startedAt) * 1000), privacy: .public) ms · \(shaped.rows.count, privacy: .public) rows · ~\(RuntimeStats.memoryHeadroomMB, privacy: .public) MB headroom")
 
         // Cache the finished screen for the next launch. Throttled: the catalog
         // revision bumps repeatedly during an import, and each save is a JSON
@@ -218,10 +223,17 @@ public final class HomeViewModel {
 
     /// The newest played title that still carries genre tags — the "Because You
     /// Watched" anchor, resolved from the resume points the store already built.
+    ///
+    /// Series come back as shells in one id-batch lookup — only `.genres` is
+    /// read here, so pulling each show's full season tree (what `series(id:)`
+    /// does) is wasted decode on the launch path.
     private func watchedAnchor(resume: [ResumePoint]) async -> (id: CatalogID, genres: [Genre])? {
-        for point in resume.sorted(by: { $0.lastWatched > $1.lastWatched }) {
+        let ordered = resume.sorted { $0.lastWatched > $1.lastWatched }
+        let shells = await repository.seriesShells(ids: ordered.filter(\.isSeries).map(\.containerID))
+        let shellByID = Dictionary(shells.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for point in ordered {
             if point.isSeries {
-                if let show = await repository.series(id: point.containerID), !show.genres.isEmpty {
+                if let show = shellByID[point.containerID], !show.genres.isEmpty {
                     return (id: show.id, genres: show.genres)
                 }
             } else if let movie = await repository.movie(id: point.containerID), !movie.genres.isEmpty {
