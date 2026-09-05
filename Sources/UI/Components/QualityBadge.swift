@@ -16,6 +16,21 @@ public struct QualityBadge: View {
     }
 }
 
+/// The provider's channel number, e.g. "42" — IPTV users zap by number.
+public struct ChannelNumberBadge: View {
+    let number: Int
+    public init(number: Int) { self.number = number }
+
+    public var body: some View {
+        Text("\(number)")
+            .font(.dsTag)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.hairline))
+    }
+}
+
 public struct LiveBadge: View {
     public init() {}
     public var body: some View {

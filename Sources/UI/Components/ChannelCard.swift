@@ -9,6 +9,10 @@ public struct ChannelCard: View {
     let nextTitle: String?
     let quality: VideoQuality
     let nowProgress: Double?
+    /// The provider's channel number (Xtream `num` / M3U `tvg-chnb`). IPTV users
+    /// navigate by number, not name — `nil` or non-positive hides the chip
+    /// (playlists that never set one land on `Channel.sortIndex == 0`).
+    let channelNumber: Int?
     let action: () -> Void
 
     public init(
@@ -18,6 +22,7 @@ public struct ChannelCard: View {
         nextTitle: String? = nil,
         quality: VideoQuality = .unknown,
         nowProgress: Double? = nil,
+        channelNumber: Int? = nil,
         action: @escaping () -> Void
     ) {
         self.name = name
@@ -26,6 +31,7 @@ public struct ChannelCard: View {
         self.nextTitle = nextTitle
         self.quality = quality
         self.nowProgress = nowProgress
+        self.channelNumber = channelNumber
         self.action = action
     }
 
@@ -42,11 +48,16 @@ public struct ChannelCard: View {
                         monogram
                     }
 
-                    if quality > .unknown {
+                    if quality > .unknown || (channelNumber ?? 0) > 0 {
                         VStack {
                             HStack {
+                                if let channelNumber, channelNumber > 0 {
+                                    ChannelNumberBadge(number: channelNumber).padding(Metrics.space1)
+                                }
                                 Spacer()
-                                QualityBadge(quality: quality).padding(Metrics.space1)
+                                if quality > .unknown {
+                                    QualityBadge(quality: quality).padding(Metrics.space1)
+                                }
                             }
                             Spacer()
                         }

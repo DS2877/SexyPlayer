@@ -8,6 +8,7 @@ public struct LiveChannelRow: Identifiable, Sendable {
     public let quality: VideoQuality
     public let nowTitle: String?
     public let nowProgress: Double?
+    public let number: Int
 }
 
 @MainActor
@@ -22,14 +23,19 @@ public final class LiveTVBrowseViewModel {
 
     public var selectedCategory = "All"
     public var sort: ChannelSort = .number
+    /// Shows only channels the user has hearted — a bounded, curated set, so it
+    /// skips the paged/category query entirely and fetches by id.
+    public var favoritesOnly = false
 
     private let repository: any CatalogQuerying
+    private let favorites: FavoritesStore
     private let pageSize = 90
     private var page = 0
     private var reloadTask: Task<Void, Never>?
 
-    public init(repository: any CatalogQuerying) {
+    public init(repository: any CatalogQuerying, favorites: FavoritesStore) {
         self.repository = repository
+        self.favorites = favorites
     }
 
     /// Whether this screen still needs a load is tracked by `SectionModels`.
@@ -56,17 +62,55 @@ public final class LiveTVBrowseViewModel {
         isLoading = true
         page = 0
         canLoadMore = true
+
+        if favoritesOnly {
+            await loadFavorites()
+            isLoading = false
+            return
+        }
+
         let category = selectedCategory
         let sort = self.sort
 
         await loadPage(replacing: true, category: category, sort: sort)
         isLoading = false
-        guard !Task.isCancelled, category == selectedCategory, sort == self.sort else { return }
+        guard !Task.isCancelled, category == selectedCategory, sort == self.sort, !favoritesOnly else { return }
 
         decorationTask?.cancel()
         decorationTask = Task { [weak self] in
             await self?.loadDecorations(category: category, sort: sort)
         }
+    }
+
+    /// Favourites are few by construction, so this loads them all in one shot
+    /// (by id, via the store's own list) instead of the category/page query —
+    /// no pagination, no category chips, no A–Z rail.
+    private func loadFavorites() async {
+        let ids = favorites.all().filter { $0.kind == .liveChannel }.map(\.itemID)
+        let channels = await repository.channels(ids: ids)
+        guard !Task.isCancelled, favoritesOnly else { return }
+
+        let now = Date()
+        let window = DateInterval(start: now.addingTimeInterval(-4 * 3600),
+                                  end: now.addingTimeInterval(4 * 3600))
+        let epg = await repository.epgIndex(forEPGIDs: channels.compactMap(\.epgID), in: window)
+        guard !Task.isCancelled, favoritesOnly else { return }
+
+        let ordered = sort == .nameAsc
+            ? channels.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            : channels.sorted { $0.sortIndex < $1.sortIndex }
+
+        rows = ordered.map { channel in
+            let event = channel.epgID.flatMap { epg.nowPlaying(forChannel: $0, at: now) }
+            return LiveChannelRow(
+                id: channel.id, name: channel.name, logoURL: channel.logoURL,
+                quality: channel.quality, nowTitle: event?.title,
+                nowProgress: event?.progress(at: now), number: channel.sortIndex
+            )
+        }
+        total = rows.count
+        canLoadMore = false
+        anchors = []
     }
 
     private func loadDecorations(category: String, sort: ChannelSort) async {
@@ -124,7 +168,7 @@ public final class LiveTVBrowseViewModel {
             return LiveChannelRow(
                 id: channel.id, name: channel.name, logoURL: channel.logoURL,
                 quality: channel.quality, nowTitle: event?.title,
-                nowProgress: event?.progress(at: now)
+                nowProgress: event?.progress(at: now), number: channel.sortIndex
             )
         }
         guard category == selectedCategory else { return }
@@ -188,9 +232,14 @@ struct LiveTVBrowseView: View {
                     if model.rows.isEmpty && !model.isLoading && env.loadState.isImporting {
                         LibraryLoadingPlaceholder().frame(minHeight: 400)
                     } else if model.rows.isEmpty && !model.isLoading {
-                        EmptyStateView(icon: "tv", title: "No channels",
-                                       message: "No channels in this category.")
-                            .frame(minHeight: 400)
+                        EmptyStateView(
+                            icon: model.favoritesOnly ? "star" : "tv",
+                            title: model.favoritesOnly ? "No favourite channels" : "No channels",
+                            message: model.favoritesOnly
+                                ? "Heart a channel from its detail screen to see it here."
+                                : "No channels in this category."
+                        )
+                        .frame(minHeight: 400)
                     } else {
                         LazyVGrid(columns: columns, alignment: .leading, spacing: Metrics.gridSpacing) {
                             ForEach(model.rows) { row in
@@ -200,6 +249,7 @@ struct LiveTVBrowseView: View {
                                     nowTitle: row.nowTitle,
                                     quality: row.quality,
                                     nowProgress: row.nowProgress,
+                                    channelNumber: row.number,
                                     action: { path.append(.channel(row.id)) }
                                 )
                                 .id(row.id)
@@ -222,6 +272,10 @@ struct LiveTVBrowseView: View {
             withAnimation { proxy.scrollTo("live-top", anchor: .top) }
             Task { await model.reload() }
         }
+        .onChange(of: model.favoritesOnly) { _, _ in
+            withAnimation { proxy.scrollTo("live-top", anchor: .top) }
+            Task { await model.reload() }
+        }
         }
     }
 
@@ -232,6 +286,9 @@ struct LiveTVBrowseView: View {
                 Text("\(model.total)").font(.dsCardTitle).foregroundStyle(Palette.textTertiary)
                 Spacer()
                 HStack(spacing: Metrics.space1) {
+                    FilterChip(label: "★ Favourites", isSelected: model.favoritesOnly) {
+                        model.favoritesOnly.toggle()
+                    }
                     ForEach(ChannelSort.allCases, id: \.self) { option in
                         FilterChip(label: option.label, isSelected: model.sort == option) {
                             model.sort = option
@@ -239,7 +296,7 @@ struct LiveTVBrowseView: View {
                     }
                 }
             }
-            if model.categories.count > 1 {
+            if !model.favoritesOnly, model.categories.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: Metrics.space1) {
                         ForEach(model.categories, id: \.self) { category in
