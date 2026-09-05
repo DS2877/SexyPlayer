@@ -56,13 +56,24 @@ struct SidebarShell: View {
     private static let contentInsetShift: CGFloat = expanded - collapsed
     private static let railAnimation: Animation = .easeOut(duration: 0.26)
 
-    @State private var selection: Section = .home
+    /// Restored synchronously at init so the first frame already shows the
+    /// right screen — setting it later (`.onAppear`) would flash Home first.
+    @State private var selection: Section
     @FocusState private var focusedItem: Section?
     /// Sections the user has opened at least once — kept mounted from then on.
-    @State private var visited: Set<Section> = [.home]
+    @State private var visited: Set<Section>
     /// Section view models outlive the view tree, so revisiting a screen shows
     /// what it already had instead of re-querying.
     @State private var models = SectionModels()
+
+    private static let lastSectionKey = "sidebar.lastSection.v1"
+
+    init() {
+        let restored = UserDefaults.standard.string(forKey: Self.lastSectionKey)
+            .flatMap(Section.init(rawValue:)) ?? .home
+        _selection = State(initialValue: restored)
+        _visited = State(initialValue: [restored])
+    }
 
     /// The rail is expanded whenever it owns focus.
     private var railExpanded: Bool { focusedItem != nil }
@@ -119,6 +130,9 @@ struct SidebarShell: View {
                 selection = item
                 visited.insert(item)
             }
+        }
+        .onChange(of: selection) { _, section in
+            UserDefaults.standard.set(section.rawValue, forKey: Self.lastSectionKey)
         }
         .onChange(of: env.pendingRoute) { _, route in
             // A Top Shelf deep link lands here — Home owns the nav stack that
