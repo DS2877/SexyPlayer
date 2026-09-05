@@ -71,7 +71,7 @@ public final class SectionModels {
 
     func liveTV(_ env: AppEnvironment) -> LiveTVBrowseViewModel {
         if let liveTVModel { return liveTVModel }
-        let model = LiveTVBrowseViewModel(repository: env.repository)
+        let model = LiveTVBrowseViewModel(repository: env.repository, favorites: env.favorites)
         liveTVModel = model
         return model
     }

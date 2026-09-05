@@ -171,13 +171,14 @@ public final class HomeViewModel {
         }
         guard !Task.isCancelled else { return }
 
-        // "Because You Watched" — genre-similar to the newest played title. The
-        // resume points already name the container, so no extra lookup pass.
+        // "Because You Watched" — genre-similar to up to 2 recently played
+        // titles (Home shows a row per anchor). The resume points already name
+        // the containers, so no extra lookup pass beyond the anchors themselves.
         var becauseMovies: [Movie] = []
         var becauseSeries: [Series] = []
-        if let anchor = await watchedAnchor(resume: resume) {
-            becauseMovies = await repository.similarMovies(to: anchor.id, genres: anchor.genres, limit: 20)
-            becauseSeries = await repository.similarSeries(to: anchor.id, genres: anchor.genres, limit: 12)
+        for anchor in await watchedAnchors(resume: resume, limit: 2) {
+            becauseMovies += await repository.similarMovies(to: anchor.id, genres: anchor.genres, limit: 20)
+            becauseSeries += await repository.similarSeries(to: anchor.id, genres: anchor.genres, limit: 12)
         }
         guard !Task.isCancelled else { return }
 
@@ -221,26 +222,31 @@ public final class HomeViewModel {
     private var lastSnapshotSave = Date.distantPast
     private static let snapshotInterval: TimeInterval = 20
 
-    /// The newest played title that still carries genre tags — the "Because You
-    /// Watched" anchor, resolved from the resume points the store already built.
+    /// Up to `limit` distinct recently played titles that still carry genre
+    /// tags, newest first — each is a "Because You Watched" anchor, resolved
+    /// from the resume points the store already built.
     ///
     /// Series come back as shells in one id-batch lookup — only `.genres` is
     /// read here, so pulling each show's full season tree (what `series(id:)`
     /// does) is wasted decode on the launch path.
-    private func watchedAnchor(resume: [ResumePoint]) async -> (id: CatalogID, genres: [Genre])? {
+    private func watchedAnchors(resume: [ResumePoint], limit: Int) async -> [(id: CatalogID, genres: [Genre])] {
         let ordered = resume.sorted { $0.lastWatched > $1.lastWatched }
         let shells = await repository.seriesShells(ids: ordered.filter(\.isSeries).map(\.containerID))
         let shellByID = Dictionary(shells.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var seen: Set<CatalogID> = []
+        var anchors: [(id: CatalogID, genres: [Genre])] = []
         for point in ordered {
+            guard anchors.count < limit else { break }
+            guard seen.insert(point.containerID).inserted else { continue }
             if point.isSeries {
                 if let show = shellByID[point.containerID], !show.genres.isEmpty {
-                    return (id: show.id, genres: show.genres)
+                    anchors.append((id: show.id, genres: show.genres))
                 }
             } else if let movie = await repository.movie(id: point.containerID), !movie.genres.isEmpty {
-                return (id: movie.id, genres: movie.genres)
+                anchors.append((id: movie.id, genres: movie.genres))
             }
         }
-        return nil
+        return anchors
     }
 
     /// De-dupe by id, keeping first-seen order.
@@ -309,15 +315,25 @@ public final class HomeViewModel {
 
         let seriesByRecency = catalog.series.sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
 
-        // "Because You Watched X" — genre-similar titles to the newest thing the
-        // viewer has played. Floated just under Continue Watching below.
-        let becauseRow: HomeRow? = {
-            guard let anchor = mostRecentWatched(progress: progress, catalog: catalog) else { return nil }
-            let cards = similarTitles(toGenres: anchor.genres, excluding: anchor.id,
-                                      movies: moviesByRecency, series: seriesByRecency, limit: 20)
-            guard cards.count >= 5 else { return nil }
-            return HomeRow(id: "because-\(anchor.id.rawValue)",
-                           title: "Because You Watched \(anchor.title)", subtitle: nil, cards: cards)
+        // "Because You Watched X" — genre-similar titles to up to 2 of the most
+        // recent things the viewer has played. Floated just under Continue
+        // Watching below. A title already used as siblings in an earlier row
+        // (or as its own anchor) is excluded from a later row so the shelves
+        // don't just repeat each other.
+        let becauseRows: [HomeRow] = {
+            var built: [HomeRow] = []
+            var excluded: Set<CatalogID> = []
+            for anchor in mostRecentWatchedAnchors(progress: progress, catalog: catalog, limit: 2) {
+                let cards = similarTitles(toGenres: anchor.genres, excluding: anchor.id,
+                                          movies: moviesByRecency, series: seriesByRecency, limit: 20)
+                    .filter { !excluded.contains($0.id) }
+                guard cards.count >= 5 else { continue }
+                built.append(HomeRow(id: "because-\(anchor.id.rawValue)",
+                                     title: "Because You Watched \(anchor.title)", subtitle: nil, cards: cards))
+                excluded.formUnion(cards.map(\.id))
+                excluded.insert(anchor.id)
+            }
+            return built
         }()
 
         var recent = Array(moviesByRecency.prefix(12)).map { card(for: $0) }
@@ -355,7 +371,7 @@ public final class HomeViewModel {
                                 subtitle: "Highest rated in your library", cards: Array(topRated)))
         }
         if let myListRow { rows.append(myListRow) }
-        if let becauseRow { rows.append(becauseRow) }
+        rows.append(contentsOf: becauseRows)
         if let recentChannelRow { rows.append(recentChannelRow) }
 
         // Genre shelves — the biggest few genres in the library. Like "Top
@@ -393,7 +409,7 @@ public final class HomeViewModel {
         var floatIDs: [String] = []
         if myListRow != nil { floatIDs.append(HomeRowKind.myList.rawValue) }
         floatIDs.append(HomeRowKind.topRated.rawValue)
-        if let becauseID = becauseRow?.id { floatIDs.append(becauseID) }
+        floatIDs.append(contentsOf: becauseRows.map(\.id))
         if let recentID = recentChannelRow?.id { floatIDs.append(recentID) }
         var placedFloats: Set<String> = []
         for floatID in floatIDs {
@@ -512,26 +528,39 @@ public final class HomeViewModel {
     nonisolated static func mostRecentWatched(
         progress: [WatchProgress], catalog: Catalog
     ) -> (id: CatalogID, title: String, genres: [Genre])? {
+        mostRecentWatchedAnchors(progress: progress, catalog: catalog, limit: 1).first
+    }
+
+    /// Up to `limit` distinct recently-played titles that still carry genre
+    /// tags, newest first — each anchors its own "Because You Watched" row.
+    /// Multiple resume points for the same series (different episodes) count
+    /// once, at their most recent watch.
+    nonisolated static func mostRecentWatchedAnchors(
+        progress: [WatchProgress], catalog: Catalog, limit: Int
+    ) -> [(id: CatalogID, title: String, genres: [Genre])] {
         let moviesByID = Dictionary(catalog.movies.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var seriesByEpisode: [CatalogID: Series] = [:]
         for s in catalog.series {
             for season in s.seasons { for e in season.episodes { seriesByEpisode[e.id] = s } }
         }
+        var seen: Set<CatalogID> = []
+        var anchors: [(id: CatalogID, title: String, genres: [Genre])] = []
         for entry in progress.sorted(by: { $0.updatedAt > $1.updatedAt }) {
+            guard anchors.count < limit else { break }
             switch entry.kind {
             case .movie:
-                if let m = moviesByID[entry.itemID], !m.genres.isEmpty {
-                    return (id: m.id, title: m.title, genres: m.genres)
+                if let m = moviesByID[entry.itemID], !m.genres.isEmpty, seen.insert(m.id).inserted {
+                    anchors.append((id: m.id, title: m.title, genres: m.genres))
                 }
             case .series:
-                if let s = seriesByEpisode[entry.itemID], !s.genres.isEmpty {
-                    return (id: s.id, title: s.title, genres: s.genres)
+                if let s = seriesByEpisode[entry.itemID], !s.genres.isEmpty, seen.insert(s.id).inserted {
+                    anchors.append((id: s.id, title: s.title, genres: s.genres))
                 }
             case .liveChannel:
                 break
             }
         }
-        return nil
+        return anchors
     }
 
     /// Movies + series that share a genre with `genres`, ranked by shared-genre

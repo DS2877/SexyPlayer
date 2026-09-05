@@ -119,4 +119,25 @@ final class HomeViewModelTests: XCTestCase {
         XCTAssertEqual(because?.title, "Because You Watched Seed")
         XCTAssertFalse(because?.cards.contains { $0.id == watched.id } ?? true)
     }
+
+    func testMakeContentProducesUpToTwoBecauseYouWatchedRows() {
+        let seed1 = movie("seed1", "Seed One", genres: [.action])
+        let actionSiblings = (0..<6).map { movie("a\($0)", "Action \($0)", genres: [.action]) }
+        let seed2 = movie("seed2", "Seed Two", genres: [.comedy])
+        let comedySiblings = (0..<6).map { movie("c\($0)", "Comedy \($0)", genres: [.comedy]) }
+        let catalog = Catalog(movies: [seed1, seed2] + actionSiblings + comedySiblings)
+        let older = progress(seed1.id, kind: .movie, fraction: 0.5, at: Date(timeIntervalSince1970: 1_000))
+        let newer = progress(seed2.id, kind: .movie, fraction: 0.5, at: Date(timeIntervalSince1970: 2_000))
+
+        let content = HomeViewModel.makeContent(
+            catalog: catalog, epg: [:], progress: [older, newer],
+            prefs: UserPreferences(), ratings: [:], liveNow: [], now: .now
+        )
+
+        let becauseRows = content.rows.filter { $0.id.hasPrefix("because-") }
+        XCTAssertEqual(becauseRows.count, 2)
+        // Most recently watched anchors its row first.
+        XCTAssertEqual(becauseRows.first?.title, "Because You Watched Seed Two")
+        XCTAssertEqual(becauseRows.last?.title, "Because You Watched Seed One")
+    }
 }
